@@ -377,11 +377,16 @@ fun SeriesScreen(
                     Tab(
                         selected = selectedTab == index,
                         onClick = { viewModel.setSelectedTab(index) },
-                        text = { Text(country) }
+                        text = {
+                            Text(
+                                text = country,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1
+                            )
+                        }
                     )
                 }
             }
-
             if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -425,7 +430,7 @@ fun SeriesScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = series.seriesDate,
+                                            text = "${series.seriesDate} / ${series.seriesCountry}",
                                             style = AppStyles.textCardSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
