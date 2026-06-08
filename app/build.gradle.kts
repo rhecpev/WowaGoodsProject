@@ -72,3 +72,11 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.6.0")
 
 }
+afterEvaluate {
+    (android as com.android.build.gradle.AppExtension).applicationVariants.all {
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "WowaGoods_${versionName}.apk"
+        }
+    }
+}
