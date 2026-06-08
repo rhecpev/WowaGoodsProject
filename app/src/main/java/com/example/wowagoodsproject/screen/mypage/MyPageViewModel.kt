@@ -309,9 +309,9 @@ class MyPageViewModel : ViewModel() {
                     else append("완료!")
                 }
                 val msg2 = buildString {
-                    if (result2.first > 0) append("${result.first}개 굿즈 추가 ")
-                    if (result2.second > 0) append("${result.second}개 굿즈 업데이트 ")
-                    if (result2.third > 0) append("${result.third}개 굿즈 삭제 ")
+                    if (result2.first > 0) append("${result2.first}개 굿즈 추가 ")
+                    if (result2.second > 0) append("${result2.second}개 굿즈 업데이트 ")
+                    if (result2.third > 0) append("${result2.third}개 굿즈 삭제 ")
                     if (isEmpty()) append("이미 굿즈가 최신 상태예요!")
                     else append("완료!")
                 }
