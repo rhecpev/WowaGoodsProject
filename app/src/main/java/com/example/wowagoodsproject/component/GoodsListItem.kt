@@ -13,6 +13,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.ui.theme.AppStyles
 import java.io.File
+import java.net.URI
 
 @Composable
 fun GoodsListItem(
@@ -24,6 +25,15 @@ fun GoodsListItem(
     isGotten: Boolean,
     onClick: () -> Unit = {}
 ) {
+    val encodedPath = if (imgPath.startsWith("http")) {
+        try {
+            URI(null, imgPath.removePrefix("https://"), null).toASCIIString()
+                .let { "https://" + it.removePrefix("https:/") }
+        } catch (e: Exception) {
+            imgPath
+        }
+    } else imgPath
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -46,7 +56,7 @@ fun GoodsListItem(
             ) {
                 Image(
                     painter = rememberAsyncImagePainter(
-                        model = if (imgPath.isNotEmpty()) File(imgPath) else null
+                        model = if (encodedPath.isNotEmpty()) encodedPath else null
                     ),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),

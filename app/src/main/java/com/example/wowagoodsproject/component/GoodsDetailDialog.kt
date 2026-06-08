@@ -15,6 +15,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.ui.theme.AppStyles
 import java.io.File
+import java.net.URI
 
 @Composable
 fun GoodsDetailDialog(
@@ -32,6 +33,21 @@ fun GoodsDetailDialog(
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+
+    val encodedPath = if (imgPath.startsWith("http")) {
+        try {
+            URI(null, imgPath.removePrefix("https://"), null).toASCIIString()
+                .let { "https://" + it.removePrefix("https:/") }
+        } catch (e: Exception) {
+            imgPath
+        }
+    } else imgPath
+
+    val imageModel = if (encodedPath.startsWith("http")) {
+        encodedPath
+    } else if (encodedPath.isNotEmpty()) {
+        File(encodedPath)
+    } else null
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -58,9 +74,7 @@ fun GoodsDetailDialog(
                         horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingLarge)
                     ) {
                         Image(
-                            painter = rememberAsyncImagePainter(
-                                model = if (imgPath.isNotEmpty()) File(imgPath) else null
-                            ),
+                            painter = rememberAsyncImagePainter(model = imageModel),
                             contentDescription = null,
                             modifier = Modifier
                                 .weight(1f)
@@ -90,9 +104,7 @@ fun GoodsDetailDialog(
                 } else {
                     Column(modifier = Modifier.weight(1f)) {
                         Image(
-                            painter = rememberAsyncImagePainter(
-                                model = if (imgPath.isNotEmpty()) File(imgPath) else null
-                            ),
+                            painter = rememberAsyncImagePainter(model = imageModel),
                             contentDescription = null,
                             modifier = Modifier
                                 .fillMaxWidth()
