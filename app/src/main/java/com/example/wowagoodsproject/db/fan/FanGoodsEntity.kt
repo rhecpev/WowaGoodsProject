@@ -14,7 +14,8 @@ data class FanGoodsEntity(
     val fanGoodsChara: String = "",
     val fanGoodsCategory: String = "",
     val fanGoodsImgPath: String = "",
-    val fanGoodsIsGotten: Boolean = false
+    val fanGoodsIsGotten: Boolean = false,
+    val fanGoodsMemo: String = ""
 ) : GoodsItem {
     override val imgPath get() = fanGoodsImgPath
     override val series get() = fanGoodsSeries

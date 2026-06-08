@@ -31,9 +31,9 @@ data class OfficialGoodsBackup(
     val goodsSeries: String,
     val goodsChara: String,
     val goodsCategory: String,
-    val goodsIsGotten: Boolean
+    val goodsIsGotten: Boolean,
+    val goodsMemo: String = ""
 )
-
 class MyPageViewModel : ViewModel() {
 
     private val _charaList = MutableStateFlow<List<CharaEntity>>(emptyList())
@@ -122,7 +122,8 @@ class MyPageViewModel : ViewModel() {
                             goodsSeries = it.goodsSeries,
                             goodsChara = it.goodsChara,
                             goodsCategory = it.goodsCategory,
-                            goodsIsGotten = it.goodsIsGotten
+                            goodsIsGotten = it.goodsIsGotten,
+                            goodsMemo = it.goodsMemo  // 추가
                         )
                     }
                     val officialJson = gson.toJson(officialBackup)
@@ -240,7 +241,8 @@ class MyPageViewModel : ViewModel() {
                             val goods = App.database.goodsDao().getByUniqueKey(
                                 backup.goodsSeries,
                                 backup.goodsChara,
-                                backup.goodsCategory
+                                backup.goodsCategory,
+                                backup.goodsMemo
                             )
                             goods?.let {
                                 App.database.goodsDao().update(

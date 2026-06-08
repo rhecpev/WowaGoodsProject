@@ -113,7 +113,6 @@ object UpdateManager {
             }
         }
 
-        // 리모트에 없는 시리즈 삭제
         val remoteKeys = remoteSeries.map { "${it.seriesNm}|${it.seriesCountry}" }
         localSeries.forEach { local ->
             if (!remoteKeys.contains("${local.seriesNm}|${local.seriesCountry}")) {
@@ -139,7 +138,8 @@ object UpdateManager {
             val local = localGoods.find {
                 it.goodsSeries == remote.goodsSeries &&
                         it.goodsChara == remote.goodsChara &&
-                        it.goodsCategory == remote.goodsCategory
+                        it.goodsCategory == remote.goodsCategory &&
+                        it.goodsMemo == remote.goodsMemo
             }
             if (local == null) {
                 App.database.goodsDao().insert(remote.copy(goodsId = 0, goodsIsGotten = false))
@@ -158,10 +158,9 @@ object UpdateManager {
             }
         }
 
-        // 리모트에 없는 굿즈 삭제
-        val remoteKeys = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}" }
+        val remoteKeys = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsMemo}" }
         localGoods.forEach { local ->
-            if (!remoteKeys.contains("${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}")) {
+            if (!remoteKeys.contains("${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsMemo}")) {
                 App.database.goodsDao().delete(local)
                 deletedCount++
             }

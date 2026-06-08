@@ -24,10 +24,11 @@ fun GoodsDetailDialog(
     category: String,
     price: Int,
     isGotten: Boolean,
+    memo: String = "",
     onDismiss: () -> Unit,
     onToggleGotten: () -> Unit,
     onDelete: () -> Unit,
-    showDelete: Boolean = true  // 추가
+    showDelete: Boolean = true
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
@@ -40,7 +41,7 @@ fun GoodsDetailDialog(
             modifier = if (isLandscape)
                 Modifier.fillMaxWidth(0.7f).fillMaxHeight(0.9f)
             else
-                Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.7f),  // 여기 추가
+                Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.7f),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
@@ -81,6 +82,9 @@ fun GoodsDetailDialog(
                                 value = if (isGotten) "보유" else "미보유",
                                 valueColor = if (isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
                             )
+                            if (memo.isNotEmpty()) {
+                                DetailRow(label = "메모", value = memo)
+                            }
                         }
                     }
                 } else {
@@ -105,6 +109,9 @@ fun GoodsDetailDialog(
                             value = if (isGotten) "보유" else "미보유",
                             valueColor = if (isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
                         )
+                        if (memo.isNotEmpty()) {
+                            DetailRow(label = "메모", value = memo)
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(AppStyles.paddingLarge))

@@ -14,7 +14,8 @@ data class GoodsEntity(
     val goodsChara: String = "",
     val goodsCategory: String = "",
     val goodsIsGotten: Boolean = false,
-    val goodsUrl: String = ""
+    val goodsUrl: String = "",
+    val goodsMemo: String = ""
 ) : GoodsItem {
     override val imgPath get() = goodsUrl
     override val series get() = goodsSeries

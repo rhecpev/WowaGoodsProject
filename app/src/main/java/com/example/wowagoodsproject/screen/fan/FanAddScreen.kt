@@ -57,6 +57,7 @@ fun FanAddScreen(
     val charaList by viewModel.charaList.collectAsState()
     val categoryList by viewModel.categoryList.collectAsState()
     val isGotten by viewModel.isGotten.collectAsState()
+    val memo by viewModel.memo.collectAsState()
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -117,7 +118,6 @@ fun FanAddScreen(
         }
     }
 
-    // 카테고리 다이얼로그
     if (showCategoryDialog) {
         Dialog(
             onDismissRequest = {
@@ -197,7 +197,6 @@ fun FanAddScreen(
         }
     }
 
-    // 캐릭터 선택 다이얼로그
     if (showCharaDialog) {
         AlertDialog(
             onDismissRequest = { showCharaDialog = false },
@@ -326,7 +325,6 @@ fun FanAddScreen(
                 disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
         )
-
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedButton(
             onClick = { showCharaDialog = true },
@@ -337,7 +335,6 @@ fun FanAddScreen(
                 else selectedCharas.joinToString(", ")
             )
         }
-
         if (selectedCharas.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -375,6 +372,14 @@ fun FanAddScreen(
                 onCheckedChange = { viewModel.onIsGottenChange(it) }
             )
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = memo,
+            onValueChange = { viewModel.onMemoChange(it) },
+            label = { Text("메모") },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 3
+        )
     }
 
     @Composable

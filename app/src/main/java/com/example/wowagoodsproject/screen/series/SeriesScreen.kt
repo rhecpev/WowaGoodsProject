@@ -93,6 +93,7 @@ fun SeriesScreen(
             category = goods.category,
             price = goods.price,
             isGotten = goods.isGotten,
+            memo = (goods as? GoodsEntity)?.goodsMemo ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleGotten(it) }

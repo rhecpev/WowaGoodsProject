@@ -58,6 +58,7 @@ fun FanArtScreen(
             category = goods.category,
             price = goods.price,
             isGotten = goods.isGotten,
+            memo = (goods as? FanGoodsEntity)?.fanGoodsMemo ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 viewModel.toggleGotten(fanGoods)

@@ -45,6 +45,9 @@ class FanAddViewModel : ViewModel() {
     private val _isGotten = MutableStateFlow(false)
     val isGotten: StateFlow<Boolean> = _isGotten
 
+    private val _memo = MutableStateFlow("")
+    val memo: StateFlow<String> = _memo
+
     init {
         loadCharaList()
         loadCategoryList()
@@ -71,6 +74,7 @@ class FanAddViewModel : ViewModel() {
     fun onCategoryChange(value: String) { _category.value = value }
     fun onImageSelected(uri: Uri?) { _imageUri.value = uri }
     fun onIsGottenChange(value: Boolean) { _isGotten.value = value }
+    fun onMemoChange(value: String) { _memo.value = value }
 
     fun toggleChara(chara: String) {
         val current = _selectedCharas.value.toMutableList()
@@ -110,7 +114,8 @@ class FanAddViewModel : ViewModel() {
                     fanGoodsChara = _selectedCharas.value.joinToString(","),
                     fanGoodsCategory = _category.value,
                     fanGoodsImgPath = imgPath,
-                    fanGoodsIsGotten = _isGotten.value
+                    fanGoodsIsGotten = _isGotten.value,
+                    fanGoodsMemo = _memo.value
                 )
             )
             onSuccess()

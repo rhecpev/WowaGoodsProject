@@ -122,6 +122,9 @@ fun MyPageScreen(
             category = goods.category,
             price = goods.price,
             isGotten = goods.isGotten,
+            memo = (goods as? GoodsEntity)?.goodsMemo
+                ?: (goods as? FanGoodsEntity)?.fanGoodsMemo
+                ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleOfficialGotten(it) }

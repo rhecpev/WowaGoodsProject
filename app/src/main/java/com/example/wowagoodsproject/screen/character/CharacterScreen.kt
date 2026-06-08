@@ -87,6 +87,7 @@ fun CharacterScreen(
             category = goods.category,
             price = goods.price,
             isGotten = goods.isGotten,
+            memo = (goods as? FanGoodsEntity)?.fanGoodsMemo ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 fanGoodsItem?.let { viewModel.toggleFanGotten(it) }

@@ -19,7 +19,7 @@ class App : Application() {
 
         fun getThemeMode(): Int {
             return appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
-                .getInt("theme_mode", 0) // 0=시스템, 1=라이트, 2=다크
+                .getInt("theme_mode", 0)
         }
 
         fun setThemeMode(mode: Int) {
@@ -36,13 +36,13 @@ class App : Application() {
             applicationContext,
             GoodsDatabase::class.java,
             "goods_database"
-        ).build()
+        ).addMigrations(GoodsDatabase.MIGRATION_1_2).build()
 
         fanDatabase = Room.databaseBuilder(
             applicationContext,
             FanGoodsDatabase::class.java,
             "fan_goods_database"
-        ).build()
+        ).addMigrations(FanGoodsDatabase.MIGRATION_1_2).build()
 
         charaDatabase = Room.databaseBuilder(
             applicationContext,

@@ -37,8 +37,8 @@ interface GoodsDao {
     @Query("UPDATE tb_goods SET goodsIsGotten = 0")
     suspend fun resetAllGotten()
 
-    @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series AND goodsChara = :chara AND goodsCategory = :category LIMIT 1")
-    suspend fun getByUniqueKey(series: String, chara: String, category: String): GoodsEntity?
+    @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series AND goodsChara = :chara AND goodsCategory = :category AND goodsMemo = :memo LIMIT 1")
+    suspend fun getByUniqueKey(series: String, chara: String, category: String, memo: String = ""): GoodsEntity?
 
     @Query("SELECT * FROM tb_goods")
     fun getAllFlow(): Flow<List<GoodsEntity>>
