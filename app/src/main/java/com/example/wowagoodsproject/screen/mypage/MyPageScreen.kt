@@ -14,7 +14,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Favorite
@@ -158,7 +160,9 @@ fun MyPageScreen(
                         columns = GridCells.Fixed(3),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().height(300.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.5f)
                     ) {
                         items(goodsCharaList) { charaNm ->
                             val charaEntity = charaList.find { it.charaNm == charaNm }
@@ -174,7 +178,10 @@ fun MyPageScreen(
                                     .background(
                                         color = when {
                                             selectedCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(
+                                                alpha = 0.2f
+                                            )
+
                                             else -> Color.Transparent
                                         },
                                         shape = RoundedCornerShape(8.dp)
@@ -266,6 +273,7 @@ fun MyPageScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())  // 추가
                     .padding(AppStyles.paddingLarge),
                 verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
             ) {
@@ -275,7 +283,9 @@ fun MyPageScreen(
                 ) {
                     Button(
                         onClick = { viewModel.setSection("favorite") },
-                        modifier = Modifier.weight(1f).height(80.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(80.dp),
                         shape = RoundedCornerShape(4.dp)
                     ) { Text("캐릭터\n선호 설정", textAlign = TextAlign.Center) }
                     Button(
@@ -283,7 +293,9 @@ fun MyPageScreen(
                             viewModel.setSection("goods")
                             viewModel.loadGottenGoods()
                         },
-                        modifier = Modifier.weight(1f).height(80.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(80.dp),
                         shape = RoundedCornerShape(4.dp)
                     ) { Text("보유\n굿즈 목록", textAlign = TextAlign.Center) }
                 }
@@ -386,12 +398,20 @@ fun MyPageScreen(
                                     containerColor = Color(0xFFFFFAF0)
                                 ),
                                 border = if (selectedThemeMode == 1)
-                                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                    androidx.compose.foundation.BorderStroke(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.primary
+                                    )
                                 else
-                                    androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                                    androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline
+                                    )
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(AppStyles.paddingMedium).fillMaxWidth(),
+                                    modifier = Modifier
+                                        .padding(AppStyles.paddingMedium)
+                                        .fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Icon(
@@ -401,7 +421,11 @@ fun MyPageScreen(
                                         modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("라이트", style = AppStyles.textCardSmall, color = Color(0xFF3D2B00))
+                                    Text(
+                                        "라이트",
+                                        style = AppStyles.textCardSmall,
+                                        color = Color(0xFF3D2B00)
+                                    )
                                 }
                             }
                             OutlinedCard(
@@ -415,12 +439,20 @@ fun MyPageScreen(
                                     containerColor = Color(0xFF0A0A0A)
                                 ),
                                 border = if (selectedThemeMode == 2)
-                                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                    androidx.compose.foundation.BorderStroke(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.primary
+                                    )
                                 else
-                                    androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                                    androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline
+                                    )
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(AppStyles.paddingMedium).fillMaxWidth(),
+                                    modifier = Modifier
+                                        .padding(AppStyles.paddingMedium)
+                                        .fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Icon(
@@ -430,7 +462,11 @@ fun MyPageScreen(
                                         modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("다크", style = AppStyles.textCardSmall, color = Color(0xFFEEEEEE))
+                                    Text(
+                                        "다크",
+                                        style = AppStyles.textCardSmall,
+                                        color = Color(0xFFEEEEEE)
+                                    )
                                 }
                             }
                         }
@@ -498,6 +534,7 @@ fun MyPageScreen(
                     }
                 }
             }
+
             "goods" -> {
                 Column(modifier = Modifier.fillMaxSize()) {
                     TabRow(selectedTabIndex = selectedTab) {
@@ -517,9 +554,16 @@ fun MyPageScreen(
                         0 -> {
                             if (filteredOfficialGoods.isEmpty()) {
                                 Box(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.background),
                                     contentAlignment = Alignment.Center
-                                ) { Text("보유한 공식 굿즈가 없습니다") }
+                                ) {
+                                    Text(
+                                        text = "보유한 공식 굿즈가 없습니다",
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
                             } else {
                                 if (isGridMode) {
                                     val rows = filteredOfficialGoods.chunked(gridColumns)
@@ -535,7 +579,11 @@ fun MyPageScreen(
                                                             category = goods.category,
                                                             price = goods.price,
                                                             isGotten = goods.isGotten,
-                                                            onClick = { detailViewModel.selectGoods(goods) }
+                                                            onClick = {
+                                                                detailViewModel.selectGoods(
+                                                                    goods
+                                                                )
+                                                            }
                                                         )
                                                     }
                                                 }
@@ -543,7 +591,10 @@ fun MyPageScreen(
                                                     Box(modifier = Modifier.weight(1f))
                                                 }
                                             }
-                                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                            HorizontalDivider(
+                                                thickness = 1.dp,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
                                         }
                                     }
                                 } else {
@@ -559,7 +610,10 @@ fun MyPageScreen(
                                                 onClick = { detailViewModel.selectGoods(goods) }
                                             )
                                             if (index < filteredOfficialGoods.lastIndex) {
-                                                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                                HorizontalDivider(
+                                                    thickness = 1.dp,
+                                                    color = MaterialTheme.colorScheme.outline
+                                                )
                                                 Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                                             }
                                         }
@@ -567,12 +621,20 @@ fun MyPageScreen(
                                 }
                             }
                         }
+
                         1 -> {
                             if (filteredFanGoods.isEmpty()) {
                                 Box(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.background),
                                     contentAlignment = Alignment.Center
-                                ) { Text("보유한 2차창작 굿즈가 없습니다") }
+                                ) {
+                                    Text(
+                                        text = "보유한 2차창작 굿즈가 없습니다",
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
                             } else {
                                 if (isGridMode) {
                                     val rows = filteredFanGoods.chunked(gridColumns)
@@ -588,7 +650,11 @@ fun MyPageScreen(
                                                             category = goods.category,
                                                             price = goods.price,
                                                             isGotten = goods.isGotten,
-                                                            onClick = { detailViewModel.selectGoods(goods) }
+                                                            onClick = {
+                                                                detailViewModel.selectGoods(
+                                                                    goods
+                                                                )
+                                                            }
                                                         )
                                                     }
                                                 }
@@ -596,7 +662,10 @@ fun MyPageScreen(
                                                     Box(modifier = Modifier.weight(1f))
                                                 }
                                             }
-                                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                            HorizontalDivider(
+                                                thickness = 1.dp,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
                                         }
                                     }
                                 } else {
@@ -612,7 +681,10 @@ fun MyPageScreen(
                                                 onClick = { detailViewModel.selectGoods(goods) }
                                             )
                                             if (index < filteredFanGoods.lastIndex) {
-                                                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                                HorizontalDivider(
+                                                    thickness = 1.dp,
+                                                    color = MaterialTheme.colorScheme.outline
+                                                )
                                                 Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                                             }
                                         }

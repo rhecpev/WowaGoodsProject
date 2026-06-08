@@ -5,7 +5,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+
 @Composable
 fun TopBar(
     title: String,
@@ -19,15 +21,22 @@ fun TopBar(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,  // headlineMedium → titleMedium 으로 변경
+                style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(end = if (action != null) 120.dp else 0.dp)
             )
-            Box(modifier = Modifier.align(Alignment.CenterEnd)) {
-                action?.invoke()
+            Box(
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                CompositionLocalProvider(
+                    LocalContentColor provides MaterialTheme.colorScheme.onBackground
+                ) {
+                    action?.invoke()
+                }
             }
         }
         HorizontalDivider(

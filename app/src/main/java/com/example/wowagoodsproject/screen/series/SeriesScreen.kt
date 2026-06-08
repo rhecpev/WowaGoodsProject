@@ -124,7 +124,9 @@ fun SeriesScreen(
                         columns = GridCells.Fixed(3),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().height(300.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.5f)
                     ) {
                         items(sortedCharaList) { chara ->
                             Column(
@@ -139,7 +141,10 @@ fun SeriesScreen(
                                     .background(
                                         color = when {
                                             selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                            chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(
+                                                alpha = 0.2f
+                                            )
+
                                             else -> Color.Transparent
                                         },
                                         shape = RoundedCornerShape(8.dp)
@@ -200,7 +205,9 @@ fun SeriesScreen(
                         columns = GridCells.Fixed(3),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().height(300.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.5f)
                     ) {
                         items(goodsCharaList) { charaNm ->
                             val charaEntity = allCharaList.find { it.charaNm == charaNm }
@@ -215,7 +222,10 @@ fun SeriesScreen(
                                     .background(
                                         color = when {
                                             selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(
+                                                alpha = 0.2f
+                                            )
+
                                             else -> Color.Transparent
                                         },
                                         shape = RoundedCornerShape(8.dp)
@@ -328,10 +338,15 @@ fun SeriesScreen(
             )
             if (filteredGoods.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("등록된 굿즈가 없습니다")
+                    Text(
+                        text = "등록된 굿즈가 없습니다",
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
                 }
             } else {
                 if (isGridMode) {
@@ -356,7 +371,10 @@ fun SeriesScreen(
                                     Box(modifier = Modifier.weight(1f))
                                 }
                             }
-                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
                         }
                     }
                 } else {
@@ -372,7 +390,10 @@ fun SeriesScreen(
                                 onClick = { detailViewModel.selectGoods(goods) }
                             )
                             if (index < filteredGoods.lastIndex) {
-                                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                HorizontalDivider(
+                                    thickness = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
                                 Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                             }
                         }
@@ -385,17 +406,28 @@ fun SeriesScreen(
                     Tab(
                         selected = selectedTab == index,
                         onClick = { viewModel.setSelectedTab(index) },
-                        text = { Text(country, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+                        text = {
+                            Text(
+                                country,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1
+                            )
+                        }
                     )
                 }
             }
 
             if (filteredList.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("등록된 시리즈가 없습니다")
+                    Text(text = "등록된 시리즈가 없습니다", color = MaterialTheme.colorScheme.onBackground)
+
+
+
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -455,10 +487,14 @@ fun SeriesScreen(
                                         charas.chunked(2).forEach { rowCharas ->
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                                                horizontalArrangement = Arrangement.spacedBy(
+                                                    AppStyles.paddingMedium
+                                                )
                                             ) {
                                                 rowCharas.forEach { chara ->
-                                                    val count = seriesCharaCountMap["${series.seriesNm}|${chara.charaNm}"] ?: Pair(0, 0)
+                                                    val count =
+                                                        seriesCharaCountMap["${series.seriesNm}|${chara.charaNm}"]
+                                                            ?: Pair(0, 0)
                                                     Row(
                                                         modifier = Modifier
                                                             .weight(1f)
@@ -505,7 +541,10 @@ fun SeriesScreen(
                             }
                         }
                         if (index < filteredList.lastIndex) {
-                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
                             Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                         }
                     }

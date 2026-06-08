@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.screen.fan
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -97,10 +98,15 @@ fun FanArtScreen(
 
         if (filteredList.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "등록된 굿즈가 없습니다")
+                Text(
+                    text = "등록된 굿즈가 없습니다",
+                    color = MaterialTheme.colorScheme.onBackground
+                )
             }
         } else {
             if (isGridMode) {
