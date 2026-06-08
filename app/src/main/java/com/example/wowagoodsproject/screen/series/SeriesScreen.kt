@@ -61,6 +61,8 @@ fun SeriesScreen(
     var showGoodsCharaFilterDialog by remember { mutableStateOf(false) }
     var selectedGoodsCharaFilter by remember { mutableStateOf<String?>(null) }
 
+    val sortedCharaList = allCharaList.sortedByDescending { it.charaIsFavorite }
+
     val gridColumns = when (widthSizeClass) {
         WindowWidthSizeClass.Compact -> 2
         WindowWidthSizeClass.Medium -> 3
@@ -77,6 +79,7 @@ fun SeriesScreen(
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
         .distinct()
         .filter { it.isNotEmpty() }
+        .sortedByDescending { charaNm -> allCharaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
 
     BackHandler(enabled = selectedSeries != null) {
         viewModel.clearSelectedSeries()
@@ -123,7 +126,7 @@ fun SeriesScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().height(300.dp)
                     ) {
-                        items(allCharaList) { chara ->
+                        items(sortedCharaList) { chara ->
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
@@ -134,9 +137,11 @@ fun SeriesScreen(
                                         showCharaFilterDialog = false
                                     }
                                     .background(
-                                        color = if (selectedCharaFilter?.charaNm == chara.charaNm)
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        else Color.Transparent,
+                                        color = when {
+                                            selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                            chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else -> Color.Transparent
+                                        },
                                         shape = RoundedCornerShape(8.dp)
                                     )
                                     .padding(AppStyles.paddingSmall)
@@ -208,9 +213,11 @@ fun SeriesScreen(
                                         showGoodsCharaFilterDialog = false
                                     }
                                     .background(
-                                        color = if (selectedGoodsCharaFilter == charaNm)
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        else Color.Transparent,
+                                        color = when {
+                                            selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else -> Color.Transparent
+                                        },
                                         shape = RoundedCornerShape(8.dp)
                                     )
                                     .padding(AppStyles.paddingSmall)
@@ -378,16 +385,11 @@ fun SeriesScreen(
                     Tab(
                         selected = selectedTab == index,
                         onClick = { viewModel.setSelectedTab(index) },
-                        text = {
-                            Text(
-                                text = country,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1
-                            )
-                        }
+                        text = { Text(country, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
                     )
                 }
             }
+
             if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),

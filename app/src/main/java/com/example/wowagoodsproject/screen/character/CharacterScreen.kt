@@ -2,6 +2,7 @@ package com.example.wowagoodsproject.screen.character
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -56,7 +57,11 @@ fun CharacterScreen(
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val showFavoriteOnly by viewModel.showFavoriteOnly.collectAsState()
 
-    val filteredCharaList = if (showFavoriteOnly) charaList.filter { it.charaIsFavorite } else charaList
+    val filteredCharaList = if (showFavoriteOnly)
+        charaList.filter { it.charaIsFavorite }
+    else
+        charaList.sortedByDescending { it.charaIsFavorite }
+
     val filteredOfficialGoods = filterViewModel.applyFilter(officialGoods)
     val filteredFanGoods = filterViewModel.applyFilter(fanGoods)
 
@@ -144,14 +149,19 @@ fun CharacterScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(charaGridColumns),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     items(filteredCharaList) { chara ->
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surface
+                                )
                                 .clickable { viewModel.selectChara(chara) }
                                 .padding(AppStyles.paddingSmall)
                         ) {
@@ -162,12 +172,16 @@ fun CharacterScreen(
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(80.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                                    .border(1.dp, MaterialTheme.colorScheme.outline),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = chara.charaNm, style = AppStyles.textCardSmall)
+                            Text(
+                                text = chara.charaNm,
+                                style = AppStyles.textCardSmall,
+                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }

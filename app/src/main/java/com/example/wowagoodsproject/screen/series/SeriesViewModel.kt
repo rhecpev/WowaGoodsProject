@@ -44,7 +44,7 @@ class SeriesViewModel : ViewModel() {
     private val _filteredSeriesList = MutableStateFlow<List<SeriesEntity>>(emptyList())
     val filteredSeriesList: StateFlow<List<SeriesEntity>> = _filteredSeriesList
 
-    val countries = listOf("전체","버전", "중국", "대만", "한국", "일본", "미국")
+    val countries = listOf("전체","버전", "중국", "대만", "한국", "일본", "기타")
 
     init {
         loadCharaMap()

@@ -43,6 +43,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.BuildConfig
 import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.GoodsGridItem
@@ -82,9 +83,12 @@ fun MyPageScreen(
     ) { uri ->
         uri?.let { viewModel.importData(context, it) }
     }
-    BackHandler(enabled = currentSection == "favorite") {
+
+    BackHandler(enabled = currentSection != null) {
         viewModel.setSection(null)
+        viewModel.setCharaFilter(null)
     }
+
     val gridColumns = when (widthSizeClass) {
         WindowWidthSizeClass.Compact -> 2
         WindowWidthSizeClass.Medium -> 3
@@ -102,6 +106,7 @@ fun MyPageScreen(
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
         .distinct()
         .filter { it.isNotEmpty() }
+        .sortedByDescending { charaNm -> charaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
 
     val filteredOfficialGoods = officialGottenGoods.let { list ->
         if (selectedCharaFilter != null) list.filter { it.chara.contains(selectedCharaFilter!!) }
@@ -166,10 +171,13 @@ fun MyPageScreen(
                                         )
                                         viewModel.setShowCharaFilterDialog(false)
                                     }
-                                    .then(
-                                        if (selectedCharaFilter == charaNm)
-                                            Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
-                                        else Modifier
+                                    .background(
+                                        color = when {
+                                            selectedCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                            else -> Color.Transparent
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
                                     )
                                     .padding(AppStyles.paddingSmall)
                             ) {
@@ -209,10 +217,7 @@ fun MyPageScreen(
             }
         }
     }
-    BackHandler(enabled = currentSection != null) {
-        viewModel.setSection(null)
-        viewModel.setCharaFilter(null)
-    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
             title = "마이페이지",
@@ -271,8 +276,7 @@ fun MyPageScreen(
                     Button(
                         onClick = { viewModel.setSection("favorite") },
                         modifier = Modifier.weight(1f).height(80.dp),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-
+                        shape = RoundedCornerShape(4.dp)
                     ) { Text("캐릭터\n선호 설정", textAlign = TextAlign.Center) }
                     Button(
                         onClick = {
@@ -280,8 +284,7 @@ fun MyPageScreen(
                             viewModel.loadGottenGoods()
                         },
                         modifier = Modifier.weight(1f).height(80.dp),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-
+                        shape = RoundedCornerShape(4.dp)
                     ) { Text("보유\n굿즈 목록", textAlign = TextAlign.Center) }
                 }
 
@@ -433,6 +436,14 @@ fun MyPageScreen(
                         }
                     }
                 }
+
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    style = AppStyles.textCardSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
             }
         } else when (currentSection) {
             "favorite" -> {

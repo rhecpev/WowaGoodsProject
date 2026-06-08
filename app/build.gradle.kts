@@ -11,13 +11,16 @@ android {
             minorApiLevel = 1
         }
     }
-
+    buildFeatures {
+        compose = true
+        buildConfig = true  // 추가
+    }
     defaultConfig {
         applicationId = "com.example.wowagoodsproject"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.5"
+        versionCode = 8
+        versionName = "1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
