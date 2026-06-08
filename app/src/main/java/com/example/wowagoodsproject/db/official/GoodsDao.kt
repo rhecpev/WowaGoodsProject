@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface GoodsDao {
 
-    @Query("SELECT * FROM tb_goods")
+    @Query("SELECT * FROM tb_goods ORDER BY goodsReleaseDate DESC")
     suspend fun getAll(): List<GoodsEntity>
 
     @Insert
@@ -22,10 +22,10 @@ interface GoodsDao {
     @Delete
     suspend fun delete(goods: GoodsEntity)
 
-    @Query("SELECT * FROM tb_goods WHERE goodsChara LIKE '%' || :chara || '%'")
+    @Query("SELECT * FROM tb_goods WHERE goodsChara LIKE '%' || :chara || '%' ORDER BY goodsReleaseDate DESC")
     fun getByCharaFlow(chara: String): Flow<List<GoodsEntity>>
 
-    @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series")
+    @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series ORDER BY goodsReleaseDate DESC")
     suspend fun getBySeries(series: String): List<GoodsEntity>
 
     @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%'")
@@ -40,7 +40,7 @@ interface GoodsDao {
     @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series AND goodsChara = :chara AND goodsCategory = :category AND goodsMemo = :memo LIMIT 1")
     suspend fun getByUniqueKey(series: String, chara: String, category: String, memo: String = ""): GoodsEntity?
 
-    @Query("SELECT * FROM tb_goods")
+    @Query("SELECT * FROM tb_goods ORDER BY goodsReleaseDate DESC")
     fun getAllFlow(): Flow<List<GoodsEntity>>
 
     @Query("SELECT DISTINCT goodsCategory FROM tb_goods WHERE goodsCategory != ''")

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface FanGoodsDao {
 
-    @Query("SELECT * FROM tb_fan_goods")
+    @Query("SELECT * FROM tb_fan_goods ORDER BY fanGoodsReleaseDate DESC")
     suspend fun getAll(): List<FanGoodsEntity>
 
     @Query("SELECT DISTINCT fanGoodsCategory FROM tb_fan_goods")
@@ -25,7 +25,7 @@ interface FanGoodsDao {
     @Delete
     suspend fun delete(fanGoods: FanGoodsEntity)
 
-    @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsChara LIKE '%' || :chara || '%'")
+    @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsChara LIKE '%' || :chara || '%' ORDER BY fanGoodsReleaseDate DESC")
     fun getByCharaFlow(chara: String): Flow<List<FanGoodsEntity>>
 
     @Query("DELETE FROM tb_fan_goods")

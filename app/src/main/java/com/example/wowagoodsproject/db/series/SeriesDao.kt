@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface SeriesDao {
 
-    @Query("SELECT * FROM tb_series")
+    @Query("SELECT * FROM tb_series ORDER BY seriesDate DESC")
     suspend fun getAll(): List<SeriesEntity>
 
     @Insert
@@ -22,6 +22,6 @@ interface SeriesDao {
     @Delete
     suspend fun delete(series: SeriesEntity)
 
-    @Query("SELECT * FROM tb_series")
+    @Query("SELECT * FROM tb_series ORDER BY seriesDate DESC")
     fun getAllFlow(): Flow<List<SeriesEntity>>
 }
