@@ -716,14 +716,14 @@ fun MyPageScreen(
                             onClick = {
                                 viewModel.setSelectedTab(0)
                             },
-                            text = { Text("공식 (${officialGottenGoods.size})") }
+                            text = { Text("공식 (${filteredOfficialGoods.size})") }
                         )
                         Tab(
                             selected = selectedTab == 1,
                             onClick = {
                                 viewModel.setSelectedTab(1)
                             },
-                            text = { Text("2차창작 (${fanGottenGoods.size})") }
+                            text = { Text("2차창작 (${filteredFanGoods.size})") }
                         )
                     }
 
