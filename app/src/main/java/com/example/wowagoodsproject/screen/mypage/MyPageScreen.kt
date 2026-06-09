@@ -13,11 +13,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -72,10 +74,14 @@ fun MyPageScreen(
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val currentSection by viewModel.currentSection.collectAsState()
     val selectedCharaFilter by viewModel.selectedCharaFilter.collectAsState()
-    val showCharaFilterDialog by viewModel.showCharaFilterDialog.collectAsState()
+    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
+    val showFilterDialog by viewModel.showFilterDialog.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val updateStatus by viewModel.updateStatus.collectAsState()
 
+    var filterDialogTab by remember { mutableStateOf(0) }
+    var filterSearch by remember { mutableStateOf("") }
+    var charaSearchQuery by remember { mutableStateOf("") }
     var isDbExpanded by remember { mutableStateOf(false) }
     var isUserDataExpanded by remember { mutableStateOf(false) }
     var selectedThemeMode by remember { mutableStateOf(App.getThemeMode()) }
@@ -89,6 +95,8 @@ fun MyPageScreen(
     BackHandler(enabled = currentSection != null) {
         viewModel.setSection(null)
         viewModel.setCharaFilter(null)
+        viewModel.setCategoryFilter(null)
+        charaSearchQuery = ""
     }
 
     val gridColumns = when (widthSizeClass) {
@@ -103,21 +111,41 @@ fun MyPageScreen(
         else -> 5
     }
 
-    val currentGoods = if (selectedTab == 0) officialGottenGoods else fanGottenGoods
-    val goodsCharaList = currentGoods
+    val goodsCharaList = (officialGottenGoods + fanGottenGoods)
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
         .distinct()
         .filter { it.isNotEmpty() }
         .sortedByDescending { charaNm -> charaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
 
+    val combinedCategoryList = (officialGottenGoods + fanGottenGoods)
+        .map { it.category }
+        .distinct()
+        .filter { it.isNotEmpty() }
+        .sorted()
+
     val filteredOfficialGoods = officialGottenGoods.let { list ->
-        if (selectedCharaFilter != null) list.filter { it.chara.contains(selectedCharaFilter!!) }
-        else list
+        var result = list
+        if (selectedCharaFilter != null) result = result.filter { it.chara.contains(selectedCharaFilter!!) }
+        if (selectedCategoryFilter != null) result = result.filter { it.category == selectedCategoryFilter }
+        result
     }
     val filteredFanGoods = fanGottenGoods.let { list ->
-        if (selectedCharaFilter != null) list.filter { it.chara.contains(selectedCharaFilter!!) }
-        else list
+        var result = list
+        if (selectedCharaFilter != null) result = result.filter { it.chara.contains(selectedCharaFilter!!) }
+        if (selectedCategoryFilter != null) result = result.filter { it.category == selectedCategoryFilter }
+        result
     }
+
+    val filteredCharaList = goodsCharaList.filter {
+        it.contains(filterSearch, ignoreCase = true)
+    }
+    val filteredCategoryList = combinedCategoryList.filter {
+        it.contains(filterSearch, ignoreCase = true)
+    }
+
+    val searchedCharaList = charaList
+        .sortedByDescending { it.charaIsFavorite }
+        .filter { it.charaNm.contains(charaSearchQuery, ignoreCase = true) }
 
     selectedGoods?.let { goods ->
         val officialGoods = goods as? GoodsEntity
@@ -143,66 +171,146 @@ fun MyPageScreen(
         )
     }
 
-    if (showCharaFilterDialog) {
+    if (showFilterDialog) {
         Dialog(
-            onDismissRequest = { viewModel.setShowCharaFilterDialog(false) },
+            onDismissRequest = {
+                viewModel.setShowFilterDialog(false)
+                filterSearch = ""
+            },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth(0.9f),
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .fillMaxHeight(0.7f),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
                 Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
-                    Text(text = "캐릭터 필터", style = AppStyles.textCardTitle)
+                    Text(text = "필터", style = AppStyles.textCardTitle)
                     Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.5f)
-                    ) {
-                        items(goodsCharaList) { charaNm ->
-                            val charaEntity = charaList.find { it.charaNm == charaNm }
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        viewModel.setCharaFilter(
-                                            if (selectedCharaFilter == charaNm) null else charaNm
-                                        )
-                                        viewModel.setShowCharaFilterDialog(false)
-                                    }
-                                    .background(
-                                        color = when {
-                                            selectedCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(
-                                                alpha = 0.2f
-                                            )
 
-                                            else -> Color.Transparent
-                                        },
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .padding(AppStyles.paddingSmall)
+                    TabRow(selectedTabIndex = filterDialogTab) {
+                        Tab(
+                            selected = filterDialogTab == 0,
+                            onClick = {
+                                filterDialogTab = 0
+                                filterSearch = ""
+                            },
+                            text = { Text("캐릭터") }
+                        )
+                        Tab(
+                            selected = filterDialogTab == 1,
+                            onClick = {
+                                filterDialogTab = 1
+                                filterSearch = ""
+                            },
+                            text = { Text("카테고리") }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                    OutlinedTextField(
+                        value = filterSearch,
+                        onValueChange = { filterSearch = it },
+                        label = { Text("검색") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        trailingIcon = {
+                            if (filterSearch.isNotEmpty()) {
+                                IconButton(onClick = { filterSearch = "" }) {
+                                    Icon(imageVector = Icons.Default.Clear, contentDescription = "초기화")
+                                }
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                    when (filterDialogTab) {
+                        0 -> {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
                             ) {
-                                Image(
-                                    painter = rememberAsyncImagePainter(
-                                        model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(60.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = charaNm, style = AppStyles.textCardSmall)
+                                items(filteredCharaList) { charaNm ->
+                                    val charaEntity = charaList.find { it.charaNm == charaNm }
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clickable {
+                                                viewModel.setCharaFilter(
+                                                    if (selectedCharaFilter == charaNm) null else charaNm
+                                                )
+                                                viewModel.setShowFilterDialog(false)
+                                                filterSearch = ""
+                                            }
+                                            .background(
+                                                color = when {
+                                                    selectedCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                                    charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                    else -> Color.Transparent
+                                                },
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .padding(AppStyles.paddingSmall)
+                                    ) {
+                                        Image(
+                                            painter = rememberAsyncImagePainter(
+                                                model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(text = charaNm, style = AppStyles.textCardSmall)
+                                    }
+                                }
+                            }
+                        }
+                        1 -> {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(filteredCategoryList) { cat ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.setCategoryFilter(
+                                                    if (selectedCategoryFilter == cat) null else cat
+                                                )
+                                                viewModel.setShowFilterDialog(false)
+                                                filterSearch = ""
+                                            },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedCategoryFilter == cat)
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surface
+                                        )
+                                    ) {
+                                        Text(
+                                            text = cat,
+                                            modifier = Modifier.padding(AppStyles.paddingMedium),
+                                            color = if (selectedCategoryFilter == cat)
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
+
                     Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -211,12 +319,17 @@ fun MyPageScreen(
                         OutlinedButton(
                             onClick = {
                                 viewModel.setCharaFilter(null)
-                                viewModel.setShowCharaFilterDialog(false)
+                                viewModel.setCategoryFilter(null)
+                                viewModel.setShowFilterDialog(false)
+                                filterSearch = ""
                             },
                             modifier = Modifier.weight(1f)
                         ) { Text("필터 해제") }
                         Button(
-                            onClick = { viewModel.setShowCharaFilterDialog(false) },
+                            onClick = {
+                                viewModel.setShowFilterDialog(false)
+                                filterSearch = ""
+                            },
                             modifier = Modifier.weight(1f)
                         ) { Text("닫기") }
                     }
@@ -239,11 +352,19 @@ fun MyPageScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                         }
-                        IconButton(onClick = { viewModel.setShowCharaFilterDialog(true) }) {
+                        if (selectedCategoryFilter != null) {
+                            Text(
+                                text = selectedCategoryFilter!!,
+                                style = AppStyles.textCardSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        IconButton(onClick = { viewModel.setShowFilterDialog(true) }) {
                             Icon(
                                 imageVector = Icons.Default.FilterList,
-                                contentDescription = "캐릭터 필터",
-                                tint = if (selectedCharaFilter != null)
+                                contentDescription = "필터",
+                                tint = if (selectedCharaFilter != null || selectedCategoryFilter != null)
                                     MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface
                             )
@@ -257,12 +378,16 @@ fun MyPageScreen(
                         TextButton(onClick = {
                             viewModel.setSection(null)
                             viewModel.setCharaFilter(null)
+                            viewModel.setCategoryFilter(null)
                         }) {
                             Text("뒤로")
                         }
                     }
                 } else if (currentSection != null) {
-                    TextButton(onClick = { viewModel.setSection(null) }) {
+                    TextButton(onClick = {
+                        viewModel.setSection(null)
+                        charaSearchQuery = ""
+                    }) {
                         Text("뒤로")
                     }
                 }
@@ -273,7 +398,7 @@ fun MyPageScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())  // 추가
+                    .verticalScroll(rememberScrollState())
                     .padding(AppStyles.paddingLarge),
                 verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
             ) {
@@ -398,15 +523,9 @@ fun MyPageScreen(
                                     containerColor = Color(0xFFFFFAF0)
                                 ),
                                 border = if (selectedThemeMode == 1)
-                                    androidx.compose.foundation.BorderStroke(
-                                        2.dp,
-                                        MaterialTheme.colorScheme.primary
-                                    )
+                                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                                 else
-                                    androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outline
-                                    )
+                                    androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -421,11 +540,7 @@ fun MyPageScreen(
                                         modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "라이트",
-                                        style = AppStyles.textCardSmall,
-                                        color = Color(0xFF3D2B00)
-                                    )
+                                    Text("라이트", style = AppStyles.textCardSmall, color = Color(0xFF3D2B00))
                                 }
                             }
                             OutlinedCard(
@@ -439,15 +554,9 @@ fun MyPageScreen(
                                     containerColor = Color(0xFF0A0A0A)
                                 ),
                                 border = if (selectedThemeMode == 2)
-                                    androidx.compose.foundation.BorderStroke(
-                                        2.dp,
-                                        MaterialTheme.colorScheme.primary
-                                    )
+                                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
                                 else
-                                    androidx.compose.foundation.BorderStroke(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outline
-                                    )
+                                    androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -462,11 +571,7 @@ fun MyPageScreen(
                                         modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "다크",
-                                        style = AppStyles.textCardSmall,
-                                        color = Color(0xFFEEEEEE)
-                                    )
+                                    Text("다크", style = AppStyles.textCardSmall, color = Color(0xFFEEEEEE))
                                 }
                             }
                         }
@@ -488,6 +593,22 @@ fun MyPageScreen(
                     style = AppStyles.textCardTitle,
                     modifier = Modifier.padding(AppStyles.paddingLarge)
                 )
+                OutlinedTextField(
+                    value = charaSearchQuery,
+                    onValueChange = { charaSearchQuery = it },
+                    label = { Text("캐릭터 검색") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppStyles.paddingMedium, vertical = AppStyles.paddingSmall),
+                    singleLine = true,
+                    trailingIcon = {
+                        if (charaSearchQuery.isNotEmpty()) {
+                            IconButton(onClick = { charaSearchQuery = "" }) {
+                                Icon(imageVector = Icons.Default.Clear, contentDescription = "검색 초기화")
+                            }
+                        }
+                    }
+                )
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(charaGridColumns),
                     modifier = Modifier.fillMaxSize(),
@@ -495,7 +616,7 @@ fun MyPageScreen(
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                     verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
-                    items(charaList) { chara ->
+                    items(searchedCharaList) { chara ->
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
@@ -540,12 +661,18 @@ fun MyPageScreen(
                     TabRow(selectedTabIndex = selectedTab) {
                         Tab(
                             selected = selectedTab == 0,
-                            onClick = { viewModel.setSelectedTab(0) },
+                            onClick = {
+                                viewModel.setSelectedTab(0)
+                                viewModel.setCategoryFilter(null)
+                            },
                             text = { Text("공식 (${officialGottenGoods.size})") }
                         )
                         Tab(
                             selected = selectedTab == 1,
-                            onClick = { viewModel.setSelectedTab(1) },
+                            onClick = {
+                                viewModel.setSelectedTab(1)
+                                viewModel.setCategoryFilter(null)
+                            },
                             text = { Text("2차창작 (${fanGottenGoods.size})") }
                         )
                     }
@@ -580,11 +707,7 @@ fun MyPageScreen(
                                                             price = goods.price,
                                                             isGotten = goods.isGotten,
                                                             memo = goods.goodsMemo,
-                                                            onClick = {
-                                                                detailViewModel.selectGoods(
-                                                                    goods
-                                                                )
-                                                            }
+                                                            onClick = { detailViewModel.selectGoods(goods) }
                                                         )
                                                     }
                                                 }
@@ -592,10 +715,7 @@ fun MyPageScreen(
                                                     Box(modifier = Modifier.weight(1f))
                                                 }
                                             }
-                                            HorizontalDivider(
-                                                thickness = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline
-                                            )
+                                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
                                         }
                                     }
                                 } else {
@@ -612,10 +732,7 @@ fun MyPageScreen(
                                                 onClick = { detailViewModel.selectGoods(goods) }
                                             )
                                             if (index < filteredOfficialGoods.lastIndex) {
-                                                HorizontalDivider(
-                                                    thickness = 1.dp,
-                                                    color = MaterialTheme.colorScheme.outline
-                                                )
+                                                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
                                                 Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                                             }
                                         }
@@ -653,11 +770,7 @@ fun MyPageScreen(
                                                             price = goods.price,
                                                             isGotten = goods.isGotten,
                                                             memo = goods.fanGoodsMemo,
-                                                            onClick = {
-                                                                detailViewModel.selectGoods(
-                                                                    goods
-                                                                )
-                                                            }
+                                                            onClick = { detailViewModel.selectGoods(goods) }
                                                         )
                                                     }
                                                 }
@@ -665,10 +778,7 @@ fun MyPageScreen(
                                                     Box(modifier = Modifier.weight(1f))
                                                 }
                                             }
-                                            HorizontalDivider(
-                                                thickness = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline
-                                            )
+                                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
                                         }
                                     }
                                 } else {
@@ -685,10 +795,7 @@ fun MyPageScreen(
                                                 onClick = { detailViewModel.selectGoods(goods) }
                                             )
                                             if (index < filteredFanGoods.lastIndex) {
-                                                HorizontalDivider(
-                                                    thickness = 1.dp,
-                                                    color = MaterialTheme.colorScheme.outline
-                                                )
+                                                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
                                                 Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                                             }
                                         }

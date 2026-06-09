@@ -34,6 +34,7 @@ data class OfficialGoodsBackup(
     val goodsIsGotten: Boolean,
     val goodsMemo: String = ""
 )
+
 class MyPageViewModel : ViewModel() {
 
     private val _charaList = MutableStateFlow<List<CharaEntity>>(emptyList())
@@ -54,8 +55,12 @@ class MyPageViewModel : ViewModel() {
     private val _selectedCharaFilter = MutableStateFlow<String?>(null)
     val selectedCharaFilter: StateFlow<String?> = _selectedCharaFilter
 
-    private val _showCharaFilterDialog = MutableStateFlow(false)
-    val showCharaFilterDialog: StateFlow<Boolean> = _showCharaFilterDialog
+    // ✅ 카테고리 필터 추가
+    private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
+    val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter
+
+    private val _showFilterDialog = MutableStateFlow(false)
+    val showFilterDialog: StateFlow<Boolean> = _showFilterDialog
 
     private val _updateStatus = MutableStateFlow<String?>(null)
     val updateStatus: StateFlow<String?> = _updateStatus
@@ -106,8 +111,12 @@ class MyPageViewModel : ViewModel() {
     fun setSelectedTab(tab: Int) { _selectedTab.value = tab }
     fun setSection(section: String?) { _currentSection.value = section }
     fun setCharaFilter(chara: String?) { _selectedCharaFilter.value = chara }
-    fun setShowCharaFilterDialog(show: Boolean) { _showCharaFilterDialog.value = show }
+    fun setCategoryFilter(category: String?) { _selectedCategoryFilter.value = category }
+    fun setShowFilterDialog(show: Boolean) { _showFilterDialog.value = show }
     fun clearUpdateStatus() { _updateStatus.value = null }
+
+    // 기존 호환성을 위해 유지
+    fun setShowCharaFilterDialog(show: Boolean) { _showFilterDialog.value = show }
 
     fun exportData(context: Context) {
         viewModelScope.launch {
@@ -123,7 +132,7 @@ class MyPageViewModel : ViewModel() {
                             goodsChara = it.goodsChara,
                             goodsCategory = it.goodsCategory,
                             goodsIsGotten = it.goodsIsGotten,
-                            goodsMemo = it.goodsMemo  // 추가
+                            goodsMemo = it.goodsMemo
                         )
                     }
                     val officialJson = gson.toJson(officialBackup)
@@ -291,7 +300,7 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
-    fun updateGoods(){
+    fun updateGoods() {
         viewModelScope.launch {
             try {
                 _updateStatus.value = "업데이트 중..."
@@ -330,100 +339,4 @@ class MyPageViewModel : ViewModel() {
             }
         }
     }
-
-
-
-//    fun updateGoods() {
-//        viewModelScope.launch {
-//            try {
-//                _updateStatus.value = "업데이트 중..."
-//                val result = withContext(Dispatchers.IO) {
-//                    val gson = Gson()
-//                    val seriesUrl = java.net.URL("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/series.json")
-//                    val seriesConnection = seriesUrl.openConnection() as java.net.HttpURLConnection
-//                    seriesConnection.requestMethod = "GET"
-//                    seriesConnection.connectTimeout = 10000
-//                    seriesConnection.readTimeout = 10000
-//                    val seriesJson = seriesConnection.inputStream.bufferedReader().readText()
-//                    val seriesType = object : TypeToken<List<com.example.wowagoodsproject.db.series.SeriesEntity>>() {}.type
-//                    val remoteSeries: List<com.example.wowagoodsproject.db.series.SeriesEntity> = gson.fromJson(seriesJson, seriesType)
-//                    val localSeries = App.seriesDatabase.seriesDao().getAll()
-//
-//                    var seriesCount = 0
-//                    remoteSeries.forEach { remote ->
-//                        val local = localSeries.find {
-//                            it.seriesNm == remote.seriesNm && it.seriesCountry == remote.seriesCountry
-//                        }
-//                        if (local == null) {
-//                            App.seriesDatabase.seriesDao().insert(remote.copy(seriesId = 0))
-//                            seriesCount++
-//                        } else if (
-//                            local.seriesUrl != remote.seriesUrl ||
-//                            local.seriesCharas != remote.seriesCharas ||
-//                            local.seriesDate != remote.seriesDate
-//                        ) {
-//                            App.seriesDatabase.seriesDao().update(
-//                                local.copy(
-//                                    seriesUrl = remote.seriesUrl,
-//                                    seriesCharas = remote.seriesCharas,
-//                                    seriesDate = remote.seriesDate
-//                                )
-//                            )
-//                            seriesCount++
-//                        }
-//                    }
-//
-//                    val goodsUrl = java.net.URL("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/goods.json")
-//                    val goodsConnection = goodsUrl.openConnection() as java.net.HttpURLConnection
-//                    goodsConnection.requestMethod = "GET"
-//                    goodsConnection.connectTimeout = 10000
-//                    goodsConnection.readTimeout = 10000
-//                    val goodsJson = goodsConnection.inputStream.bufferedReader().readText()
-//                    val goodsType = object : TypeToken<List<GoodsEntity>>() {}.type
-//                    val remoteGoods: List<GoodsEntity> = gson.fromJson(goodsJson, goodsType)
-//                    val localGoods = App.database.goodsDao().getAll()
-//
-//                    var goodsCount = 0
-//                    remoteGoods.forEach { remote ->
-//                        val local = localGoods.find {
-//                            it.goodsSeries == remote.goodsSeries &&
-//                                    it.goodsChara == remote.goodsChara &&
-//                                    it.goodsCategory == remote.goodsCategory
-//                        }
-//                        if (local == null) {
-//                            App.database.goodsDao().insert(remote.copy(goodsId = 0, goodsIsGotten = false))
-//                            goodsCount++
-//                        } else if (
-//                            local.goodsUrl != remote.goodsUrl ||
-//                            local.goodsPrice != remote.goodsPrice
-//                        ) {
-//                            App.database.goodsDao().update(
-//                                local.copy(
-//                                    goodsUrl = remote.goodsUrl,
-//                                    goodsPrice = remote.goodsPrice
-//                                )
-//                            )
-//                            goodsCount++
-//                        }
-//                    }
-//                    Pair(seriesCount, goodsCount)
-//                }
-//                val msg = buildString {
-//                    if (result.first > 0) append("시리즈 ${result.first}개 ")
-//                    if (result.second > 0) append("굿즈 ${result.second}개 ")
-//                    if (isEmpty()) append("이미 최신 상태예요!")
-//                    else append("업데이트됨!")
-//                }
-//                _updateStatus.value = null
-//                withContext(Dispatchers.Main) {
-//                    Toast.makeText(App.appContext, msg, Toast.LENGTH_SHORT).show()
-//                }
-//            } catch (e: Exception) {
-//                _updateStatus.value = null
-//                withContext(Dispatchers.Main) {
-//                    Toast.makeText(App.appContext, "업데이트 실패: ${e.message}", Toast.LENGTH_SHORT).show()
-//                }
-//            }
-//        }
-//    }
 }
