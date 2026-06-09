@@ -54,7 +54,7 @@ fun SeriesScreen(
     val allCharaList by viewModel.allCharaList.collectAsState()
     val selectedCharaFilter by viewModel.selectedCharaFilter.collectAsState()
     val selectedSeries by viewModel.selectedSeries.collectAsState()
-    val seriesGoods by viewModel.seriesGoods.collectAsState()
+    val seriesGoods by (if (1===1) viewModel.seriesGoods.collectAsState() else viewModel.seriesGoods.collectAsState())
     val filterType by filterViewModel.filterType.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
@@ -98,7 +98,15 @@ fun SeriesScreen(
         it.contains(goodsFilterSearch, ignoreCase = true)
     }
 
-    val filteredGoods = filterViewModel.applyFilter(seriesGoods).let { list ->
+    val filteredGoods = filterViewModel.applyFilter(seriesGoods).second.let { list ->
+        var result = list
+        if (selectedGoodsCharaFilter != null)
+            result = result.filter { it.chara.contains(selectedGoodsCharaFilter!!) }
+        if (selectedGoodsCategoryFilter != null)
+            result = result.filter { it.category == selectedGoodsCategoryFilter }
+        result
+    }
+    val AllSeriesGoods = filterViewModel.applyFilter(seriesGoods).first.let { list ->
         var result = list
         if (selectedGoodsCharaFilter != null)
             result = result.filter { it.chara.contains(selectedGoodsCharaFilter!!) }
@@ -503,7 +511,7 @@ fun SeriesScreen(
             FilterBar(
                 filterType = filterType,
                 onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = seriesGoods
+                goodsList = AllSeriesGoods
             )
             if (filteredGoods.isEmpty()) {
                 Box(

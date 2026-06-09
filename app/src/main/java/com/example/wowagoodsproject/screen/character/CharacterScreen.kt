@@ -72,7 +72,7 @@ fun CharacterScreen(
         charaList.sortedByDescending { it.charaIsFavorite }
             .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
-    val categoryList = (filterViewModel.applyFilter(officialGoods) + filterViewModel.applyFilter(fanGoods))
+    val categoryList = (filterViewModel.applyFilter(officialGoods).second + filterViewModel.applyFilter(fanGoods).second)
         .map { it.category }
         .distinct()
         .filter { it.isNotEmpty() }
@@ -82,11 +82,20 @@ fun CharacterScreen(
         it.contains(categorySearch, ignoreCase = true)
     }
 
-    val filteredOfficialGoods = filterViewModel.applyFilter(officialGoods).let { list ->
+    val filteredOfficialGoods = filterViewModel.applyFilter(officialGoods).second.let { list ->
         if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
         else list
     }
-    val filteredFanGoods = filterViewModel.applyFilter(fanGoods).let { list ->
+    val filteredFanGoods = filterViewModel.applyFilter(fanGoods).second.let { list ->
+        if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
+        else list
+    }
+
+    val AllFilteredOfficialGoods = filterViewModel.applyFilter(officialGoods).first.let { list ->
+        if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
+        else list
+    }
+    val AllFilteredFanGoods = filterViewModel.applyFilter(fanGoods).first.let { list ->
         if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
         else list
     }
@@ -367,7 +376,6 @@ fun CharacterScreen(
                         selected = selectedTab == 0,
                         onClick = {
                             viewModel.setSelectedTab(0)
-                            selectedCategoryFilter = null
                         },
                         text = { Text("공식 (${officialGoods.size})") }
                     )
@@ -375,7 +383,6 @@ fun CharacterScreen(
                         selected = selectedTab == 1,
                         onClick = {
                             viewModel.setSelectedTab(1)
-                            selectedCategoryFilter = null
                         },
                         text = { Text("2차창작 (${fanGoods.size})") }
                     )
@@ -384,7 +391,7 @@ fun CharacterScreen(
                 FilterBar(
                     filterType = filterType,
                     onFilterChange = { filterViewModel.setFilter(it) },
-                    goodsList = if (selectedTab == 0) officialGoods else fanGoods
+                    goodsList = if (selectedTab == 0) AllFilteredOfficialGoods else AllFilteredFanGoods
                 )
 
                 when (selectedTab) {

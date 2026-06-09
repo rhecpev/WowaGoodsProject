@@ -17,11 +17,11 @@ class FilterViewModel : ViewModel() {
         _filterType.value = filter
     }
 
-    fun <T : GoodsItem> applyFilter(list: List<T>): List<T> {
-        return when (_filterType.value) {
+    fun <T : GoodsItem> applyFilter(list: List<T>): Pair<List<T>, List<T> >{
+        return Pair(list,when (_filterType.value) {
             FilterType.ALL -> list
             FilterType.GOTTEN -> list.filter { it.isGotten }
             FilterType.NOT_GOTTEN -> list.filter { !it.isGotten }
-        }
+        })
     }
 }
