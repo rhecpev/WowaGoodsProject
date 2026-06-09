@@ -122,6 +122,8 @@ fun CharacterScreen(
 
     // 카테고리 필터 다이얼로그
     if (showCategoryFilterDialog) {
+        val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
+
         Dialog(
             onDismissRequest = {
                 showCategoryFilterDialog = false
@@ -131,88 +133,204 @@ fun CharacterScreen(
         ) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .fillMaxHeight(0.7f),
+                    .fillMaxWidth(if (isLandscape) 0.85f else 0.9f)
+                    .fillMaxHeight(if (isLandscape) 0.85f else 0.7f),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
-                Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
-                    Text(text = "카테고리 필터", style = AppStyles.textCardTitle)
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    OutlinedTextField(
-                        value = categorySearch,
-                        onValueChange = { categorySearch = it },
-                        label = { Text("검색") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (categorySearch.isNotEmpty()) {
-                                IconButton(onClick = { categorySearch = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "초기화"
+                if (isLandscape) {
+                    Row(modifier = Modifier.padding(AppStyles.paddingLarge)) {
+
+                        // ── 왼쪽 패널 ──
+                        Column(
+                            modifier = Modifier
+                                .width(200.dp)
+                                .fillMaxHeight()
+                        ) {
+                            Text(text = "카테고리 필터", style = AppStyles.textCardTitle)
+                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                            OutlinedTextField(
+                                value = categorySearch,
+                                onValueChange = { categorySearch = it },
+                                label = { Text("검색") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (categorySearch.isNotEmpty()) {
+                                        IconButton(onClick = { categorySearch = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "초기화"
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedCategoryFilter = null
+                                        showCategoryFilterDialog = false
+                                        categorySearch = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("필터 해제") }
+                                Button(
+                                    onClick = {
+                                        showCategoryFilterDialog = false
+                                        categorySearch = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("닫기") }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
+                        VerticalDivider(
+                            modifier = Modifier.fillMaxHeight(),
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                        Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
+
+                        // ── 오른쪽 패널 ──
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(filteredCategories) { cat ->
+                                    Column {
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedCategoryFilter =
+                                                        if (selectedCategoryFilter == cat) null else cat
+                                                    showCategoryFilterDialog = false
+                                                    categorySearch = ""
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (selectedCategoryFilter == cat)
+                                                    MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surface
+                                            )
+                                        ) {
+                                            Text(
+                                                text = cat,
+                                                modifier = Modifier.padding(AppStyles.paddingMedium),
+                                                color = if (selectedCategoryFilter == cat)
+                                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        HorizontalDivider(
+                                            thickness = 1.dp,
+                                            color = MaterialTheme.colorScheme.outlineVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                } else {
+                    // ── 세로 레이아웃 ──
+                    Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
+                        Text(text = "카테고리 필터", style = AppStyles.textCardTitle)
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                        OutlinedTextField(
+                            value = categorySearch,
+                            onValueChange = { categorySearch = it },
+                            label = { Text("검색") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                if (categorySearch.isNotEmpty()) {
+                                    IconButton(onClick = { categorySearch = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "초기화"
+                                        )
+                                    }
+                                }
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(filteredCategories) { cat ->
+                                Column {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectedCategoryFilter =
+                                                    if (selectedCategoryFilter == cat) null else cat
+                                                showCategoryFilterDialog = false
+                                                categorySearch = ""
+                                            },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedCategoryFilter == cat)
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surface
+                                        )
+                                    ) {
+                                        Text(
+                                            text = cat,
+                                            modifier = Modifier.padding(AppStyles.paddingMedium),
+                                            color = if (selectedCategoryFilter == cat)
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    HorizontalDivider(
+                                        thickness = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant
                                     )
                                 }
                             }
                         }
-                    )
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    androidx.compose.foundation.lazy.LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(filteredCategories) { cat ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedCategoryFilter =
-                                            if (selectedCategoryFilter == cat) null else cat
-                                        showCategoryFilterDialog = false
-                                        categorySearch = ""
-                                    },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (selectedCategoryFilter == cat)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surface
-                                )
-                            ) {
-                                Text(
-                                    text = cat,
-                                    modifier = Modifier.padding(AppStyles.paddingMedium),
-                                    color = if (selectedCategoryFilter == cat)
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    selectedCategoryFilter = null
+                                    showCategoryFilterDialog = false
+                                    categorySearch = ""
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("필터 해제") }
+                            Button(
+                                onClick = {
+                                    showCategoryFilterDialog = false
+                                    categorySearch = ""
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("닫기") }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                selectedCategoryFilter = null
-                                showCategoryFilterDialog = false
-                                categorySearch = ""
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("필터 해제") }
-                        Button(
-                            onClick = {
-                                showCategoryFilterDialog = false
-                                categorySearch = ""
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("닫기") }
                     }
                 }
             }
         }
     }
-
     selectedGoods?.let { goods ->
         val fanGoodsItem = goods as? FanGoodsEntity
         GoodsDetailDialog(
@@ -377,14 +495,14 @@ fun CharacterScreen(
                         onClick = {
                             viewModel.setSelectedTab(0)
                         },
-                        text = { Text("공식 (${officialGoods.size})") }
+                        text = { Text("공식 (${AllFilteredOfficialGoods.size})") }
                     )
                     Tab(
                         selected = selectedTab == 1,
                         onClick = {
                             viewModel.setSelectedTab(1)
                         },
-                        text = { Text("2차창작 (${fanGoods.size})") }
+                        text = { Text("2차창작 (${AllFilteredFanGoods.size})") }
                     )
                 }
 

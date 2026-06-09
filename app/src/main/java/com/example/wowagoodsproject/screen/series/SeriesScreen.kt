@@ -145,97 +145,204 @@ fun SeriesScreen(
 
     // 시리즈 목록용 캐릭터 필터 다이얼로그
     if (showCharaFilterDialog) {
+        val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
+
         Dialog(
             onDismissRequest = { showCharaFilterDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
-                modifier = Modifier.fillMaxWidth(0.9f),
+                modifier = Modifier
+                    .fillMaxWidth(if (isLandscape) 0.85f else 0.9f)
+                    .fillMaxHeight(if (isLandscape) 0.85f else 0.7f),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
-                Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        label = { Text("검색") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "초기화"
-                                    )
+                if (isLandscape) {
+                    Row(modifier = Modifier.padding(AppStyles.paddingLarge)) {
+
+                        // ── 왼쪽 패널 ──
+                        Column(
+                            modifier = Modifier
+                                .width(200.dp)
+                                .fillMaxHeight()
+                        ) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text("검색") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "초기화"
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.setCharaFilter(null)
+                                        showCharaFilterDialog = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("필터 해제") }
+                                Button(
+                                    onClick = { showCharaFilterDialog = false },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("닫기") }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
+                        VerticalDivider(
+                            modifier = Modifier.fillMaxHeight(),
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                        Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
+
+                        // ── 오른쪽 패널 ──
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        ) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(sortedCharaList) { chara ->
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .clickable {
+                                                viewModel.setCharaFilter(
+                                                    if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara
+                                                )
+                                                showCharaFilterDialog = false
+                                            }
+                                            .background(
+                                                color = when {
+                                                    selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                                    chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                    else -> Color.Transparent
+                                                },
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .padding(AppStyles.paddingSmall)
+                                    ) {
+                                        Image(
+                                            painter = rememberAsyncImagePainter(
+                                                model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(60.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(text = chara.charaNm, style = AppStyles.textCardSmall)
+                                    }
                                 }
                             }
                         }
-                    )
+                    }
 
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.5f)
-                    ) {
-                        items(sortedCharaList) { chara ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable {
-                                        viewModel.setCharaFilter(
-                                            if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara
+                } else {
+                    // ── 세로 레이아웃 ──
+                    Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("검색") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "초기화"
                                         )
-                                        showCharaFilterDialog = false
                                     }
-                                    .background(
-                                        color = when {
-                                            selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                            chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(
-                                                alpha = 0.2f
-                                            )
+                                }
+                            }
+                        )
 
-                                            else -> Color.Transparent
-                                        },
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .padding(AppStyles.paddingSmall)
-                            ) {
-                                Image(
-                                    painter = rememberAsyncImagePainter(
-                                        model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
-                                    ),
-                                    contentDescription = null,
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            items(sortedCharaList) { chara ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
-                                        .size(60.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(text = chara.charaNm, style = AppStyles.textCardSmall)
+                                        .clickable {
+                                            viewModel.setCharaFilter(
+                                                if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara
+                                            )
+                                            showCharaFilterDialog = false
+                                        }
+                                        .background(
+                                            color = when {
+                                                selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                                chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                else -> Color.Transparent
+                                            },
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(AppStyles.paddingSmall)
+                                ) {
+                                    Image(
+                                        painter = rememberAsyncImagePainter(
+                                            model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(60.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(text = chara.charaNm, style = AppStyles.textCardSmall)
+                                }
                             }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.setCharaFilter(null)
-                                showCharaFilterDialog = false
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("필터 해제") }
-                        Button(
-                            onClick = { showCharaFilterDialog = false },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("닫기") }
+
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.setCharaFilter(null)
+                                    showCharaFilterDialog = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("필터 해제") }
+                            Button(
+                                onClick = { showCharaFilterDialog = false },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("닫기") }
+                        }
                     }
                 }
             }
@@ -244,6 +351,8 @@ fun SeriesScreen(
 
     // 굿즈용 통합 필터 다이얼로그 (캐릭터 + 카테고리)
     if (showGoodsFilterDialog) {
+        val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
+
         Dialog(
             onDismissRequest = {
                 showGoodsFilterDialog = false
@@ -253,162 +362,329 @@ fun SeriesScreen(
         ) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .fillMaxHeight(0.7f),
+                    .fillMaxWidth(if (isLandscape) 0.85f else 0.9f)
+                    .fillMaxHeight(if (isLandscape) 0.85f else 0.7f),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
-                Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
-                    Text(text = "필터", style = AppStyles.textCardTitle)
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                if (isLandscape) {
+                    Row(modifier = Modifier.padding(AppStyles.paddingLarge)) {
 
-                    TabRow(selectedTabIndex = goodsFilterDialogTab) {
-                        Tab(
-                            selected = goodsFilterDialogTab == 0,
-                            onClick = {
-                                goodsFilterDialogTab = 0
-                                goodsFilterSearch = ""
-                            },
-                            text = { Text("캐릭터") }
-                        )
-                        Tab(
-                            selected = goodsFilterDialogTab == 1,
-                            onClick = {
-                                goodsFilterDialogTab = 1
-                                goodsFilterSearch = ""
-                            },
-                            text = { Text("카테고리") }
-                        )
-                    }
+                        // ── 왼쪽 패널 ──
+                        Column(
+                            modifier = Modifier
+                                .width(200.dp)
+                                .fillMaxHeight()
+                        ) {
+                            Text(text = "필터", style = AppStyles.textCardTitle)
+                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
 
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-
-                    OutlinedTextField(
-                        value = goodsFilterSearch,
-                        onValueChange = { goodsFilterSearch = it },
-                        label = { Text("검색") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            if (goodsFilterSearch.isNotEmpty()) {
-                                IconButton(onClick = { goodsFilterSearch = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Clear,
-                                        contentDescription = "초기화"
-                                    )
-                                }
+                            TabRow(selectedTabIndex = goodsFilterDialogTab) {
+                                Tab(
+                                    selected = goodsFilterDialogTab == 0,
+                                    onClick = { goodsFilterDialogTab = 0; goodsFilterSearch = "" },
+                                    text = { Text("캐릭터") }
+                                )
+                                Tab(
+                                    selected = goodsFilterDialogTab == 1,
+                                    onClick = { goodsFilterDialogTab = 1; goodsFilterSearch = "" },
+                                    text = { Text("카테고리") }
+                                )
                             }
-                        }
-                    )
 
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
 
-                    when (goodsFilterDialogTab) {
-                        0 -> {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(3),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                            ) {
-                                items(filteredGoodsCharaList) { charaNm ->
-                                    val charaEntity = allCharaList.find { it.charaNm == charaNm }
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier
-                                            .clickable {
-                                                selectedGoodsCharaFilter =
-                                                    if (selectedGoodsCharaFilter == charaNm) null else charaNm
-                                                showGoodsFilterDialog = false
-                                                goodsFilterSearch = ""
-                                            }
-                                            .background(
-                                                color = when {
-                                                    selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                                    charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(
-                                                        alpha = 0.2f
-                                                    )
-
-                                                    else -> Color.Transparent
-                                                },
-                                                shape = RoundedCornerShape(8.dp)
+                            OutlinedTextField(
+                                value = goodsFilterSearch,
+                                onValueChange = { goodsFilterSearch = it },
+                                label = { Text("검색") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (goodsFilterSearch.isNotEmpty()) {
+                                        IconButton(onClick = { goodsFilterSearch = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Clear,
+                                                contentDescription = "초기화"
                                             )
-                                            .padding(AppStyles.paddingSmall)
-                                    ) {
-                                        Image(
-                                            painter = rememberAsyncImagePainter(
-                                                model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
-                                            ),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(60.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(text = charaNm, style = AppStyles.textCardSmall)
+                                        }
                                     }
                                 }
+                            )
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedGoodsCharaFilter = null
+                                        selectedGoodsCategoryFilter = null
+                                        showGoodsFilterDialog = false
+                                        goodsFilterSearch = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("필터 해제") }
+                                Button(
+                                    onClick = {
+                                        showGoodsFilterDialog = false
+                                        goodsFilterSearch = ""
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("닫기") }
                             }
                         }
 
-                        1 -> {
-                            LazyColumn(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                items(filteredGoodsCategoryList) { cat ->
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                selectedGoodsCategoryFilter =
-                                                    if (selectedGoodsCategoryFilter == cat) null else cat
-                                                showGoodsFilterDialog = false
-                                                goodsFilterSearch = ""
-                                            },
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (selectedGoodsCategoryFilter == cat)
-                                                MaterialTheme.colorScheme.primaryContainer
-                                            else MaterialTheme.colorScheme.surface
-                                        )
+                        Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
+                        VerticalDivider(
+                            modifier = Modifier.fillMaxHeight(),
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                        Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
+
+                        // ── 오른쪽 패널 ──
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        ) {
+                            when (goodsFilterDialogTab) {
+                                0 -> {
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Fixed(3),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxSize()
                                     ) {
-                                        Text(
-                                            text = cat,
-                                            modifier = Modifier.padding(AppStyles.paddingMedium),
-                                            color = if (selectedGoodsCategoryFilter == cat)
-                                                MaterialTheme.colorScheme.onPrimaryContainer
-                                            else MaterialTheme.colorScheme.onSurface
-                                        )
+                                        items(filteredGoodsCharaList) { charaNm ->
+                                            val charaEntity = allCharaList.find { it.charaNm == charaNm }
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier
+                                                    .clickable {
+                                                        selectedGoodsCharaFilter =
+                                                            if (selectedGoodsCharaFilter == charaNm) null else charaNm
+                                                        showGoodsFilterDialog = false
+                                                        goodsFilterSearch = ""
+                                                    }
+                                                    .background(
+                                                        color = when {
+                                                            selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                            else -> Color.Transparent
+                                                        },
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    )
+                                                    .padding(AppStyles.paddingSmall)
+                                            ) {
+                                                Image(
+                                                    painter = rememberAsyncImagePainter(
+                                                        model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
+                                                    ),
+                                                    contentDescription = null,
+                                                    modifier = Modifier
+                                                        .size(60.dp)
+                                                        .clip(RoundedCornerShape(8.dp)),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(text = charaNm, style = AppStyles.textCardSmall)
+                                            }
+                                        }
+                                    }
+                                }
+                                1 -> {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        items(filteredGoodsCategoryList) { cat ->
+                                            Column {
+                                                Card(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            selectedGoodsCategoryFilter =
+                                                                if (selectedGoodsCategoryFilter == cat) null else cat
+                                                            showGoodsFilterDialog = false
+                                                            goodsFilterSearch = ""
+                                                        },
+                                                    colors = CardDefaults.cardColors(
+                                                        containerColor = if (selectedGoodsCategoryFilter == cat)
+                                                            MaterialTheme.colorScheme.primaryContainer
+                                                        else MaterialTheme.colorScheme.surface
+                                                    )
+                                                ) {
+                                                    Text(
+                                                        text = cat,
+                                                        modifier = Modifier.padding(AppStyles.paddingMedium),
+                                                        color = if (selectedGoodsCategoryFilter == cat)
+                                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                                        else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                                HorizontalDivider(
+                                                    thickness = 1.dp,
+                                                    color = MaterialTheme.colorScheme.outlineVariant
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                selectedGoodsCharaFilter = null
-                                selectedGoodsCategoryFilter = null
-                                showGoodsFilterDialog = false
-                                goodsFilterSearch = ""
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("필터 해제") }
-                        Button(
-                            onClick = {
-                                showGoodsFilterDialog = false
-                                goodsFilterSearch = ""
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("닫기") }
+                } else {
+                    // ── 세로 레이아웃 ──
+                    Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
+                        Text(text = "필터", style = AppStyles.textCardTitle)
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                        TabRow(selectedTabIndex = goodsFilterDialogTab) {
+                            Tab(
+                                selected = goodsFilterDialogTab == 0,
+                                onClick = { goodsFilterDialogTab = 0; goodsFilterSearch = "" },
+                                text = { Text("캐릭터") }
+                            )
+                            Tab(
+                                selected = goodsFilterDialogTab == 1,
+                                onClick = { goodsFilterDialogTab = 1; goodsFilterSearch = "" },
+                                text = { Text("카테고리") }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                        OutlinedTextField(
+                            value = goodsFilterSearch,
+                            onValueChange = { goodsFilterSearch = it },
+                            label = { Text("검색") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                if (goodsFilterSearch.isNotEmpty()) {
+                                    IconButton(onClick = { goodsFilterSearch = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Clear,
+                                            contentDescription = "초기화"
+                                        )
+                                    }
+                                }
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+
+                        when (goodsFilterDialogTab) {
+                            0 -> {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(3),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    items(filteredGoodsCharaList) { charaNm ->
+                                        val charaEntity = allCharaList.find { it.charaNm == charaNm }
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .clickable {
+                                                    selectedGoodsCharaFilter =
+                                                        if (selectedGoodsCharaFilter == charaNm) null else charaNm
+                                                    showGoodsFilterDialog = false
+                                                    goodsFilterSearch = ""
+                                                }
+                                                .background(
+                                                    color = when {
+                                                        selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
+                                                        charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                        else -> Color.Transparent
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(AppStyles.paddingSmall)
+                                        ) {
+                                            Image(
+                                                painter = rememberAsyncImagePainter(
+                                                    model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
+                                                ),
+                                                contentDescription = null,
+                                                modifier = Modifier
+                                                    .size(60.dp)
+                                                    .clip(RoundedCornerShape(8.dp)),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(text = charaNm, style = AppStyles.textCardSmall)
+                                        }
+                                    }
+                                }
+                            }
+                            1 -> {
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    items(filteredGoodsCategoryList) { cat ->
+                                        Column {
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        selectedGoodsCategoryFilter =
+                                                            if (selectedGoodsCategoryFilter == cat) null else cat
+                                                        showGoodsFilterDialog = false
+                                                        goodsFilterSearch = ""
+                                                    },
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = if (selectedGoodsCategoryFilter == cat)
+                                                        MaterialTheme.colorScheme.primaryContainer
+                                                    else MaterialTheme.colorScheme.surface
+                                                )
+                                            ) {
+                                                Text(
+                                                    text = cat,
+                                                    modifier = Modifier.padding(AppStyles.paddingMedium),
+                                                    color = if (selectedGoodsCategoryFilter == cat)
+                                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                            HorizontalDivider(
+                                                thickness = 1.dp,
+                                                color = MaterialTheme.colorScheme.outlineVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    selectedGoodsCharaFilter = null
+                                    selectedGoodsCategoryFilter = null
+                                    showGoodsFilterDialog = false
+                                    goodsFilterSearch = ""
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("필터 해제") }
+                            Button(
+                                onClick = {
+                                    showGoodsFilterDialog = false
+                                    goodsFilterSearch = ""
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("닫기") }
+                        }
                     }
                 }
             }
