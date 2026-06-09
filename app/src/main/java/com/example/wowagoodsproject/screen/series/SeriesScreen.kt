@@ -363,6 +363,7 @@ fun SeriesScreen(
                                             category = goods.category,
                                             price = goods.price,
                                             isGotten = goods.isGotten,
+                                            memo = goods.goodsMemo,
                                             onClick = { detailViewModel.selectGoods(goods) }
                                         )
                                     }
@@ -387,6 +388,7 @@ fun SeriesScreen(
                                 category = goods.category,
                                 price = goods.price,
                                 isGotten = goods.isGotten,
+                                memo = goods.goodsMemo,
                                 onClick = { detailViewModel.selectGoods(goods) }
                             )
                             if (index < filteredGoods.lastIndex) {

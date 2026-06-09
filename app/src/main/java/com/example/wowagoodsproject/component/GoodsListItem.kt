@@ -23,6 +23,7 @@ fun GoodsListItem(
     category: String,
     price: Int,
     isGotten: Boolean,
+    memo: String,
     onClick: () -> Unit = {}
 ) {
     val encodedPath = if (imgPath.startsWith("http")) {
@@ -84,7 +85,7 @@ fun GoodsListItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = category,
+                    text = "${category} / ${memo}",
                     style = AppStyles.textCardSubtitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,

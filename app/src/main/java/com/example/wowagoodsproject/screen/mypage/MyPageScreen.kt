@@ -579,6 +579,7 @@ fun MyPageScreen(
                                                             category = goods.category,
                                                             price = goods.price,
                                                             isGotten = goods.isGotten,
+                                                            memo = goods.goodsMemo,
                                                             onClick = {
                                                                 detailViewModel.selectGoods(
                                                                     goods
@@ -607,6 +608,7 @@ fun MyPageScreen(
                                                 category = goods.category,
                                                 price = goods.price,
                                                 isGotten = goods.isGotten,
+                                                memo = goods.goodsMemo,
                                                 onClick = { detailViewModel.selectGoods(goods) }
                                             )
                                             if (index < filteredOfficialGoods.lastIndex) {
@@ -650,6 +652,7 @@ fun MyPageScreen(
                                                             category = goods.category,
                                                             price = goods.price,
                                                             isGotten = goods.isGotten,
+                                                            memo = goods.fanGoodsMemo,
                                                             onClick = {
                                                                 detailViewModel.selectGoods(
                                                                     goods
@@ -678,6 +681,7 @@ fun MyPageScreen(
                                                 category = goods.category,
                                                 price = goods.price,
                                                 isGotten = goods.isGotten,
+                                                memo = goods.fanGoodsMemo,
                                                 onClick = { detailViewModel.selectGoods(goods) }
                                             )
                                             if (index < filteredFanGoods.lastIndex) {

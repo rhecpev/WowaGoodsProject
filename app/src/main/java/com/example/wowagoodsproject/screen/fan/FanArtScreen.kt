@@ -123,6 +123,7 @@ fun FanArtScreen(
                                         category = goods.fanGoodsCategory,
                                         price = goods.fanGoodsPrice,
                                         isGotten = goods.fanGoodsIsGotten,
+                                        memo = goods.fanGoodsMemo,
                                         onClick = { detailViewModel.selectGoods(goods) }
                                     )
                                 }
@@ -144,6 +145,7 @@ fun FanArtScreen(
                             category = goods.fanGoodsCategory,
                             price = goods.fanGoodsPrice,
                             isGotten = goods.fanGoodsIsGotten,
+                            memo = goods.fanGoodsMemo,
                             onClick = { detailViewModel.selectGoods(goods) }
                         )
                         if (index < filteredList.lastIndex) {

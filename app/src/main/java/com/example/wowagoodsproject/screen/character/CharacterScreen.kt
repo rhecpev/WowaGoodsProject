@@ -228,7 +228,8 @@ fun CharacterScreen(
                                                         chara = goods.chara,
                                                         category = goods.category,
                                                         price = goods.price,
-                                                        isGotten = goods.isGotten
+                                                        isGotten = goods.isGotten,
+                                                        memo = goods.goodsMemo
                                                     )
                                                 }
                                             }
@@ -248,7 +249,8 @@ fun CharacterScreen(
                                             chara = goods.chara,
                                             category = goods.category,
                                             price = goods.price,
-                                            isGotten = goods.isGotten
+                                            isGotten = goods.isGotten,
+                                            memo = goods.goodsMemo
                                         )
                                         if (index < filteredOfficialGoods.lastIndex) {
                                             HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
@@ -280,6 +282,7 @@ fun CharacterScreen(
                                                         category = goods.category,
                                                         price = goods.price,
                                                         isGotten = goods.isGotten,
+                                                        memo = goods.fanGoodsMemo,
                                                         onClick = { detailViewModel.selectGoods(goods) }
                                                     )
                                                 }
@@ -301,6 +304,7 @@ fun CharacterScreen(
                                             category = goods.category,
                                             price = goods.price,
                                             isGotten = goods.isGotten,
+                                            memo = goods.fanGoodsMemo,
                                             onClick = { detailViewModel.selectGoods(goods) }
                                         )
                                         if (index < filteredFanGoods.lastIndex) {
