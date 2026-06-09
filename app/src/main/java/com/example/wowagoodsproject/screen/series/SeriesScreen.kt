@@ -415,7 +415,7 @@ fun SeriesScreen(
             action = {
                 if (selectedSeries != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column() {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
                             Row() {
                                 IconButton(onClick = { showGoodsFilterDialog = true }) {
@@ -452,6 +452,14 @@ fun SeriesScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                 }
+                                if (selectedGoodsCharaFilter != null && selectedGoodsCategoryFilter != null) {
+                                    Text(
+                                        text = "/",
+                                        style = AppStyles.textCardSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
                                 if (selectedGoodsCategoryFilter != null) {
                                     Text(
                                         text = selectedGoodsCategoryFilter!!,
@@ -465,22 +473,26 @@ fun SeriesScreen(
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (selectedCharaFilter != null) {
-                            Text(
-                                text = selectedCharaFilter!!.charaNm,
-                                style = AppStyles.textCardSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        IconButton(onClick = { showCharaFilterDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.FilterList,
-                                contentDescription = "캐릭터 필터",
-                                tint = if (selectedCharaFilter != null)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
-                            )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            IconButton(onClick = { showCharaFilterDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.FilterList,
+                                    contentDescription = "캐릭터 필터",
+                                    tint = if (selectedCharaFilter != null)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            if (selectedCharaFilter != null) {
+                                Text(
+                                    text = selectedCharaFilter!!.charaNm,
+                                    style = AppStyles.textCardSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
                         }
                     }
                 }

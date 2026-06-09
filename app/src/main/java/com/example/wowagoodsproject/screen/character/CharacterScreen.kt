@@ -72,8 +72,7 @@ fun CharacterScreen(
         charaList.sortedByDescending { it.charaIsFavorite }
             .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
-    val currentGoods = if (selectedTab == 0) officialGoods else fanGoods
-    val categoryList = currentGoods
+    val categoryList = (filterViewModel.applyFilter(officialGoods) + filterViewModel.applyFilter(fanGoods))
         .map { it.category }
         .distinct()
         .filter { it.isNotEmpty() }
@@ -140,7 +139,10 @@ fun CharacterScreen(
                         trailingIcon = {
                             if (categorySearch.isNotEmpty()) {
                                 IconButton(onClick = { categorySearch = "" }) {
-                                    Icon(imageVector = Icons.Default.Clear, contentDescription = "초기화")
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "초기화"
+                                    )
                                 }
                             }
                         }
@@ -155,7 +157,8 @@ fun CharacterScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        selectedCategoryFilter = if (selectedCategoryFilter == cat) null else cat
+                                        selectedCategoryFilter =
+                                            if (selectedCategoryFilter == cat) null else cat
                                         showCategoryFilterDialog = false
                                         categorySearch = ""
                                     },
@@ -229,38 +232,48 @@ fun CharacterScreen(
             action = {
                 if (selectedChara != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (selectedCategoryFilter != null) {
-                            Text(
-                                text = selectedCategoryFilter!!,
-                                style = AppStyles.textCardSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row() {
+                                IconButton(onClick = { showCategoryFilterDialog = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.FilterList,
+                                        contentDescription = "카테고리 필터",
+                                        tint = if (selectedCategoryFilter != null)
+                                            MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
+                                    Icon(
+                                        imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
+                                        contentDescription = "모드 전환"
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    viewModel.clearSelectedChara()
+                                    viewModel.setSelectedTab(0)
+                                    filterViewModel.setFilter(com.example.wowagoodsproject.component.FilterType.ALL)
+                                    selectedCategoryFilter = null
+                                    categorySearch = ""
+                                }) {
+                                    Text("뒤로")
+                                }
+                            }
+                            Row() {
+                                if (selectedCategoryFilter != null) {
+                                    Text(
+                                        text = selectedCategoryFilter!!,
+                                        style = AppStyles.textCardSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                            }
                         }
-                        IconButton(onClick = { showCategoryFilterDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.FilterList,
-                                contentDescription = "카테고리 필터",
-                                tint = if (selectedCategoryFilter != null)
-                                    MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
-                            Icon(
-                                imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
-                                contentDescription = "모드 전환"
-                            )
-                        }
-                        TextButton(onClick = {
-                            viewModel.clearSelectedChara()
-                            viewModel.setSelectedTab(0)
-                            filterViewModel.setFilter(com.example.wowagoodsproject.component.FilterType.ALL)
-                            selectedCategoryFilter = null
-                            categorySearch = ""
-                        }) {
-                            Text("뒤로")
-                        }
+
+
                     }
                 } else {
                     IconButton(onClick = { viewModel.toggleFavoriteOnly() }) {
@@ -281,7 +294,10 @@ fun CharacterScreen(
                 label = { Text("캐릭터 검색") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = AppStyles.paddingMedium, vertical = AppStyles.paddingSmall),
+                    .padding(
+                        horizontal = AppStyles.paddingMedium,
+                        vertical = AppStyles.paddingSmall
+                    ),
                 singleLine = true,
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -408,7 +424,10 @@ fun CharacterScreen(
                                                 Box(modifier = Modifier.weight(1f))
                                             }
                                         }
-                                        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                        HorizontalDivider(
+                                            thickness = 1.dp,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
                                     }
                                 }
                             } else {
@@ -424,7 +443,10 @@ fun CharacterScreen(
                                             memo = goods.goodsMemo
                                         )
                                         if (index < filteredOfficialGoods.lastIndex) {
-                                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                            HorizontalDivider(
+                                                thickness = 1.dp,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
                                             Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                                         }
                                     }
@@ -432,6 +454,7 @@ fun CharacterScreen(
                             }
                         }
                     }
+
                     1 -> {
                         if (filteredFanGoods.isEmpty()) {
                             Box(
@@ -461,7 +484,11 @@ fun CharacterScreen(
                                                         price = goods.price,
                                                         isGotten = goods.isGotten,
                                                         memo = goods.fanGoodsMemo,
-                                                        onClick = { detailViewModel.selectGoods(goods) }
+                                                        onClick = {
+                                                            detailViewModel.selectGoods(
+                                                                goods
+                                                            )
+                                                        }
                                                     )
                                                 }
                                             }
@@ -469,7 +496,10 @@ fun CharacterScreen(
                                                 Box(modifier = Modifier.weight(1f))
                                             }
                                         }
-                                        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                        HorizontalDivider(
+                                            thickness = 1.dp,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
                                     }
                                 }
                             } else {
@@ -486,7 +516,10 @@ fun CharacterScreen(
                                             onClick = { detailViewModel.selectGoods(goods) }
                                         )
                                         if (index < filteredFanGoods.lastIndex) {
-                                            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                                            HorizontalDivider(
+                                                thickness = 1.dp,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
                                             Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                                         }
                                     }
