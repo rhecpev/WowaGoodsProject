@@ -23,7 +23,7 @@ fun GoodsDetailDialog(
     series: String,
     chara: String,
     category: String,
-    price: Int,
+    price: String,
     isGotten: Boolean,
     memo: String = "",
     onDismiss: () -> Unit,
@@ -90,7 +90,7 @@ fun GoodsDetailDialog(
                             DetailRow(label = "시리즈", value = series)
                             DetailRow(label = "캐릭터", value = chara)
                             DetailRow(label = "카테고리", value = category)
-                            DetailRow(label = "가격", value = "${price}원")
+                            DetailRow(label = "가격", value = price)
                             DetailRow(
                                 label = "보유 여부",
                                 value = if (isGotten) "보유" else "미보유",
@@ -115,7 +115,7 @@ fun GoodsDetailDialog(
                         DetailRow(label = "시리즈", value = series)
                         DetailRow(label = "캐릭터", value = chara)
                         DetailRow(label = "카테고리", value = category)
-                        DetailRow(label = "가격", value = "${price}원")
+                        DetailRow(label = "가격", value = price)
                         DetailRow(
                             label = "보유 여부",
                             value = if (isGotten) "보유" else "미보유",

@@ -5,6 +5,6 @@ interface GoodsItem {
     val series: String
     val chara: String
     val category: String
-    val price: Int
+    val price: String
     val isGotten: Boolean
 }

@@ -110,7 +110,7 @@ class FanAddViewModel : ViewModel() {
                 FanGoodsEntity(
                     fanGoodsReleaseDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
                     fanGoodsSeries = _series.value,
-                    fanGoodsPrice = _price.value.toIntOrNull() ?: 0,
+                    fanGoodsPrice = _price.value,
                     fanGoodsChara = _selectedCharas.value.joinToString(","),
                     fanGoodsCategory = _category.value,
                     fanGoodsImgPath = imgPath,

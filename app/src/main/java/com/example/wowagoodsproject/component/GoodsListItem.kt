@@ -21,7 +21,7 @@ fun GoodsListItem(
     series: String,
     chara: String,
     category: String,
-    price: Int,
+    price: String,
     isGotten: Boolean,
     memo: String,
     onClick: () -> Unit = {}
@@ -92,7 +92,7 @@ fun GoodsListItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${price}원",
+                    text = price,
                     style = AppStyles.textPrice,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,

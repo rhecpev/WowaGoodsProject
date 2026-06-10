@@ -10,7 +10,7 @@ data class FanGoodsEntity(
     val fanGoodsId: Int = 0,
     val fanGoodsReleaseDate: String = "",
     val fanGoodsSeries: String = "",
-    val fanGoodsPrice: Int = 0,
+    val fanGoodsPrice: String = "",
     val fanGoodsChara: String = "",
     val fanGoodsCategory: String = "",
     val fanGoodsImgPath: String = "",

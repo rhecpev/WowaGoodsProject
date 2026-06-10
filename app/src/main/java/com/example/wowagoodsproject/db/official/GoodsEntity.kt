@@ -10,7 +10,7 @@ data class GoodsEntity(
     val goodsId: Int = 0,
     val goodsReleaseDate: String = "",
     val goodsSeries: String = "",
-    val goodsPrice: Int = 0,
+    val goodsPrice: String = "",
     val goodsChara: String = "",
     val goodsCategory: String = "",
     val goodsIsGotten: Boolean = false,
