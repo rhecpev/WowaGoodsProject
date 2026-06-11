@@ -1,11 +1,13 @@
 package com.example.wowagoodsproject.screen.series
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -54,13 +57,13 @@ fun SeriesScreen(
     val allCharaList by viewModel.allCharaList.collectAsState()
     val selectedCharaFilter by viewModel.selectedCharaFilter.collectAsState()
     val selectedSeries by viewModel.selectedSeries.collectAsState()
-    val seriesGoods by (if (1===1) viewModel.seriesGoods.collectAsState() else viewModel.seriesGoods.collectAsState())
+    val seriesGoods by (if (1 === 1) viewModel.seriesGoods.collectAsState() else viewModel.seriesGoods.collectAsState())
     val filterType by filterViewModel.filterType.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val seriesCharaCountMap by viewModel.seriesCharaCountMap.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
-
+    val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
     var showCharaFilterDialog by remember { mutableStateOf(false) }
 
     // 통합 필터 다이얼로그 상태
@@ -145,7 +148,6 @@ fun SeriesScreen(
 
     // 시리즈 목록용 캐릭터 필터 다이얼로그
     if (showCharaFilterDialog) {
-        val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
 
         Dialog(
             onDismissRequest = { showCharaFilterDialog = false },
@@ -235,7 +237,10 @@ fun SeriesScreen(
                                             .background(
                                                 color = when {
                                                     selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                                    chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                    chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(
+                                                        alpha = 0.2f
+                                                    )
+
                                                     else -> Color.Transparent
                                                 },
                                                 shape = RoundedCornerShape(8.dp)
@@ -303,7 +308,10 @@ fun SeriesScreen(
                                         .background(
                                             color = when {
                                                 selectedCharaFilter?.charaNm == chara.charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                                chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                chara.charaIsFavorite -> MaterialTheme.colorScheme.primary.copy(
+                                                    alpha = 0.2f
+                                                )
+
                                                 else -> Color.Transparent
                                             },
                                             shape = RoundedCornerShape(8.dp)
@@ -457,7 +465,8 @@ fun SeriesScreen(
                                         modifier = Modifier.fillMaxSize()
                                     ) {
                                         items(filteredGoodsCharaList) { charaNm ->
-                                            val charaEntity = allCharaList.find { it.charaNm == charaNm }
+                                            val charaEntity =
+                                                allCharaList.find { it.charaNm == charaNm }
                                             Column(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier = Modifier
@@ -470,7 +479,10 @@ fun SeriesScreen(
                                                     .background(
                                                         color = when {
                                                             selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                            charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(
+                                                                alpha = 0.2f
+                                                            )
+
                                                             else -> Color.Transparent
                                                         },
                                                         shape = RoundedCornerShape(8.dp)
@@ -488,11 +500,15 @@ fun SeriesScreen(
                                                     contentScale = ContentScale.Crop
                                                 )
                                                 Spacer(modifier = Modifier.height(4.dp))
-                                                Text(text = charaNm, style = AppStyles.textCardSmall)
+                                                Text(
+                                                    text = charaNm,
+                                                    style = AppStyles.textCardSmall
+                                                )
                                             }
                                         }
                                     }
                                 }
+
                                 1 -> {
                                     LazyColumn(
                                         modifier = Modifier.fillMaxSize(),
@@ -587,7 +603,8 @@ fun SeriesScreen(
                                         .fillMaxWidth()
                                 ) {
                                     items(filteredGoodsCharaList) { charaNm ->
-                                        val charaEntity = allCharaList.find { it.charaNm == charaNm }
+                                        val charaEntity =
+                                            allCharaList.find { it.charaNm == charaNm }
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier
@@ -600,7 +617,10 @@ fun SeriesScreen(
                                                 .background(
                                                     color = when {
                                                         selectedGoodsCharaFilter == charaNm -> MaterialTheme.colorScheme.primaryContainer
-                                                        charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                                        charaEntity?.charaIsFavorite == true -> MaterialTheme.colorScheme.primary.copy(
+                                                            alpha = 0.2f
+                                                        )
+
                                                         else -> Color.Transparent
                                                     },
                                                     shape = RoundedCornerShape(8.dp)
@@ -623,6 +643,7 @@ fun SeriesScreen(
                                     }
                                 }
                             }
+
                             1 -> {
                                 LazyColumn(
                                     modifier = Modifier.weight(1f),
@@ -893,102 +914,311 @@ fun SeriesScreen(
                                 containerColor = MaterialTheme.colorScheme.surface
                             )
                         ) {
-                            Column {
-                                Box(
+                            if (isLandscape) {
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(200.dp)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
+                                        .height(200.dp) // 👈 이미지 높이에 맞춤
                                 ) {
-                                    Image(
-                                        painter = rememberAsyncImagePainter(
-                                            model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null
-                                        ),
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                }
-                                Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+
+                                    // ✅ 이미지 (기존 Box 그대로 이동)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.5f)
+                                            .fillMaxHeight()
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text(
-                                            text = "${series.seriesDate} / ${series.seriesCountry}",
-                                            style = AppStyles.textCardSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = series.seriesNm,
-                                            style = AppStyles.textCardTitle
+                                        Image(
+                                            painter = rememberAsyncImagePainter(
+                                                model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Fit
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                                    HorizontalDivider()
-                                    Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
 
-                                    if (charas.isEmpty()) {
-                                        Text(
-                                            text = "등록된 캐릭터가 없습니다",
-                                            style = AppStyles.textCardSmall
-                                        )
-                                    } else {
-                                        charas.chunked(2).forEach { rowCharas ->
-                                            Row(
+                                    // ✅ 오른쪽 캐릭터 영역
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(AppStyles.paddingMedium)
+                                    ) {
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "${series.seriesDate} / ${series.seriesCountry}",
+                                                style = AppStyles.textCardSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = series.seriesNm,
+                                                style = AppStyles.textCardTitle
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                                        HorizontalDivider()
+                                        Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+
+                                        if (charas.isEmpty()) {
+                                            Text(
+                                                text = "등록된 캐릭터가 없습니다",
+                                                style = AppStyles.textCardSmall
+                                            )
+                                        } else {
+//                                        charas.chunked(1).forEach { rowCharas ->
+                                            LazyRow(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(
                                                     AppStyles.paddingMedium
                                                 )
                                             ) {
-                                                rowCharas.forEach { chara ->
+                                                val sortedCharas =
+                                                    charas.sortedByDescending { it.charaIsFavorite }
+
+                                                items((sortedCharas.size + 1) / 2) { index ->
+
+                                                    Column(
+                                                        verticalArrangement = Arrangement.spacedBy(
+                                                            AppStyles.paddingSmall
+                                                        )
+                                                    ) {
+
+                                                        // 👆 위
+                                                        val charaTop =
+                                                            sortedCharas.getOrNull(index * 2)
+                                                        if (charaTop != null) {
+
+                                                            val count =
+                                                                seriesCharaCountMap["${series.seriesNm}|${charaTop.charaNm}"]
+                                                                    ?: Pair(0, 0)
+
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .width(IntrinsicSize.Min)
+                                                                    .padding(vertical = AppStyles.paddingSmall)
+                                                                    .background(
+                                                                        color = if (charaTop.charaIsFavorite)
+                                                                            MaterialTheme.colorScheme.primary
+                                                                        else Color.Transparent,
+                                                                        shape = RoundedCornerShape(8.dp)
+                                                                    )
+                                                                    .padding(AppStyles.paddingSmall),
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                                                                    Image(
+                                                                        painter = rememberAsyncImagePainter(
+                                                                            model = if (charaTop.charaUrl.isNotEmpty()) charaTop.charaUrl else null
+                                                                        ),
+                                                                        contentDescription = null,
+                                                                        modifier = Modifier
+                                                                            .size(48.dp)
+                                                                            .clip(
+                                                                                RoundedCornerShape(
+                                                                                    8.dp
+                                                                                )
+                                                                            ),
+                                                                        contentScale = ContentScale.Crop
+                                                                    )
+                                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                                        Text(
+                                                                            text = charaTop.charaNm,
+                                                                            maxLines = 1,
+                                                                            overflow = TextOverflow.Ellipsis,
+                                                                            style = AppStyles.textCardSubtitle
+                                                                        )
+
+                                                                        Text(
+                                                                            text = "(${count.first}/${count.second})",
+                                                                            style = AppStyles.textCardSmall
+                                                                        )
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // 👇 아래
+                                                        val charaBottom =
+                                                            sortedCharas.getOrNull(index * 2 + 1)
+                                                        if (charaBottom != null) {
+
+                                                            val count =
+                                                                seriesCharaCountMap["${series.seriesNm}|${charaBottom.charaNm}"]
+                                                                    ?: Pair(0, 0)
+
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .width(IntrinsicSize.Min)
+                                                                    .padding(vertical = AppStyles.paddingSmall)
+                                                                    .background(
+                                                                        color = if (charaBottom.charaIsFavorite)
+                                                                            MaterialTheme.colorScheme.primary
+                                                                        else Color.Transparent,
+                                                                        shape = RoundedCornerShape(8.dp)
+                                                                    )
+                                                                    .padding(AppStyles.paddingSmall),
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                        Image(
+                                                                            painter = rememberAsyncImagePainter(
+                                                                                model = if (charaBottom.charaUrl.isNotEmpty()) charaBottom.charaUrl else null
+                                                                            ),
+                                                                            contentDescription = null,
+                                                                            modifier = Modifier
+                                                                                .size(48.dp)
+                                                                                .clip(
+                                                                                    RoundedCornerShape(
+                                                                                        8.dp
+                                                                                    )
+                                                                                ),
+                                                                            contentScale = ContentScale.Crop
+                                                                        )
+                                                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                                            Text(
+                                                                                text = charaBottom.charaNm,
+                                                                                maxLines = 1,
+                                                                                overflow = TextOverflow.Ellipsis,
+                                                                                style = AppStyles.textCardSubtitle
+                                                                            )
+
+                                                                            Text(
+                                                                                text = "(${count.first}/${count.second})",
+                                                                                style = AppStyles.textCardSmall
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+
+                                Column {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(200.dp)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Image(
+                                            painter = rememberAsyncImagePainter(
+                                                model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null
+                                            ),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    }
+
+                                    Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "${series.seriesDate} / ${series.seriesCountry}",
+                                                style = AppStyles.textCardSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = series.seriesNm,
+                                                style = AppStyles.textCardTitle
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                                        HorizontalDivider()
+                                        Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+
+                                        if (charas.isEmpty()) {
+                                            Text(
+                                                text = "등록된 캐릭터가 없습니다",
+                                                style = AppStyles.textCardSmall
+                                            )
+                                        } else {
+//                                        charas.chunked(1).forEach { rowCharas ->
+                                            LazyRow(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(
+                                                    AppStyles.paddingMedium
+                                                )
+                                            ) {
+                                                items(charas.sortedByDescending { it.charaIsFavorite }) { chara ->
                                                     val count =
                                                         seriesCharaCountMap["${series.seriesNm}|${chara.charaNm}"]
                                                             ?: Pair(0, 0)
+
                                                     Row(
                                                         modifier = Modifier
-                                                            .weight(1f)
+                                                            .width(IntrinsicSize.Min) // 👈 중요 (아래 설명)
                                                             .padding(vertical = AppStyles.paddingSmall)
                                                             .background(
-                                                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                                                color = if (chara.charaIsFavorite)
+                                                                    MaterialTheme.colorScheme.primary
+                                                                else Color.Transparent,
                                                                 shape = RoundedCornerShape(8.dp)
                                                             )
                                                             .padding(AppStyles.paddingSmall),
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Image(
-                                                            painter = rememberAsyncImagePainter(
-                                                                model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
-                                                            ),
-                                                            contentDescription = null,
-                                                            modifier = Modifier
-                                                                .size(48.dp)
-                                                                .clip(RoundedCornerShape(8.dp)),
-                                                            contentScale = ContentScale.Crop
-                                                        )
-                                                        Spacer(modifier = Modifier.width(AppStyles.paddingSmall))
-                                                        Column {
+                                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                            Image(
+                                                                painter = rememberAsyncImagePainter(
+                                                                    model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
+                                                                ),
+                                                                contentDescription = null,
+                                                                modifier = Modifier
+                                                                    .size(48.dp)
+                                                                    .clip(RoundedCornerShape(8.dp)),
+                                                                contentScale = ContentScale.Crop
+                                                            )
+
                                                             Text(
                                                                 text = chara.charaNm,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
                                                                 style = AppStyles.textCardSubtitle,
-                                                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                                color = if (chara.charaIsFavorite)
+                                                                    MaterialTheme.colorScheme.onPrimary
+                                                                else MaterialTheme.colorScheme.onSurface
                                                             )
                                                             Text(
                                                                 text = "(${count.first}/${count.second})",
                                                                 style = AppStyles.textCardSmall,
-                                                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                                                color = if (chara.charaIsFavorite)
+                                                                    MaterialTheme.colorScheme.onPrimary
+                                                                else MaterialTheme.colorScheme.primary
                                                             )
+
                                                         }
+
                                                     }
                                                 }
-                                                if (rowCharas.size == 1) {
-                                                    Spacer(modifier = Modifier.weight(1f))
+
+                                                if (charas.size == 1) {
+                                                    item {
+                                                        Spacer(modifier = Modifier.weight(1f))
+                                                    }
                                                 }
                                             }
                                         }
                                     }
+
                                 }
                             }
                         }
@@ -1004,4 +1234,5 @@ fun SeriesScreen(
             }
         }
     }
+
 }
