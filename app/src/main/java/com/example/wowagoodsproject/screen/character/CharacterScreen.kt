@@ -40,6 +40,7 @@ import com.example.wowagoodsproject.component.GoodsGridItem
 import com.example.wowagoodsproject.component.GoodsListItem
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
+import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.ui.theme.AppStyles
 
@@ -72,11 +73,12 @@ fun CharacterScreen(
         charaList.sortedByDescending { it.charaIsFavorite }
             .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
-    val categoryList = (filterViewModel.applyFilter(officialGoods).second + filterViewModel.applyFilter(fanGoods).second)
-        .map { it.category }
-        .distinct()
-        .filter { it.isNotEmpty() }
-        .sorted()
+    val categoryList =
+        (filterViewModel.applyFilter(officialGoods).second + filterViewModel.applyFilter(fanGoods).second)
+            .map { it.category }
+            .distinct()
+            .filter { it.isNotEmpty() }
+            .sorted()
 
     val filteredCategories = categoryList.filter {
         it.contains(categorySearch, ignoreCase = true)
@@ -331,8 +333,11 @@ fun CharacterScreen(
             }
         }
     }
+
+
     selectedGoods?.let { goods ->
-        val fanGoodsItem = goods as? FanGoodsEntity
+        val officialGoods = goods as? GoodsEntity
+        val fanGoods = goods as? FanGoodsEntity
         GoodsDetailDialog(
             imgPath = goods.imgPath,
             series = goods.series,
@@ -340,16 +345,17 @@ fun CharacterScreen(
             category = goods.category,
             price = goods.price,
             isGotten = goods.isGotten,
-            memo = (goods as? FanGoodsEntity)?.fanGoodsMemo ?: "",
+            memo = (goods as? GoodsEntity)?.goodsMemo
+                ?: (goods as? FanGoodsEntity)?.fanGoodsMemo
+                ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
-                fanGoodsItem?.let { viewModel.toggleFanGotten(it) }
+                officialGoods?.let { viewModel.toggleOfficialGotten(it) }
+                fanGoods?.let { viewModel.toggleFanGotten(it) }
                 detailViewModel.dismissDialog()
             },
-            onDelete = {
-                fanGoodsItem?.let { viewModel.deleteFanGoods(it) }
-                detailViewModel.dismissDialog()
-            }
+            onDelete = {},
+            showDelete = false
         )
     }
 
@@ -541,8 +547,12 @@ fun CharacterScreen(
                                                         category = goods.category,
                                                         price = goods.price,
                                                         isGotten = goods.isGotten,
-                                                        memo = goods.goodsMemo
-                                                    )
+                                                        memo = goods.goodsMemo,
+                                                        onClick = {
+                                                            detailViewModel.selectGoods(
+                                                                goods
+                                                            )
+                                                        })
                                                 }
                                             }
                                             repeat(gridColumns - rowItems.size) {
@@ -565,8 +575,12 @@ fun CharacterScreen(
                                             category = goods.category,
                                             price = goods.price,
                                             isGotten = goods.isGotten,
-                                            memo = goods.goodsMemo
-                                        )
+                                            memo = goods.goodsMemo,
+                                            onClick = {
+                                                detailViewModel.selectGoods(
+                                                    goods
+                                                )
+                                            }                                        )
                                         if (index < filteredOfficialGoods.lastIndex) {
                                             HorizontalDivider(
                                                 thickness = 1.dp,
@@ -638,8 +652,11 @@ fun CharacterScreen(
                                             price = goods.price,
                                             isGotten = goods.isGotten,
                                             memo = goods.fanGoodsMemo,
-                                            onClick = { detailViewModel.selectGoods(goods) }
-                                        )
+                                            onClick = {
+                                                detailViewModel.selectGoods(
+                                                    goods
+                                                )
+                                            }                                        )
                                         if (index < filteredFanGoods.lastIndex) {
                                             HorizontalDivider(
                                                 thickness = 1.dp,

@@ -70,6 +70,13 @@ class CharacterViewModel : ViewModel() {
         _selectedTab.value = tab
     }
 
+    fun toggleOfficialGotten(goods: GoodsEntity) {
+        viewModelScope.launch {
+            val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
+            App.database.goodsDao().update(updated)
+        }
+    }
+
     fun toggleFanGotten(goods: FanGoodsEntity) {
         viewModelScope.launch {
             val updated = goods.copy(fanGoodsIsGotten = !goods.fanGoodsIsGotten)
@@ -82,4 +89,7 @@ class CharacterViewModel : ViewModel() {
             App.fanDatabase.fanGoodsDao().delete(goods)
         }
     }
+
+
+
 }

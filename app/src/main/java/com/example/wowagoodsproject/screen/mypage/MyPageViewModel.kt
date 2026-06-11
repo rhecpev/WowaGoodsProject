@@ -55,7 +55,6 @@ class MyPageViewModel : ViewModel() {
     private val _selectedCharaFilter = MutableStateFlow<String?>(null)
     val selectedCharaFilter: StateFlow<String?> = _selectedCharaFilter
 
-    // ✅ 카테고리 필터 추가
     private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
     val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter
 
@@ -114,8 +113,6 @@ class MyPageViewModel : ViewModel() {
     fun setCategoryFilter(category: String?) { _selectedCategoryFilter.value = category }
     fun setShowFilterDialog(show: Boolean) { _showFilterDialog.value = show }
     fun clearUpdateStatus() { _updateStatus.value = null }
-
-    // 기존 호환성을 위해 유지
     fun setShowCharaFilterDialog(show: Boolean) { _showFilterDialog.value = show }
 
     fun exportData(context: Context) {
@@ -136,6 +133,12 @@ class MyPageViewModel : ViewModel() {
                         )
                     }
                     val officialJson = gson.toJson(officialBackup)
+
+                    // 선호 캐릭터 백업
+                    val charas = App.charaDatabase.charaDao().getAll()
+                    val favoriteCharas = charas.filter { it.charaIsFavorite }.map { it.charaNm }
+                    val charaJson = gson.toJson(favoriteCharas)
+
                     val zipFile = File(context.filesDir, "wowa_backup.zip")
                     ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
                         zip.putNextEntry(ZipEntry("fan_goods.json"))
@@ -143,6 +146,9 @@ class MyPageViewModel : ViewModel() {
                         zip.closeEntry()
                         zip.putNextEntry(ZipEntry("official_gotten.json"))
                         zip.write(officialJson.toByteArray())
+                        zip.closeEntry()
+                        zip.putNextEntry(ZipEntry("favorite_charas.json"))
+                        zip.write(charaJson.toByteArray())
                         zip.closeEntry()
                         fanGoods.forEach { goods ->
                             if (goods.fanGoodsImgPath.isNotEmpty()) {
@@ -206,6 +212,7 @@ class MyPageViewModel : ViewModel() {
                     val gson = Gson()
                     var fanGoodsJson: String? = null
                     var officialJson: String? = null
+                    var favoriteCharaJson: String? = null
                     val imageMap = mutableMapOf<String, ByteArray>()
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         ZipInputStream(input).use { zip ->
@@ -214,6 +221,7 @@ class MyPageViewModel : ViewModel() {
                                 when {
                                     entry.name == "fan_goods.json" -> fanGoodsJson = zip.bufferedReader().readText()
                                     entry.name == "official_gotten.json" -> officialJson = zip.bufferedReader().readText()
+                                    entry.name == "favorite_charas.json" -> favoriteCharaJson = zip.bufferedReader().readText()
                                     entry.name.startsWith("images/") -> {
                                         val fileName = entry.name.removePrefix("images/")
                                         imageMap[fileName] = zip.readBytes()
@@ -258,6 +266,16 @@ class MyPageViewModel : ViewModel() {
                                     it.copy(goodsIsGotten = backup.goodsIsGotten)
                                 )
                             }
+                        }
+                    }
+                    favoriteCharaJson?.let { json ->
+                        val type = object : TypeToken<List<String>>() {}.type
+                        val favoriteCharas: List<String> = gson.fromJson(json, type)
+                        val allCharas = App.charaDatabase.charaDao().getAll()
+                        allCharas.forEach { chara ->
+                            App.charaDatabase.charaDao().update(
+                                chara.copy(charaIsFavorite = favoriteCharas.contains(chara.charaNm))
+                            )
                         }
                     }
                 }
