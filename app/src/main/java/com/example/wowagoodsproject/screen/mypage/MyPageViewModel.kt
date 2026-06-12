@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
@@ -42,6 +43,9 @@ class MyPageViewModel : ViewModel() {
 
     private val _officialGottenGoods = MutableStateFlow<List<GoodsEntity>>(emptyList())
     val officialGottenGoods: StateFlow<List<GoodsEntity>> = _officialGottenGoods
+
+    private val _allSeriesGoods = MutableStateFlow<List<GoodsEntity>>(emptyList())
+    val allSeriesGoods: StateFlow<List<GoodsEntity>> = _allSeriesGoods
 
     private val _fanGottenGoods = MutableStateFlow<List<FanGoodsEntity>>(emptyList())
     val fanGottenGoods: StateFlow<List<FanGoodsEntity>> = _fanGottenGoods
@@ -79,7 +83,31 @@ class MyPageViewModel : ViewModel() {
 
     fun loadGottenGoods() {
         viewModelScope.launch {
-            _officialGottenGoods.value = App.database.goodsDao().getAll().filter { it.goodsIsGotten }
+            val allGoods = App.database.goodsDao().getAll()
+            val setMemos = allGoods.filter { it.goodsCategory == CATEGORY_SET }.map { it.goodsMemo }.toSet()
+
+            val gottenGoods = allGoods.filter { goods ->
+                when {
+                    // 세트면 구성품 중 하나라도 보유시 표시
+                    goods.goodsCategory == CATEGORY_SET -> {
+                        allGoods.any {
+                            it.goodsCategory != CATEGORY_SET &&
+                                    it.goodsMemo == goods.goodsMemo &&
+                                    it.goodsIsGotten
+                        }
+                    }
+                    // 구성품은 제외
+                    goods.goodsMemo.isNotEmpty() && goods.goodsMemo in setMemos && goods.goodsCategory != CATEGORY_SET -> false
+                    // 일반 굿즈는 기존대로
+                    else -> goods.goodsIsGotten
+                }
+            }
+
+            _officialGottenGoods.value = gottenGoods
+            val seriesList = gottenGoods.map { it.goodsSeries }.distinct()
+            _allSeriesGoods.value = seriesList.flatMap {
+                App.database.goodsDao().getBySeries(it)
+            }
             _fanGottenGoods.value = App.fanDatabase.fanGoodsDao().getAll().filter { it.fanGoodsIsGotten }
         }
     }
@@ -95,6 +123,21 @@ class MyPageViewModel : ViewModel() {
         viewModelScope.launch {
             val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
             App.database.goodsDao().update(updated)
+
+            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
+                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
+                val siblings = allGoods.filter {
+                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                val setGoods = allGoods.find {
+                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                setGoods?.let { set ->
+                    val newIsGotten = siblings.all { it.goodsIsGotten }
+                    App.database.goodsDao().update(set.copy(goodsIsGotten = newIsGotten))
+                }
+            }
+
             loadGottenGoods()
         }
     }
@@ -133,8 +176,6 @@ class MyPageViewModel : ViewModel() {
                         )
                     }
                     val officialJson = gson.toJson(officialBackup)
-
-                    // 선호 캐릭터 백업
                     val charas = App.charaDatabase.charaDao().getAll()
                     val favoriteCharas = charas.filter { it.charaIsFavorite }.map { it.charaNm }
                     val charaJson = gson.toJson(favoriteCharas)

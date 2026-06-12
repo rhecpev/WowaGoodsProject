@@ -3,6 +3,8 @@ package com.example.wowagoodsproject.screen.series
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.component.CATEGORY_COMPONENT
+import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.db.series.SeriesEntity
@@ -137,6 +139,21 @@ class SeriesViewModel : ViewModel() {
         viewModelScope.launch {
             val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
             App.database.goodsDao().update(updated)
+
+            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
+                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
+                val siblings = allGoods.filter {
+                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                val setGoods = allGoods.find {
+                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                setGoods?.let { set ->
+                    val newIsGotten = siblings.all { it.goodsIsGotten }
+                    App.database.goodsDao().update(set.copy(goodsIsGotten = newIsGotten))
+                }
+            }
+
             _selectedSeries.value?.let {
                 _seriesGoods.value = App.database.goodsDao().getBySeries(it.seriesNm)
             }

@@ -23,4 +23,5 @@ data class GoodsEntity(
     override val category get() = goodsCategory
     override val price get() = goodsPrice
     override val isGotten get() = goodsIsGotten
+    override val memo get() = goodsMemo
 }

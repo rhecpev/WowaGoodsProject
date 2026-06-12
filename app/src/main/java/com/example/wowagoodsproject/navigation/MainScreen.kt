@@ -16,6 +16,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
+import com.example.wowagoodsproject.component.FilterViewModel
+import com.example.wowagoodsproject.component.GoodsDetailViewModel
+import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.screen.character.CharacterViewModel
 import com.example.wowagoodsproject.screen.fan.FanArtViewModel
 import com.example.wowagoodsproject.screen.mypage.MyPageViewModel
@@ -52,7 +55,9 @@ fun MainScreen(
     val characterViewModel: CharacterViewModel = viewModel()
     val fanArtViewModel: FanArtViewModel = viewModel()
     val myPageViewModel: MyPageViewModel = viewModel()
-
+    val filterViewModel: FilterViewModel = viewModel(key = "seriesFilter")
+    val detailViewModel: GoodsDetailViewModel = viewModel(key = "seriesDetail")
+    val listModeViewModel: ListModeViewModel = viewModel(key = "seriesListMode")
     val seriesSelectedSeries by seriesViewModel.selectedSeries.collectAsState()
     val characterSelectedChara by characterViewModel.selectedChara.collectAsState()
     val myPageCurrentSection by myPageViewModel.currentSection.collectAsState()
@@ -64,7 +69,12 @@ fun MainScreen(
     val navSelected = MaterialTheme.colorScheme.primary
     val navUnselected = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
     val navIndicator = MaterialTheme.colorScheme.surfaceVariant
-
+    val characterFilterViewModel: FilterViewModel = viewModel(key = "characterFilter")
+    val characterListModeViewModel: ListModeViewModel = viewModel(key = "characterListMode")
+    val characterDetailViewModel: GoodsDetailViewModel = viewModel(key = "characterDetail")
+    val fanFilterViewModel: FilterViewModel = viewModel(key = "fanFilter")
+    val fanListModeViewModel: ListModeViewModel = viewModel(key = "fanListMode")
+    val fanDetailViewModel: GoodsDetailViewModel = viewModel(key = "fanDetail")
     fun resetTab(route: String) {
         when (route) {
             BottomNavItem.Series.route -> {
@@ -134,16 +144,31 @@ fun MainScreen(
             }
             NavHost(navController = navController, startDestination = BottomNavItem.Series.route) {
                 composable(BottomNavItem.Series.route) {
-                    SeriesScreen(widthSizeClass = widthSizeClass, viewModel = seriesViewModel)
+                    SeriesScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = seriesViewModel,
+                        filterViewModel = filterViewModel,
+                        detailViewModel = detailViewModel,
+                        listModeViewModel = listModeViewModel
+                    )
                 }
                 composable(BottomNavItem.Character.route) {
-                    CharacterScreen(widthSizeClass = widthSizeClass, viewModel = characterViewModel)
+                    CharacterScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = characterViewModel,
+                        filterViewModel = characterFilterViewModel,
+                        listModeViewModel = characterListModeViewModel,
+                        detailViewModel = characterDetailViewModel
+                    )
                 }
                 composable(BottomNavItem.FanArt.route) {
                     FanArtScreen(
                         onNavigateToAdd = { navController.navigate("fan_add") },
                         widthSizeClass = widthSizeClass,
-                        viewModel = fanArtViewModel
+                        viewModel = fanArtViewModel,
+                        filterViewModel = fanFilterViewModel,
+                        listModeViewModel = fanListModeViewModel,
+                        detailViewModel = fanDetailViewModel
                     )
                 }
                 composable(BottomNavItem.MyPage.route) {
@@ -208,16 +233,31 @@ fun MainScreen(
                 modifier = Modifier.padding(innerPadding)
             ) {
                 composable(BottomNavItem.Series.route) {
-                    SeriesScreen(widthSizeClass = widthSizeClass, viewModel = seriesViewModel)
+                    SeriesScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = seriesViewModel,
+                        filterViewModel = filterViewModel,
+                        detailViewModel = detailViewModel,
+                        listModeViewModel = listModeViewModel
+                    )
                 }
                 composable(BottomNavItem.Character.route) {
-                    CharacterScreen(widthSizeClass = widthSizeClass, viewModel = characterViewModel)
+                    CharacterScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = characterViewModel,
+                        filterViewModel = characterFilterViewModel,
+                        listModeViewModel = characterListModeViewModel,
+                        detailViewModel = characterDetailViewModel
+                    )
                 }
                 composable(BottomNavItem.FanArt.route) {
                     FanArtScreen(
                         onNavigateToAdd = { navController.navigate("fan_add") },
                         widthSizeClass = widthSizeClass,
-                        viewModel = fanArtViewModel
+                        viewModel = fanArtViewModel,
+                        filterViewModel = fanFilterViewModel,
+                        listModeViewModel = fanListModeViewModel,
+                        detailViewModel = fanDetailViewModel
                     )
                 }
                 composable(BottomNavItem.MyPage.route) {

@@ -13,12 +13,31 @@ class FilterViewModel : ViewModel() {
     private val _filterType = MutableStateFlow(FilterType.ALL)
     val filterType: StateFlow<FilterType> = _filterType
 
+    private val _selectedCharaFilter = MutableStateFlow<String?>(null)
+    val selectedCharaFilter: StateFlow<String?> = _selectedCharaFilter
+
+    private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
+    val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter
+
     fun setFilter(filter: FilterType) {
         _filterType.value = filter
     }
 
-    fun <T : GoodsItem> applyFilter(list: List<T>): Pair<List<T>, List<T> >{
-        return Pair(list,when (_filterType.value) {
+    fun setCharaFilter(chara: String?) {
+        _selectedCharaFilter.value = chara
+    }
+
+    fun setCategoryFilter(category: String?) {
+        _selectedCategoryFilter.value = category
+    }
+
+    fun clearGoodsFilter() {
+        _selectedCharaFilter.value = null
+        _selectedCategoryFilter.value = null
+    }
+
+    fun <T : GoodsItem> applyFilter(list: List<T>): Pair<List<T>, List<T>> {
+        return Pair(list, when (_filterType.value) {
             FilterType.ALL -> list
             FilterType.GOTTEN -> list.filter { it.isGotten }
             FilterType.NOT_GOTTEN -> list.filter { !it.isGotten }

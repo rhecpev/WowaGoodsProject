@@ -58,8 +58,9 @@ fun FanArtScreen(
     var showGoodsFilterDialog by remember { mutableStateOf(false) }
     var goodsFilterDialogTab by remember { mutableStateOf(0) }
     var goodsFilterSearch by remember { mutableStateOf("") }
-    var selectedGoodsCharaFilter by remember { mutableStateOf<String?>(null) }
-    var selectedGoodsCategoryFilter by remember { mutableStateOf<String?>(null) }
+
+    val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
+    val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
     val categoryList = goodsList
         .map { it.fanGoodsCategory }
         .distinct()
@@ -201,8 +202,7 @@ fun FanArtScreen(
                             Column(verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)) {
                                 OutlinedButton(
                                     onClick = {
-                                        selectedGoodsCharaFilter = null
-                                        selectedGoodsCategoryFilter = null
+                                        filterViewModel.clearGoodsFilter()
                                         showGoodsFilterDialog = false
                                         goodsFilterSearch = ""
                                     },
@@ -246,8 +246,8 @@ fun FanArtScreen(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier = Modifier
                                                     .clickable {
-                                                        selectedGoodsCharaFilter =
-                                                            if (selectedGoodsCharaFilter == charaNm) null else charaNm
+                                                        filterViewModel.setCharaFilter(if (selectedGoodsCharaFilter == charaNm) null else charaNm)
+
                                                         showGoodsFilterDialog = false
                                                         goodsFilterSearch = ""
                                                     }
@@ -288,8 +288,8 @@ fun FanArtScreen(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
                                                         .clickable {
-                                                            selectedGoodsCategoryFilter =
-                                                                if (selectedGoodsCategoryFilter == cat) null else cat
+                                                            filterViewModel.setCategoryFilter(if (selectedGoodsCategoryFilter == cat) null else cat)
+
                                                             showGoodsFilterDialog = false
                                                             goodsFilterSearch = ""
                                                         },
@@ -376,8 +376,8 @@ fun FanArtScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier
                                                 .clickable {
-                                                    selectedGoodsCharaFilter =
-                                                        if (selectedGoodsCharaFilter == charaNm) null else charaNm
+                                                    filterViewModel.setCharaFilter(if (selectedGoodsCharaFilter == charaNm) null else charaNm)
+
                                                     showGoodsFilterDialog = false
                                                     goodsFilterSearch = ""
                                                 }
@@ -418,8 +418,8 @@ fun FanArtScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable {
-                                                        selectedGoodsCategoryFilter =
-                                                            if (selectedGoodsCategoryFilter == cat) null else cat
+                                                        filterViewModel.setCategoryFilter(if (selectedGoodsCategoryFilter == cat) null else cat)
+
                                                         showGoodsFilterDialog = false
                                                         goodsFilterSearch = ""
                                                     },
@@ -454,8 +454,7 @@ fun FanArtScreen(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    selectedGoodsCharaFilter = null
-                                    selectedGoodsCategoryFilter = null
+                                    filterViewModel.clearGoodsFilter()
                                     showGoodsFilterDialog = false
                                     goodsFilterSearch = ""
                                 },

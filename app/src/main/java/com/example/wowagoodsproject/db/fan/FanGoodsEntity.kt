@@ -23,4 +23,6 @@ data class FanGoodsEntity(
     override val category get() = fanGoodsCategory
     override val price get() = fanGoodsPrice
     override val isGotten get() = fanGoodsIsGotten
+    override val memo get() = fanGoodsMemo
+
 }

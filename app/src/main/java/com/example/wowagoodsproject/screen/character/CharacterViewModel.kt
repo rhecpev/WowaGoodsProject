@@ -3,6 +3,7 @@ package com.example.wowagoodsproject.screen.character
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
@@ -22,11 +23,15 @@ class CharacterViewModel : ViewModel() {
     private val _officialGoods = MutableStateFlow<List<GoodsEntity>>(emptyList())
     val officialGoods: StateFlow<List<GoodsEntity>> = _officialGoods
 
+    private val _allSeriesGoods = MutableStateFlow<List<GoodsEntity>>(emptyList())
+    val allSeriesGoods: StateFlow<List<GoodsEntity>> = _allSeriesGoods
+
     private val _fanGoods = MutableStateFlow<List<FanGoodsEntity>>(emptyList())
     val fanGoods: StateFlow<List<FanGoodsEntity>> = _fanGoods
 
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab
+
     private val _showFavoriteOnly = MutableStateFlow(false)
     val showFavoriteOnly: StateFlow<Boolean> = _showFavoriteOnly
 
@@ -49,8 +54,12 @@ class CharacterViewModel : ViewModel() {
     fun selectChara(chara: CharaEntity) {
         _selectedChara.value = chara
         viewModelScope.launch {
-            App.database.goodsDao().getByCharaFlow(chara.charaNm).collectLatest {
-                _officialGoods.value = it
+            App.database.goodsDao().getByCharaFlow(chara.charaNm).collectLatest { charaGoods ->
+                _officialGoods.value = charaGoods
+                val seriesList = charaGoods.map { it.goodsSeries }.distinct()
+                _allSeriesGoods.value = seriesList.flatMap {
+                    App.database.goodsDao().getBySeries(it)
+                }
             }
         }
         viewModelScope.launch {
@@ -63,6 +72,7 @@ class CharacterViewModel : ViewModel() {
     fun clearSelectedChara() {
         _selectedChara.value = null
         _officialGoods.value = emptyList()
+        _allSeriesGoods.value = emptyList()
         _fanGoods.value = emptyList()
     }
 
@@ -74,6 +84,26 @@ class CharacterViewModel : ViewModel() {
         viewModelScope.launch {
             val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
             App.database.goodsDao().update(updated)
+
+            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
+                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
+                val siblings = allGoods.filter {
+                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                val setGoods = allGoods.find {
+                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                setGoods?.let { set ->
+                    val newIsGotten = siblings.all { it.goodsIsGotten }
+                    App.database.goodsDao().update(set.copy(goodsIsGotten = newIsGotten))
+                }
+            }
+
+            // allSeriesGoods 갱신
+            val seriesList = _officialGoods.value.map { it.goodsSeries }.distinct()
+            _allSeriesGoods.value = seriesList.flatMap {
+                App.database.goodsDao().getBySeries(it)
+            }
         }
     }
 
@@ -89,7 +119,4 @@ class CharacterViewModel : ViewModel() {
             App.fanDatabase.fanGoodsDao().delete(goods)
         }
     }
-
-
-
 }

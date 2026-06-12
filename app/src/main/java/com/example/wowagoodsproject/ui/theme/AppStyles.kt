@@ -29,6 +29,7 @@ object AppStyles {
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium
     )
+    val colorPartialGotten = Color(0xFFFF9800)
     val textGotten = TextStyle(
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,

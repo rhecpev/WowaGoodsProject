@@ -155,7 +155,7 @@ fun GoodsDetailDialog(
 }
 
 @Composable
-private fun DetailRow(
+fun DetailRow(
     label: String,
     value: String,
     valueColor: Color = MaterialTheme.colorScheme.onSurface

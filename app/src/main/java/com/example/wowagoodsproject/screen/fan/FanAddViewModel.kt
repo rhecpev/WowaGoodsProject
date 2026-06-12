@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +66,10 @@ class FanAddViewModel : ViewModel() {
         viewModelScope.launch {
             val fanCategories = App.fanDatabase.fanGoodsDao().getFanCategories()
             val officialCategories = App.database.goodsDao().getAllCategories()
-            _categoryList.value = (fanCategories + officialCategories).distinct().sorted()
+            _categoryList.value = (fanCategories + officialCategories)
+                .distinct()
+                .filter { it != CATEGORY_SET }  // 추가
+                .sorted()
         }
     }
 

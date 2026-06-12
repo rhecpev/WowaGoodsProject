@@ -24,9 +24,12 @@ fun GoodsGridItem(
     category: String,
     price: String,
     isGotten: Boolean,
+    gottenStatus: GottenStatus? = null,
     memo: String,
+    components: List<String> = emptyList(),
+    highlightCategory: String? = null,
     onClick: () -> Unit = {}
-) {
+){
     val encodedPath = if (imgPath.startsWith("http")) {
         try {
             URI(null, imgPath.removePrefix("https://"), null).toASCIIString()
@@ -79,13 +82,35 @@ fun GoodsGridItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = "${category} / ${memo}",
-                style = AppStyles.textCardSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (components.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "$category [",
+                        style = AppStyles.textCardSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    components.forEachIndexed { index, cat ->
+                        Text(
+                            text = if (index < components.lastIndex) "$cat, " else "$cat]",
+                            style = AppStyles.textCardSmall,
+                            color = if (cat == highlightCategory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = if (memo.isNotEmpty()) "${category} / ${memo}" else category,
+                    style = AppStyles.textCardSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Text(
                 text = price,
                 style = AppStyles.textCardSmall,
@@ -93,9 +118,21 @@ fun GoodsGridItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            val status = gottenStatus ?: if (isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
             Text(
-                text = if (isGotten) "보유" else "미보유",
-                style = if (isGotten) AppStyles.textGotten else AppStyles.textNotGotten
+                text = when (status) {
+                    GottenStatus.GOTTEN -> "보유"
+                    GottenStatus.NOT_GOTTEN -> "미보유"
+                    GottenStatus.PARTIAL -> "일부보유"
+                },
+                style = AppStyles.textCardSmall.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = when (status) {
+                        GottenStatus.GOTTEN -> AppStyles.colorGotten
+                        GottenStatus.NOT_GOTTEN -> AppStyles.colorNotGotten
+                        GottenStatus.PARTIAL -> AppStyles.colorPartialGotten
+                    }
+                )
             )
         }
     }

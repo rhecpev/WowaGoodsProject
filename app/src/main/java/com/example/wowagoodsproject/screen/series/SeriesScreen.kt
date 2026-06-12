@@ -1,7 +1,6 @@
 package com.example.wowagoodsproject.screen.series
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,13 +32,17 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
+import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.component.FilterBar
+import com.example.wowagoodsproject.component.FilterType
 import com.example.wowagoodsproject.component.FilterViewModel
 import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.GoodsGridItem
 import com.example.wowagoodsproject.component.GoodsListItem
+import com.example.wowagoodsproject.component.GottenStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
+import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.ui.theme.AppStyles
@@ -57,21 +60,23 @@ fun SeriesScreen(
     val allCharaList by viewModel.allCharaList.collectAsState()
     val selectedCharaFilter by viewModel.selectedCharaFilter.collectAsState()
     val selectedSeries by viewModel.selectedSeries.collectAsState()
-    val seriesGoods by (if (1 === 1) viewModel.seriesGoods.collectAsState() else viewModel.seriesGoods.collectAsState())
+    val seriesGoods by viewModel.seriesGoods.collectAsState()
     val filterType by filterViewModel.filterType.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val seriesCharaCountMap by viewModel.seriesCharaCountMap.collectAsState()
+
+    // ViewModel에서 collectAsState로 변경
+    val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
+    val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
+
     var searchQuery by remember { mutableStateOf("") }
     val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
     var showCharaFilterDialog by remember { mutableStateOf(false) }
-
-    // 통합 필터 다이얼로그 상태
+    var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
     var showGoodsFilterDialog by remember { mutableStateOf(false) }
     var goodsFilterDialogTab by remember { mutableStateOf(0) }
     var goodsFilterSearch by remember { mutableStateOf("") }
-    var selectedGoodsCharaFilter by remember { mutableStateOf<String?>(null) }
-    var selectedGoodsCategoryFilter by remember { mutableStateOf<String?>(null) }
 
     val sortedCharaList = allCharaList.sortedByDescending { it.charaIsFavorite }
         .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
@@ -91,7 +96,7 @@ fun SeriesScreen(
     val goodsCategoryList = seriesGoods
         .map { it.category }
         .distinct()
-        .filter { it.isNotEmpty() }
+        .filter { it.isNotEmpty() && it != CATEGORY_SET }  // CATEGORY_SET 추가
         .sorted()
 
     val filteredGoodsCharaList = goodsCharaList.filter {
@@ -102,11 +107,24 @@ fun SeriesScreen(
     }
 
     val filteredGoods = filterViewModel.applyFilter(seriesGoods).second.let { list ->
-        var result = list
+        val setMemos = seriesGoods.filter { it.category == CATEGORY_SET }.map { it.memo }.toSet()
+        var result =
+            list.filter { it.category == CATEGORY_SET || it.memo !in setMemos || it.memo.isEmpty() }
         if (selectedGoodsCharaFilter != null)
             result = result.filter { it.chara.contains(selectedGoodsCharaFilter!!) }
-        if (selectedGoodsCategoryFilter != null)
-            result = result.filter { it.category == selectedGoodsCategoryFilter }
+        if (selectedGoodsCategoryFilter != null) {
+            result = result.filter { goods ->
+                if (goods.category == CATEGORY_SET) {
+                    seriesGoods.any {
+                        it.category != CATEGORY_SET &&
+                                it.memo == goods.memo &&
+                                it.category == selectedGoodsCategoryFilter
+                    }
+                } else {
+                    goods.category == selectedGoodsCategoryFilter
+                }
+            }
+        }
         result
     }
     val AllSeriesGoods = filterViewModel.applyFilter(seriesGoods).first.let { list ->
@@ -120,10 +138,23 @@ fun SeriesScreen(
 
     BackHandler(enabled = selectedSeries != null) {
         viewModel.clearSelectedSeries()
-        filterViewModel.setFilter(com.example.wowagoodsproject.component.FilterType.ALL)
-        selectedGoodsCharaFilter = null
-        selectedGoodsCategoryFilter = null
+        filterViewModel.setFilter(FilterType.ALL)
+        filterViewModel.clearGoodsFilter()
         goodsFilterSearch = ""
+    }
+
+    selectedSetGoods?.let { setGoods ->
+        val components = seriesGoods.filter {
+            it.category != CATEGORY_SET && it.memo == setGoods.memo
+        }
+        SetGoodsDetailDialog(
+            setGoods = setGoods,
+            components = components,
+            onDismiss = { selectedSetGoods = null },
+            onToggleGotten = { component ->
+                viewModel.toggleGotten(component)
+            }
+        )
     }
 
     selectedGoods?.let { goods ->
@@ -148,7 +179,6 @@ fun SeriesScreen(
 
     // 시리즈 목록용 캐릭터 필터 다이얼로그
     if (showCharaFilterDialog) {
-
         Dialog(
             onDismissRequest = { showCharaFilterDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -162,8 +192,6 @@ fun SeriesScreen(
             ) {
                 if (isLandscape) {
                     Row(modifier = Modifier.padding(AppStyles.paddingLarge)) {
-
-                        // ── 왼쪽 패널 ──
                         Column(
                             modifier = Modifier
                                 .width(200.dp)
@@ -186,14 +214,12 @@ fun SeriesScreen(
                                     }
                                 }
                             )
-
                             Spacer(modifier = Modifier.weight(1f))
-
                             Column(verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)) {
                                 OutlinedButton(
                                     onClick = {
-                                        viewModel.setCharaFilter(null)
-                                        showCharaFilterDialog = false
+                                        viewModel.setCharaFilter(null); showCharaFilterDialog =
+                                        false
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("필터 해제") }
@@ -203,7 +229,6 @@ fun SeriesScreen(
                                 ) { Text("닫기") }
                             }
                         }
-
                         Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
                         VerticalDivider(
                             modifier = Modifier.fillMaxHeight(),
@@ -211,8 +236,6 @@ fun SeriesScreen(
                             color = MaterialTheme.colorScheme.outlineVariant
                         )
                         Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
-
-                        // ── 오른쪽 패널 ──
                         Column(
                             modifier = Modifier
                                 .weight(1f)
@@ -229,9 +252,7 @@ fun SeriesScreen(
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         modifier = Modifier
                                             .clickable {
-                                                viewModel.setCharaFilter(
-                                                    if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara
-                                                )
+                                                viewModel.setCharaFilter(if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara)
                                                 showCharaFilterDialog = false
                                             }
                                             .background(
@@ -248,9 +269,7 @@ fun SeriesScreen(
                                             .padding(AppStyles.paddingSmall)
                                     ) {
                                         Image(
-                                            painter = rememberAsyncImagePainter(
-                                                model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
-                                            ),
+                                            painter = rememberAsyncImagePainter(model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null),
                                             contentDescription = null,
                                             modifier = Modifier
                                                 .size(60.dp)
@@ -264,9 +283,7 @@ fun SeriesScreen(
                             }
                         }
                     }
-
                 } else {
-                    // ── 세로 레이아웃 ──
                     Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
                         OutlinedTextField(
                             value = searchQuery,
@@ -285,7 +302,6 @@ fun SeriesScreen(
                                 }
                             }
                         )
-
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
@@ -300,9 +316,7 @@ fun SeriesScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
                                         .clickable {
-                                            viewModel.setCharaFilter(
-                                                if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara
-                                            )
+                                            viewModel.setCharaFilter(if (selectedCharaFilter?.charaNm == chara.charaNm) null else chara)
                                             showCharaFilterDialog = false
                                         }
                                         .background(
@@ -319,9 +333,7 @@ fun SeriesScreen(
                                         .padding(AppStyles.paddingSmall)
                                 ) {
                                     Image(
-                                        painter = rememberAsyncImagePainter(
-                                            model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null
-                                        ),
+                                        painter = rememberAsyncImagePainter(model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null),
                                         contentDescription = null,
                                         modifier = Modifier
                                             .size(60.dp)
@@ -333,7 +345,6 @@ fun SeriesScreen(
                                 }
                             }
                         }
-
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -341,8 +352,7 @@ fun SeriesScreen(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    viewModel.setCharaFilter(null)
-                                    showCharaFilterDialog = false
+                                    viewModel.setCharaFilter(null); showCharaFilterDialog = false
                                 },
                                 modifier = Modifier.weight(1f)
                             ) { Text("필터 해제") }
@@ -357,15 +367,10 @@ fun SeriesScreen(
         }
     }
 
-    // 굿즈용 통합 필터 다이얼로그 (캐릭터 + 카테고리)
+    // 굿즈용 통합 필터 다이얼로그
     if (showGoodsFilterDialog) {
-        val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
-
         Dialog(
-            onDismissRequest = {
-                showGoodsFilterDialog = false
-                goodsFilterSearch = ""
-            },
+            onDismissRequest = { showGoodsFilterDialog = false; goodsFilterSearch = "" },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
@@ -377,8 +382,6 @@ fun SeriesScreen(
             ) {
                 if (isLandscape) {
                     Row(modifier = Modifier.padding(AppStyles.paddingLarge)) {
-
-                        // ── 왼쪽 패널 ──
                         Column(
                             modifier = Modifier
                                 .width(200.dp)
@@ -386,7 +389,6 @@ fun SeriesScreen(
                         ) {
                             Text(text = "필터", style = AppStyles.textCardTitle)
                             Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-
                             TabRow(selectedTabIndex = goodsFilterDialogTab) {
                                 Tab(
                                     selected = goodsFilterDialogTab == 0,
@@ -399,9 +401,7 @@ fun SeriesScreen(
                                     text = { Text("카테고리") }
                                 )
                             }
-
                             Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-
                             OutlinedTextField(
                                 value = goodsFilterSearch,
                                 onValueChange = { goodsFilterSearch = it },
@@ -419,14 +419,11 @@ fun SeriesScreen(
                                     }
                                 }
                             )
-
                             Spacer(modifier = Modifier.weight(1f))
-
                             Column(verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)) {
                                 OutlinedButton(
                                     onClick = {
-                                        selectedGoodsCharaFilter = null
-                                        selectedGoodsCategoryFilter = null
+                                        filterViewModel.clearGoodsFilter()
                                         showGoodsFilterDialog = false
                                         goodsFilterSearch = ""
                                     },
@@ -434,14 +431,12 @@ fun SeriesScreen(
                                 ) { Text("필터 해제") }
                                 Button(
                                     onClick = {
-                                        showGoodsFilterDialog = false
-                                        goodsFilterSearch = ""
+                                        showGoodsFilterDialog = false; goodsFilterSearch = ""
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("닫기") }
                             }
                         }
-
                         Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
                         VerticalDivider(
                             modifier = Modifier.fillMaxHeight(),
@@ -449,8 +444,6 @@ fun SeriesScreen(
                             color = MaterialTheme.colorScheme.outlineVariant
                         )
                         Spacer(modifier = Modifier.width(AppStyles.paddingMedium))
-
-                        // ── 오른쪽 패널 ──
                         Column(
                             modifier = Modifier
                                 .weight(1f)
@@ -471,8 +464,7 @@ fun SeriesScreen(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier = Modifier
                                                     .clickable {
-                                                        selectedGoodsCharaFilter =
-                                                            if (selectedGoodsCharaFilter == charaNm) null else charaNm
+                                                        filterViewModel.setCharaFilter(if (selectedGoodsCharaFilter == charaNm) null else charaNm)
                                                         showGoodsFilterDialog = false
                                                         goodsFilterSearch = ""
                                                     }
@@ -490,9 +482,7 @@ fun SeriesScreen(
                                                     .padding(AppStyles.paddingSmall)
                                             ) {
                                                 Image(
-                                                    painter = rememberAsyncImagePainter(
-                                                        model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
-                                                    ),
+                                                    painter = rememberAsyncImagePainter(model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null),
                                                     contentDescription = null,
                                                     modifier = Modifier
                                                         .size(60.dp)
@@ -520,23 +510,18 @@ fun SeriesScreen(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
                                                         .clickable {
-                                                            selectedGoodsCategoryFilter =
-                                                                if (selectedGoodsCategoryFilter == cat) null else cat
+                                                            filterViewModel.setCategoryFilter(if (selectedGoodsCategoryFilter == cat) null else cat)
                                                             showGoodsFilterDialog = false
                                                             goodsFilterSearch = ""
                                                         },
                                                     colors = CardDefaults.cardColors(
-                                                        containerColor = if (selectedGoodsCategoryFilter == cat)
-                                                            MaterialTheme.colorScheme.primaryContainer
-                                                        else MaterialTheme.colorScheme.surface
+                                                        containerColor = if (selectedGoodsCategoryFilter == cat) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                                                     )
                                                 ) {
                                                     Text(
                                                         text = cat,
                                                         modifier = Modifier.padding(AppStyles.paddingMedium),
-                                                        color = if (selectedGoodsCategoryFilter == cat)
-                                                            MaterialTheme.colorScheme.onPrimaryContainer
-                                                        else MaterialTheme.colorScheme.onSurface
+                                                        color = if (selectedGoodsCategoryFilter == cat) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                                     )
                                                 }
                                                 HorizontalDivider(
@@ -550,13 +535,10 @@ fun SeriesScreen(
                             }
                         }
                     }
-
                 } else {
-                    // ── 세로 레이아웃 ──
                     Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
                         Text(text = "필터", style = AppStyles.textCardTitle)
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-
                         TabRow(selectedTabIndex = goodsFilterDialogTab) {
                             Tab(
                                 selected = goodsFilterDialogTab == 0,
@@ -569,9 +551,7 @@ fun SeriesScreen(
                                 text = { Text("카테고리") }
                             )
                         }
-
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-
                         OutlinedTextField(
                             value = goodsFilterSearch,
                             onValueChange = { goodsFilterSearch = it },
@@ -589,9 +569,7 @@ fun SeriesScreen(
                                 }
                             }
                         )
-
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-
                         when (goodsFilterDialogTab) {
                             0 -> {
                                 LazyVerticalGrid(
@@ -609,8 +587,7 @@ fun SeriesScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier
                                                 .clickable {
-                                                    selectedGoodsCharaFilter =
-                                                        if (selectedGoodsCharaFilter == charaNm) null else charaNm
+                                                    filterViewModel.setCharaFilter(if (selectedGoodsCharaFilter == charaNm) null else charaNm)
                                                     showGoodsFilterDialog = false
                                                     goodsFilterSearch = ""
                                                 }
@@ -628,9 +605,7 @@ fun SeriesScreen(
                                                 .padding(AppStyles.paddingSmall)
                                         ) {
                                             Image(
-                                                painter = rememberAsyncImagePainter(
-                                                    model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null
-                                                ),
+                                                painter = rememberAsyncImagePainter(model = if (charaEntity?.charaUrl?.isNotEmpty() == true) charaEntity.charaUrl else null),
                                                 contentDescription = null,
                                                 modifier = Modifier
                                                     .size(60.dp)
@@ -655,23 +630,18 @@ fun SeriesScreen(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable {
-                                                        selectedGoodsCategoryFilter =
-                                                            if (selectedGoodsCategoryFilter == cat) null else cat
+                                                        filterViewModel.setCategoryFilter(if (selectedGoodsCategoryFilter == cat) null else cat)
                                                         showGoodsFilterDialog = false
                                                         goodsFilterSearch = ""
                                                     },
                                                 colors = CardDefaults.cardColors(
-                                                    containerColor = if (selectedGoodsCategoryFilter == cat)
-                                                        MaterialTheme.colorScheme.primaryContainer
-                                                    else MaterialTheme.colorScheme.surface
+                                                    containerColor = if (selectedGoodsCategoryFilter == cat) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                                                 )
                                             ) {
                                                 Text(
                                                     text = cat,
                                                     modifier = Modifier.padding(AppStyles.paddingMedium),
-                                                    color = if (selectedGoodsCategoryFilter == cat)
-                                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                                    else MaterialTheme.colorScheme.onSurface
+                                                    color = if (selectedGoodsCategoryFilter == cat) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
                                             HorizontalDivider(
@@ -683,7 +653,6 @@ fun SeriesScreen(
                                 }
                             }
                         }
-
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -691,18 +660,14 @@ fun SeriesScreen(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    selectedGoodsCharaFilter = null
-                                    selectedGoodsCategoryFilter = null
+                                    filterViewModel.clearGoodsFilter()
                                     showGoodsFilterDialog = false
                                     goodsFilterSearch = ""
                                 },
                                 modifier = Modifier.weight(1f)
                             ) { Text("필터 해제") }
                             Button(
-                                onClick = {
-                                    showGoodsFilterDialog = false
-                                    goodsFilterSearch = ""
-                                },
+                                onClick = { showGoodsFilterDialog = false; goodsFilterSearch = "" },
                                 modifier = Modifier.weight(1f)
                             ) { Text("닫기") }
                         }
@@ -714,15 +679,12 @@ fun SeriesScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
-
-            title =
-                if (selectedSeries != null) "공식 - " + selectedSeries!!.seriesNm else "공식",
+            title = if (selectedSeries != null) "공식 - " + selectedSeries!!.seriesNm else "공식",
             action = {
                 if (selectedSeries != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-                            Row() {
+                            Row {
                                 IconButton(onClick = { showGoodsFilterDialog = true }) {
                                     Icon(
                                         imageVector = Icons.Default.FilterList,
@@ -740,15 +702,14 @@ fun SeriesScreen(
                                 }
                                 TextButton(onClick = {
                                     viewModel.clearSelectedSeries()
-                                    filterViewModel.setFilter(com.example.wowagoodsproject.component.FilterType.ALL)
-                                    selectedGoodsCharaFilter = null
-                                    selectedGoodsCategoryFilter = null
+                                    filterViewModel.setFilter(FilterType.ALL)
+                                    filterViewModel.clearGoodsFilter()
                                     goodsFilterSearch = ""
                                 }) {
                                     Text("뒤로")
                                 }
                             }
-                            Row() {
+                            Row {
                                 if (selectedGoodsCharaFilter != null) {
                                     Text(
                                         text = selectedGoodsCharaFilter!!,
@@ -778,16 +739,12 @@ fun SeriesScreen(
                     }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(onClick = { showCharaFilterDialog = true }) {
                                 Icon(
                                     imageVector = Icons.Default.FilterList,
                                     contentDescription = "캐릭터 필터",
-                                    tint = if (selectedCharaFilter != null)
-                                        MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface
+                                    tint = if (selectedCharaFilter != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             if (selectedCharaFilter != null) {
@@ -803,7 +760,7 @@ fun SeriesScreen(
                 }
             }
         )
-
+        val expandedStates = remember { mutableStateMapOf<Int, Boolean>() }
         if (selectedSeries != null) {
             FilterBar(
                 filterType = filterType,
@@ -817,10 +774,7 @@ fun SeriesScreen(
                         .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "등록된 굿즈가 없습니다",
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Text(text = "등록된 굿즈가 없습니다", color = MaterialTheme.colorScheme.onBackground)
                 }
             } else {
                 if (isGridMode) {
@@ -829,16 +783,45 @@ fun SeriesScreen(
                         itemsIndexed(rows) { index, rowItems ->
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 rowItems.forEach { goods ->
+                                    val gottenStatus = if (goods.category == CATEGORY_SET) {
+                                        val components = seriesGoods.filter {
+                                            it.category != CATEGORY_SET && it.memo == goods.memo
+                                        }
+                                        when {
+                                            components.isEmpty() -> if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
+                                            components.all { it.isGotten } -> GottenStatus.GOTTEN
+                                            components.none { it.isGotten } -> GottenStatus.NOT_GOTTEN
+                                            else -> GottenStatus.PARTIAL
+                                        }
+                                    } else {
+                                        if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
+                                    }
                                     Box(modifier = Modifier.weight(1f)) {
+                                        val componentCategories =
+                                            if (goods.category == CATEGORY_SET) {
+                                                seriesGoods.filter {
+                                                    it.category != CATEGORY_SET && it.memo == goods.memo
+                                                }.map { it.category }
+                                            } else emptyList()
+
                                         GoodsGridItem(
                                             imgPath = goods.imgPath,
                                             series = goods.series,
                                             chara = goods.chara,
                                             category = goods.category,
+                                            gottenStatus = gottenStatus,
                                             price = goods.price,
                                             isGotten = goods.isGotten,
-                                            memo = goods.goodsMemo,
-                                            onClick = { detailViewModel.selectGoods(goods) }
+                                            memo = goods.memo,
+                                            components = componentCategories,
+                                            highlightCategory = selectedGoodsCategoryFilter,
+                                            onClick = {
+                                                if (goods.category == CATEGORY_SET) {
+                                                    selectedSetGoods = goods
+                                                } else {
+                                                    detailViewModel.selectGoods(goods)
+                                                }
+                                            }
                                         )
                                     }
                                 }
@@ -855,16 +838,87 @@ fun SeriesScreen(
                 } else {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         itemsIndexed(filteredGoods) { index, goods ->
+                            val isExpanded = expandedStates[index] ?: false
+                            val gottenStatus = if (goods.category == CATEGORY_SET) {
+                                val components = seriesGoods.filter {
+                                    it.category != CATEGORY_SET && it.memo == goods.memo
+                                }
+                                when {
+                                    components.isEmpty() -> if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
+                                    components.all { it.isGotten } -> GottenStatus.GOTTEN
+                                    components.none { it.isGotten } -> GottenStatus.NOT_GOTTEN
+                                    else -> GottenStatus.PARTIAL
+                                }
+                            } else {
+                                if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
+                            }
+                            val componentCategories = if (goods.category == CATEGORY_SET) {
+                                seriesGoods.filter {
+                                    it.category != CATEGORY_SET && it.memo == goods.memo
+                                }.map { it.category }
+                            } else emptyList()
                             GoodsListItem(
                                 imgPath = goods.imgPath,
                                 series = goods.series,
                                 chara = goods.chara,
+                                components = componentCategories,
+                                isExpanded = isExpanded,
                                 category = goods.category,
                                 price = goods.price,
                                 isGotten = goods.isGotten,
-                                memo = goods.goodsMemo,
-                                onClick = { detailViewModel.selectGoods(goods) }
+                                gottenStatus = gottenStatus,
+                                highlightCategory = selectedGoodsCategoryFilter,
+                                memo = goods.memo,
+                                onClick = {
+                                    if (goods.category == CATEGORY_SET) {
+                                        expandedStates[index] = !isExpanded
+                                    } else {
+                                        detailViewModel.selectGoods(goods)
+                                    }
+                                }
                             )
+                            if (goods.category == CATEGORY_SET && isExpanded) {
+                                val components = seriesGoods.filter {
+                                    it.category != CATEGORY_SET && it.memo == goods.memo
+                                }
+                                LazyRow(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(AppStyles.paddingMedium),
+                                    horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                                ) {
+                                    items(components) { component ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .width(80.dp)
+                                                .clickable { detailViewModel.selectGoods(component) }
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(80.dp)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Image(
+                                                    painter = rememberAsyncImagePainter(model = if (component.imgPath.isNotEmpty()) component.imgPath else null),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Fit
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = component.category,
+                                                style = AppStyles.textCardSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                color = if (component.isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             if (index < filteredGoods.lastIndex) {
                                 HorizontalDivider(
                                     thickness = 1.dp,
@@ -892,7 +946,6 @@ fun SeriesScreen(
                     )
                 }
             }
-
             if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -910,18 +963,14 @@ fun SeriesScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = { viewModel.selectSeries(series) },
                             shape = RoundedCornerShape(0.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            )
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {
                             if (isLandscape) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(200.dp) // 👈 이미지 높이에 맞춤
+                                        .height(200.dp)
                                 ) {
-
-                                    // ✅ 이미지 (기존 Box 그대로 이동)
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth(0.5f)
@@ -930,22 +979,17 @@ fun SeriesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Image(
-                                            painter = rememberAsyncImagePainter(
-                                                model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null
-                                            ),
+                                            painter = rememberAsyncImagePainter(model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null),
                                             contentDescription = null,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Fit
                                         )
                                     }
-
-                                    // ✅ 오른쪽 캐릭터 영역
                                     Column(
                                         modifier = Modifier
                                             .weight(1f)
                                             .padding(AppStyles.paddingMedium)
                                     ) {
-
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
@@ -960,18 +1004,15 @@ fun SeriesScreen(
                                                 style = AppStyles.textCardTitle
                                             )
                                         }
-
                                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                                         HorizontalDivider()
                                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-
                                         if (charas.isEmpty()) {
                                             Text(
                                                 text = "등록된 캐릭터가 없습니다",
                                                 style = AppStyles.textCardSmall
                                             )
                                         } else {
-//                                        charas.chunked(1).forEach { rowCharas ->
                                             LazyRow(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(
@@ -980,39 +1021,30 @@ fun SeriesScreen(
                                             ) {
                                                 val sortedCharas =
                                                     charas.sortedByDescending { it.charaIsFavorite }
-
                                                 items((sortedCharas.size + 1) / 2) { index ->
-
                                                     Column(
                                                         verticalArrangement = Arrangement.spacedBy(
                                                             AppStyles.paddingSmall
                                                         )
                                                     ) {
-
-                                                        // 👆 위
                                                         val charaTop =
                                                             sortedCharas.getOrNull(index * 2)
                                                         if (charaTop != null) {
-
                                                             val count =
                                                                 seriesCharaCountMap["${series.seriesNm}|${charaTop.charaNm}"]
                                                                     ?: Pair(0, 0)
-
                                                             Row(
                                                                 modifier = Modifier
                                                                     .width(IntrinsicSize.Min)
                                                                     .padding(vertical = AppStyles.paddingSmall)
                                                                     .background(
-                                                                        color = if (charaTop.charaIsFavorite)
-                                                                            MaterialTheme.colorScheme.primary
-                                                                        else Color.Transparent,
+                                                                        color = if (charaTop.charaIsFavorite) MaterialTheme.colorScheme.primary else Color.Transparent,
                                                                         shape = RoundedCornerShape(8.dp)
                                                                     )
                                                                     .padding(AppStyles.paddingSmall),
                                                                 verticalAlignment = Alignment.CenterVertically
                                                             ) {
                                                                 Row(verticalAlignment = Alignment.CenterVertically) {
-
                                                                     Image(
                                                                         painter = rememberAsyncImagePainter(
                                                                             model = if (charaTop.charaUrl.isNotEmpty()) charaTop.charaUrl else null
@@ -1021,9 +1053,7 @@ fun SeriesScreen(
                                                                         modifier = Modifier
                                                                             .size(48.dp)
                                                                             .clip(
-                                                                                RoundedCornerShape(
-                                                                                    8.dp
-                                                                                )
+                                                                                RoundedCornerShape(8.dp)
                                                                             ),
                                                                         contentScale = ContentScale.Crop
                                                                     )
@@ -1034,7 +1064,6 @@ fun SeriesScreen(
                                                                             overflow = TextOverflow.Ellipsis,
                                                                             style = AppStyles.textCardSubtitle
                                                                         )
-
                                                                         Text(
                                                                             text = "(${count.first}/${count.second})",
                                                                             style = AppStyles.textCardSmall
@@ -1043,24 +1072,18 @@ fun SeriesScreen(
                                                                 }
                                                             }
                                                         }
-
-                                                        // 👇 아래
                                                         val charaBottom =
                                                             sortedCharas.getOrNull(index * 2 + 1)
                                                         if (charaBottom != null) {
-
                                                             val count =
                                                                 seriesCharaCountMap["${series.seriesNm}|${charaBottom.charaNm}"]
                                                                     ?: Pair(0, 0)
-
                                                             Row(
                                                                 modifier = Modifier
                                                                     .width(IntrinsicSize.Min)
                                                                     .padding(vertical = AppStyles.paddingSmall)
                                                                     .background(
-                                                                        color = if (charaBottom.charaIsFavorite)
-                                                                            MaterialTheme.colorScheme.primary
-                                                                        else Color.Transparent,
+                                                                        color = if (charaBottom.charaIsFavorite) MaterialTheme.colorScheme.primary else Color.Transparent,
                                                                         shape = RoundedCornerShape(8.dp)
                                                                     )
                                                                     .padding(AppStyles.paddingSmall),
@@ -1074,7 +1097,9 @@ fun SeriesScreen(
                                                                             ),
                                                                             contentDescription = null,
                                                                             modifier = Modifier
-                                                                                .size(48.dp)
+                                                                                .size(
+                                                                                    48.dp
+                                                                                )
                                                                                 .clip(
                                                                                     RoundedCornerShape(
                                                                                         8.dp
@@ -1089,7 +1114,6 @@ fun SeriesScreen(
                                                                                 overflow = TextOverflow.Ellipsis,
                                                                                 style = AppStyles.textCardSubtitle
                                                                             )
-
                                                                             Text(
                                                                                 text = "(${count.first}/${count.second})",
                                                                                 style = AppStyles.textCardSmall
@@ -1106,7 +1130,6 @@ fun SeriesScreen(
                                     }
                                 }
                             } else {
-
                                 Column {
                                     Box(
                                         modifier = Modifier
@@ -1116,15 +1139,12 @@ fun SeriesScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Image(
-                                            painter = rememberAsyncImagePainter(
-                                                model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null
-                                            ),
+                                            painter = rememberAsyncImagePainter(model = if (series.seriesUrl.isNotEmpty()) series.seriesUrl else null),
                                             contentDescription = null,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Fit
                                         )
                                     }
-
                                     Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -1144,14 +1164,12 @@ fun SeriesScreen(
                                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                                         HorizontalDivider()
                                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-
                                         if (charas.isEmpty()) {
                                             Text(
                                                 text = "등록된 캐릭터가 없습니다",
                                                 style = AppStyles.textCardSmall
                                             )
                                         } else {
-//                                        charas.chunked(1).forEach { rowCharas ->
                                             LazyRow(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(
@@ -1162,15 +1180,12 @@ fun SeriesScreen(
                                                     val count =
                                                         seriesCharaCountMap["${series.seriesNm}|${chara.charaNm}"]
                                                             ?: Pair(0, 0)
-
                                                     Row(
                                                         modifier = Modifier
-                                                            .width(IntrinsicSize.Min) // 👈 중요 (아래 설명)
+                                                            .width(IntrinsicSize.Min)
                                                             .padding(vertical = AppStyles.paddingSmall)
                                                             .background(
-                                                                color = if (chara.charaIsFavorite)
-                                                                    MaterialTheme.colorScheme.primary
-                                                                else Color.Transparent,
+                                                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary else Color.Transparent,
                                                                 shape = RoundedCornerShape(8.dp)
                                                             )
                                                             .padding(AppStyles.paddingSmall),
@@ -1187,38 +1202,27 @@ fun SeriesScreen(
                                                                     .clip(RoundedCornerShape(8.dp)),
                                                                 contentScale = ContentScale.Crop
                                                             )
-
                                                             Text(
                                                                 text = chara.charaNm,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis,
                                                                 style = AppStyles.textCardSubtitle,
-                                                                color = if (chara.charaIsFavorite)
-                                                                    MaterialTheme.colorScheme.onPrimary
-                                                                else MaterialTheme.colorScheme.onSurface
+                                                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                                             )
                                                             Text(
                                                                 text = "(${count.first}/${count.second})",
                                                                 style = AppStyles.textCardSmall,
-                                                                color = if (chara.charaIsFavorite)
-                                                                    MaterialTheme.colorScheme.onPrimary
-                                                                else MaterialTheme.colorScheme.primary
+                                                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                                                             )
-
                                                         }
-
                                                     }
                                                 }
-
                                                 if (charas.size == 1) {
-                                                    item {
-                                                        Spacer(modifier = Modifier.weight(1f))
-                                                    }
+                                                    item { Spacer(modifier = Modifier.weight(1f)) }
                                                 }
                                             }
                                         }
                                     }
-
                                 }
                             }
                         }
@@ -1234,5 +1238,4 @@ fun SeriesScreen(
             }
         }
     }
-
 }

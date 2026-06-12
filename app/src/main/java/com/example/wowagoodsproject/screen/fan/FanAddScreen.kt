@@ -38,6 +38,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
+import com.example.wowagoodsproject.component.CATEGORY_SET
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,20 +149,30 @@ fun FanAddScreen(
                     ) {
                         if (categorySearch.isNotEmpty() && !categoryList.contains(categorySearch)) {
                             item {
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            viewModel.onCategoryChange(categorySearch)
-                                            showCategoryDialog = false
-                                            categorySearch = ""
-                                        }
-                                ) {
-                                    Text(
-                                        text = "\"$categorySearch\" 새로 추가",
-                                        modifier = Modifier.padding(16.dp),
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                if (categorySearch == CATEGORY_SET) {
+                                    Card(modifier = Modifier.fillMaxWidth()) {
+                                        Text(
+                                            text = "\"$categorySearch\" 새로 추가 불가",
+                                            modifier = Modifier.padding(16.dp),
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                } else {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.onCategoryChange(categorySearch)
+                                                showCategoryDialog = false
+                                                categorySearch = ""
+                                            }
+                                    ) {
+                                        Text(
+                                            text = "\"$categorySearch\" 새로 추가",
+                                            modifier = Modifier.padding(16.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 }
                             }
                         }
