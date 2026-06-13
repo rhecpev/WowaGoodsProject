@@ -23,6 +23,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -892,6 +893,7 @@ fun SeriesScreen(
                                             horizontalAlignment = Alignment.CenterHorizontally,
                                             modifier = Modifier
                                                 .width(80.dp)
+                                                .alpha(if (component.isGotten) 1f else 0.3f)  // 추가
                                                 .clickable { detailViewModel.selectGoods(component) }
                                         ) {
                                             Box(

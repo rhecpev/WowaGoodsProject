@@ -44,7 +44,7 @@ fun GoodsListItem(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                if (isExpanded) MaterialTheme.colorScheme.primaryContainer
+                if (isExpanded) MaterialTheme.colorScheme.secondaryContainer
                 else MaterialTheme.colorScheme.surface
             )
             .clickable { onClick() }

@@ -37,10 +37,23 @@ class FilterViewModel : ViewModel() {
     }
 
     fun <T : GoodsItem> applyFilter(list: List<T>): Pair<List<T>, List<T>> {
-        return Pair(list, when (_filterType.value) {
+        val filtered = when (_filterType.value) {
             FilterType.ALL -> list
-            FilterType.GOTTEN -> list.filter { it.isGotten }
-            FilterType.NOT_GOTTEN -> list.filter { !it.isGotten }
-        })
+            FilterType.GOTTEN -> list.filter { goods ->
+                if (goods.category == CATEGORY_SET) {
+                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.isGotten }
+                } else {
+                    goods.isGotten
+                }
+            }
+            FilterType.NOT_GOTTEN -> list.filter { goods ->
+                if (goods.category == CATEGORY_SET) {
+                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && !it.isGotten }
+                } else {
+                    !goods.isGotten
+                }
+            }
+        }
+        return Pair(list, filtered)
     }
 }
