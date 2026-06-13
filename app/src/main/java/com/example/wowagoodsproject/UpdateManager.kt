@@ -1,6 +1,7 @@
 package com.example.wowagoodsproject
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
@@ -139,28 +140,37 @@ object UpdateManager {
                 it.goodsSeries == remote.goodsSeries &&
                         it.goodsChara == remote.goodsChara &&
                         it.goodsCategory == remote.goodsCategory &&
+                        it.price == remote.goodsPrice &&
                         it.goodsMemo == remote.goodsMemo
             }
             if (local == null) {
                 App.database.goodsDao().insert(remote.copy(goodsId = 0, goodsIsGotten = false))
                 addedCount++
             } else if (
-                local.goodsUrl != remote.goodsUrl ||
-                local.goodsPrice != remote.goodsPrice
+                local.goodsUrl != remote.goodsUrl
             ) {
+                Log.d("UpdateGoods", "=== 업데이트 감지 ===")
+                Log.d("UpdateGoods", "시리즈: ${local.goodsSeries}")
+                Log.d("UpdateGoods", "캐릭터: ${local.goodsChara}")
+                Log.d("UpdateGoods", "카테고리: ${local.goodsCategory}")
+                Log.d("UpdateGoods", "URL 같음: ${local.goodsUrl.trim() == remote.goodsUrl.trim()}")
+                Log.d("UpdateGoods", "로컬 URL: ${local.goodsUrl}")
+                Log.d("UpdateGoods", "리모트 URL: ${remote.goodsUrl}")
+                Log.d("UpdateGoods", "Price 같음: ${local.goodsPrice.trim() == remote.goodsPrice.trim()}")
+                Log.d("UpdateGoods", "로컬 Price: ${local.goodsPrice}")
+                Log.d("UpdateGoods", "리모트 Price: ${remote.goodsPrice}")
                 App.database.goodsDao().update(
                     local.copy(
-                        goodsUrl = remote.goodsUrl,
-                        goodsPrice = remote.goodsPrice
+                        goodsUrl = remote.goodsUrl
                     )
                 )
                 updatedCount++
             }
         }
 
-        val remoteKeys = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsMemo}" }
+        val remoteKeys = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsPrice}|${it.goodsMemo}" }
         localGoods.forEach { local ->
-            if (!remoteKeys.contains("${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsMemo}")) {
+            if (!remoteKeys.contains("${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsPrice}|${local.goodsMemo}")) {
                 App.database.goodsDao().delete(local)
                 deletedCount++
             }
