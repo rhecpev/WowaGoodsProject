@@ -7,12 +7,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -26,25 +24,25 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.component.CATEGORY_SET
+import com.example.wowagoodsproject.component.FanGoodsListContent
 import com.example.wowagoodsproject.component.FilterBar
 import com.example.wowagoodsproject.component.FilterViewModel
 import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
-import com.example.wowagoodsproject.component.GoodsGridItem
-import com.example.wowagoodsproject.component.GoodsListItem
-import com.example.wowagoodsproject.component.GottenStatus
+import com.example.wowagoodsproject.component.GoodsListContent
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
+import com.example.wowagoodsproject.component.filterFanGoodsList
+import com.example.wowagoodsproject.component.filterGoodsList
+import com.example.wowagoodsproject.component.filterGoodsListForBar
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
@@ -74,7 +72,6 @@ fun CharacterScreen(
     var showCategoryFilterDialog by remember { mutableStateOf(false) }
     var categorySearch by remember { mutableStateOf("") }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
-    val expandedStates = remember { mutableStateMapOf<Int, Boolean>() }
 
     val filteredCharaList = if (showFavoriteOnly)
         charaList.filter { it.charaIsFavorite }
@@ -93,40 +90,25 @@ fun CharacterScreen(
         it.contains(categorySearch, ignoreCase = true)
     }
 
-    val filteredOfficialGoods = filterViewModel.applyFilter(officialGoods).second.let { list ->
-        val setMemos = allSeriesGoods.filter { it.category == CATEGORY_SET }.map { it.memo }.toSet()
-        var result =
-            list.filter { it.category == CATEGORY_SET || it.memo !in setMemos || it.memo.isEmpty() }
-        if (selectedCategoryFilter != null) {
-            result = result.filter { goods ->
-                if (goods.category == CATEGORY_SET) {
-                    allSeriesGoods.any {
-                        it.category != CATEGORY_SET &&
-                                it.memo == goods.memo &&
-                                it.category == selectedCategoryFilter
-                    }
-                } else {
-                    goods.category == selectedCategoryFilter
-                }
-            }
-        }
-        result
-    }
+    val filteredOfficialGoods = filterGoodsList(
+        list = filterViewModel.applyFilter(officialGoods).second,
+        allGoods = allSeriesGoods,
+        categoryFilter = selectedCategoryFilter
+    )
 
-    val filteredFanGoods = filterViewModel.applyFilter(fanGoods).second.let { list ->
-        if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
-        else list
-    }
+    val filteredFanGoods = filterFanGoodsList(
+        list = filterViewModel.applyFilter(fanGoods).second,
+        categoryFilter = selectedCategoryFilter
+    )
 
-    val AllFilteredOfficialGoods = filterViewModel.applyFilter(officialGoods).first.let { list ->
-        if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
-        else list
-    }
-    val AllFilteredFanGoods = filterViewModel.applyFilter(fanGoods).first.let { list ->
-        if (selectedCategoryFilter != null) list.filter { it.category == selectedCategoryFilter }
-        else list
-    }
-
+    val AllFilteredOfficialGoods = filterGoodsListForBar(
+        list = filterViewModel.applyFilter(officialGoods).first,
+        categoryFilter = selectedCategoryFilter
+    )
+    val AllFilteredFanGoods = filterFanGoodsList(
+        list = filterViewModel.applyFilter(fanGoods).first,
+        categoryFilter = selectedCategoryFilter
+    )
     val gridColumns = when (widthSizeClass) {
         WindowWidthSizeClass.Compact -> 2
         WindowWidthSizeClass.Medium -> 3
@@ -464,7 +446,7 @@ fun CharacterScreen(
                                 .padding(AppStyles.paddingSmall)
                         ) {
                             Image(
-                                painter = rememberAsyncImagePainter(model = if (chara.charaUrl.isNotEmpty()) chara.charaUrl else null),
+                                painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(80.dp)
@@ -502,266 +484,26 @@ fun CharacterScreen(
 
                 when (selectedTab) {
                     0 -> {
-                        if (filteredOfficialGoods.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.background),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "공식 굿즈가 없습니다",
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                        } else {
-                            if (isGridMode) {
-                                val rows = filteredOfficialGoods.chunked(gridColumns)
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    itemsIndexed(rows) { index, rowItems ->
-                                        Row(modifier = Modifier.fillMaxWidth()) {
-                                            rowItems.forEach { goods ->
-                                                val gottenStatus =
-                                                    if (goods.category == CATEGORY_SET) {
-                                                        val components = allSeriesGoods.filter {
-                                                            it.category != CATEGORY_SET && it.memo == goods.memo
-                                                        }
-                                                        when {
-                                                            components.isEmpty() -> if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-                                                            components.all { it.isGotten } -> GottenStatus.GOTTEN
-                                                            components.none { it.isGotten } -> GottenStatus.NOT_GOTTEN
-                                                            else -> GottenStatus.PARTIAL
-                                                        }
-                                                    } else {
-                                                        if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-                                                    }
-                                                val componentCategories =
-                                                    if (goods.category == CATEGORY_SET) {
-                                                        allSeriesGoods.filter {
-                                                            it.category != CATEGORY_SET && it.memo == goods.memo
-                                                        }.map { it.category }
-                                                    } else emptyList()
-                                                Box(modifier = Modifier.weight(1f)) {
-                                                    GoodsGridItem(
-                                                        imgPath = goods.imgPath,
-                                                        series = goods.series,
-                                                        chara = goods.chara,
-                                                        category = goods.category,
-                                                        gottenStatus = gottenStatus,
-                                                        price = goods.price,
-                                                        isGotten = goods.isGotten,
-                                                        memo = goods.memo,
-                                                        components = componentCategories,
-                                                        highlightCategory = selectedCategoryFilter,
-                                                        onClick = {
-                                                            if (goods.category == CATEGORY_SET) {
-                                                                selectedSetGoods = goods
-                                                            } else {
-                                                                detailViewModel.selectGoods(goods)
-                                                            }
-                                                        }
-                                                    )
-                                                }
-                                            }
-                                            repeat(gridColumns - rowItems.size) {
-                                                Box(modifier = Modifier.weight(1f))
-                                            }
-                                        }
-                                        HorizontalDivider(
-                                            thickness = 1.dp,
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
-                                    }
-                                }
-                            } else {
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    itemsIndexed(filteredOfficialGoods) { index, goods ->
-                                        val isExpanded = expandedStates[index] ?: false
-                                        val componentCategories =
-                                            if (goods.category == CATEGORY_SET) {
-                                                allSeriesGoods.filter {
-                                                    it.category != CATEGORY_SET && it.memo == goods.memo
-                                                }.map { it.category }
-                                            } else emptyList()
-                                        val gottenStatus = if (goods.category == CATEGORY_SET) {
-                                            val components = allSeriesGoods.filter {
-                                                it.category != CATEGORY_SET && it.memo == goods.memo
-                                            }
-                                            when {
-                                                components.isEmpty() -> if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-                                                components.all { it.isGotten } -> GottenStatus.GOTTEN
-                                                components.none { it.isGotten } -> GottenStatus.NOT_GOTTEN
-                                                else -> GottenStatus.PARTIAL
-                                            }
-                                        } else {
-                                            if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-                                        }
-                                        GoodsListItem(
-                                            imgPath = goods.imgPath,
-                                            series = goods.series,
-                                            chara = goods.chara,
-                                            category = goods.category,
-                                            price = goods.price,
-                                            isExpanded = isExpanded,
-                                            isGotten = goods.isGotten,
-                                            gottenStatus = gottenStatus,
-                                            memo = goods.memo,
-                                            components = componentCategories,
-                                            highlightCategory = selectedCategoryFilter,
-                                            onClick = {
-                                                if (goods.category == CATEGORY_SET) {
-                                                    expandedStates[index] = !isExpanded
-                                                } else {
-                                                    detailViewModel.selectGoods(goods)
-                                                }
-                                            }
-                                        )
-                                        if (goods.category == CATEGORY_SET && isExpanded) {
-                                            val components = allSeriesGoods.filter {
-                                                it.category != CATEGORY_SET && it.memo == goods.memo
-                                            }
-                                            LazyRow(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(AppStyles.paddingMedium),
-                                                horizontalArrangement = Arrangement.spacedBy(
-                                                    AppStyles.paddingMedium
-                                                )
-                                            ) {
-                                                items(components) { component ->
-                                                    Column(
-                                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                                        modifier = Modifier
-                                                            .width(80.dp)
-                                                            .alpha(if (component.isGotten) 1f else 0.3f)  // 추가
-                                                            .clickable { detailViewModel.selectGoods(component) }
-                                                    ){
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(80.dp)
-                                                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Image(
-                                                                painter = rememberAsyncImagePainter(
-                                                                    model = if (component.imgPath.isNotEmpty()) component.imgPath else null
-                                                                ),
-                                                                contentDescription = null,
-                                                                modifier = Modifier.fillMaxSize(),
-                                                                contentScale = ContentScale.Fit
-                                                            )
-                                                        }
-                                                        Spacer(modifier = Modifier.height(4.dp))
-                                                        Text(
-                                                            text = component.category,
-                                                            style = AppStyles.textCardSmall,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            color = if (component.isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (index < filteredOfficialGoods.lastIndex) {
-                                            HorizontalDivider(
-                                                thickness = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline
-                                            )
-                                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        GoodsListContent(
+                            goods = filteredOfficialGoods,
+                            allGoods = allSeriesGoods,
+                            isGridMode = isGridMode,
+                            gridColumns = gridColumns,
+                            filterType = filterType,
+                            highlightCategory = selectedCategoryFilter,
+                            onGoodsClick = { detailViewModel.selectGoods(it) },
+                            onSetGoodsClick = { selectedSetGoods = it },
+                            onComponentClick = { detailViewModel.selectGoods(it) }
+                        )
                     }
 
                     1 -> {
-                        if (filteredFanGoods.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.background),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "2차창작 굿즈가 없습니다",
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                        } else {
-                            if (isGridMode) {
-                                val rows = filteredFanGoods.chunked(gridColumns)
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    itemsIndexed(rows) { index, rowItems ->
-                                        Row(modifier = Modifier.fillMaxWidth()) {
-                                            rowItems.forEach { goods ->
-                                                val gottenStatus =
-                                                    if (goods.category == CATEGORY_SET) {
-                                                        val components = allSeriesGoods.filter {
-                                                            it.category != CATEGORY_SET && it.memo == goods.memo
-                                                        }
-                                                        when {
-                                                            components.isEmpty() -> if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-                                                            components.all { it.isGotten } -> GottenStatus.GOTTEN
-                                                            components.none { it.isGotten } -> GottenStatus.NOT_GOTTEN
-                                                            else -> GottenStatus.PARTIAL
-                                                        }
-                                                    } else {
-                                                        if (goods.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-                                                    }
-                                                Box(modifier = Modifier.weight(1f)) {
-                                                    GoodsGridItem(
-                                                        imgPath = goods.imgPath,
-                                                        series = goods.series,
-                                                        chara = goods.chara,
-                                                        category = goods.category,
-                                                        gottenStatus = gottenStatus,
-                                                        price = goods.price,
-                                                        isGotten = goods.isGotten,
-                                                        memo = goods.memo,
-                                                        onClick = {
-                                                            detailViewModel.selectGoods(
-                                                                goods
-                                                            )
-                                                        }
-                                                    )
-                                                }
-                                            }
-                                            repeat(gridColumns - rowItems.size) {
-                                                Box(modifier = Modifier.weight(1f))
-                                            }
-                                        }
-                                        HorizontalDivider(
-                                            thickness = 1.dp,
-                                            color = MaterialTheme.colorScheme.outline
-                                        )
-                                    }
-                                }
-                            } else {
-                                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                    itemsIndexed(filteredFanGoods) { index, goods ->
-                                        GoodsListItem(
-                                            imgPath = goods.imgPath,
-                                            series = goods.series,
-                                            chara = goods.chara,
-                                            category = goods.category,
-                                            price = goods.price,
-                                            isGotten = goods.isGotten,
-                                            memo = goods.memo,
-                                            onClick = { detailViewModel.selectGoods(goods) }
-                                        )
-                                        if (index < filteredFanGoods.lastIndex) {
-                                            HorizontalDivider(
-                                                thickness = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline
-                                            )
-                                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        FanGoodsListContent(
+                            goods = filteredFanGoods,
+                            isGridMode = isGridMode,
+                            gridColumns = gridColumns,
+                            onGoodsClick = { detailViewModel.selectGoods(it) }
+                        )
                     }
                 }
             }
