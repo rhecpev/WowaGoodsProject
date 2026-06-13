@@ -28,12 +28,11 @@ interface GoodsDao {
     @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series ORDER BY goodsReleaseDate DESC")
     suspend fun getBySeries(series: String): List<GoodsEntity>
 
-    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%'")
+    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트'")
     suspend fun countBySeriesAndChara(series: String, chara: String): Int
 
-    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsIsGotten = 1")
+    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트' AND goodsIsGotten = 1")
     suspend fun countGottenBySeriesAndChara(series: String, chara: String): Int
-
     @Query("UPDATE tb_goods SET goodsIsGotten = 0")
     suspend fun resetAllGotten()
 
