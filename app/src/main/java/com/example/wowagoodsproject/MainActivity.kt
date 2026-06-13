@@ -39,7 +39,11 @@ class MainActivity : ComponentActivity() {
             WowaGoodsProjectTheme(darkTheme = darkTheme) {
                 val context = LocalContext.current
                 var isReady by remember { mutableStateOf(false) }
+                var showUpdateDialog by remember { mutableStateOf(false) }
+                var latestVersion by remember { mutableStateOf("") }
+                var releaseNote by remember { mutableStateOf("") }
                 val scope = rememberCoroutineScope()
+
 
                 val needsUpdate = remember {
                     val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
@@ -50,10 +54,44 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     scope.launch {
                         UpdateManager.checkAndUpdate(context)
+                        // 앱 버전 체크
+                        val result = UpdateManager.checkAppUpdate()
+                        if (result != null) {
+                            latestVersion = result.first
+                            releaseNote = result.second
+                            showUpdateDialog = true
+                        }
                         isReady = true
                     }
                 }
-
+                if (showUpdateDialog) {
+                    androidx.compose.material3.AlertDialog(
+                        onDismissRequest = { showUpdateDialog = false },
+                        title = { Text("업데이트 가능") },
+                        text = {
+                            Column {
+                                Text("새 버전이 출시되었습니다!")
+                                Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                                Text("${BuildConfig.VERSION_NAME} → $latestVersion")
+                            }
+                        },
+                        confirmButton = {
+                            androidx.compose.material3.TextButton(onClick = {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://github.com/rhecpev/wuwa-goods-data/releases/latest")
+                                )
+                                context.startActivity(intent)
+                                showUpdateDialog = false
+                            }) { Text("다운로드") }
+                        },
+                        dismissButton = {
+                            androidx.compose.material3.TextButton(onClick = { showUpdateDialog = false }) {
+                                Text("나중에")
+                            }
+                        }
+                    )
+                }
                 if (isReady) {
                     MainScreen(
                         onThemeChange = { mode ->

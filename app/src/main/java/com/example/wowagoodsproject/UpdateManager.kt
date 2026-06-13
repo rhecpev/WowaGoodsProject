@@ -47,7 +47,19 @@ object UpdateManager {
             }
         }
     }
-
+    suspend fun checkAppUpdate(): Pair<String, String>? {
+        return try {
+            val json = fetchJson("https://api.github.com/repos/rhecpev/wuwa-goods-data/releases/latest")
+            val jsonObj = org.json.JSONObject(json)
+            val latestTag = jsonObj.getString("tag_name").removePrefix("v")
+            val body = jsonObj.optString("body", "")
+            if (latestTag != BuildConfig.VERSION_NAME) {
+                Pair(latestTag, body)
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
     suspend fun updateCharacters(): Triple<Int, Int, Int> {
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/characters.json")
         val type = object : TypeToken<List<CharaEntity>>() {}.type
