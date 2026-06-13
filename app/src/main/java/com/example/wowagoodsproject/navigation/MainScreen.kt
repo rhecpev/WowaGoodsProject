@@ -27,6 +27,7 @@ import com.example.wowagoodsproject.screen.character.CharacterScreen
 import com.example.wowagoodsproject.screen.fan.FanArtScreen
 import com.example.wowagoodsproject.screen.fan.FanAddScreen
 import com.example.wowagoodsproject.screen.mypage.MyPageScreen
+import com.example.wowagoodsproject.screen.mypage.PatchNotesScreen
 import com.example.wowagoodsproject.screen.series.SeriesScreen
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -64,7 +65,8 @@ fun MainScreen(
     val isInSubScreen = seriesSelectedSeries != null ||
             characterSelectedChara != null ||
             myPageCurrentSection != null ||
-            currentRoute == "fan_add"
+            currentRoute == "fan_add" ||
+            currentRoute == "patch_notes"
     val navBackground = MaterialTheme.colorScheme.surface
     val navSelected = MaterialTheme.colorScheme.primary
     val navUnselected = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
@@ -175,11 +177,15 @@ fun MainScreen(
                     MyPageScreen(
                         widthSizeClass = widthSizeClass,
                         viewModel = myPageViewModel,
-                        onThemeChange = onThemeChange
+                        onThemeChange = onThemeChange,
+                        onNavigateToPatchNotes = { navController.navigate("patch_notes") }
                     )
                 }
                 composable("fan_add") {
                     FanAddScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable("patch_notes") {
+                    PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
                 }
             }
         }
@@ -264,11 +270,15 @@ fun MainScreen(
                     MyPageScreen(
                         widthSizeClass = widthSizeClass,
                         viewModel = myPageViewModel,
-                        onThemeChange = onThemeChange
+                        onThemeChange = onThemeChange,
+                        onNavigateToPatchNotes = { navController.navigate("patch_notes") }
                     )
                 }
                 composable("fan_add") {
                     FanAddScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable("patch_notes") {
+                    PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
                 }
             }
         }

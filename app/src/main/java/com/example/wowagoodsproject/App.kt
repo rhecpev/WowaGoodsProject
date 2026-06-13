@@ -7,7 +7,7 @@ import com.example.wowagoodsproject.db.character.CharaDatabase
 import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
 import com.example.wowagoodsproject.db.official.GoodsDatabase
 import com.example.wowagoodsproject.db.series.SeriesDatabase
-
+import com.example.wowagoodsproject.db.patchnote.PatchNoteDatabase
 class App : Application() {
 
     companion object {
@@ -15,6 +15,8 @@ class App : Application() {
         lateinit var fanDatabase: FanGoodsDatabase
         lateinit var charaDatabase: CharaDatabase
         lateinit var seriesDatabase: SeriesDatabase
+
+        lateinit var patchNoteDatabase: PatchNoteDatabase
         lateinit var appContext: Context
 
         fun getThemeMode(): Int {
@@ -54,6 +56,11 @@ class App : Application() {
             applicationContext,
             SeriesDatabase::class.java,
             "series_database"
+        ).build()
+        patchNoteDatabase = Room.databaseBuilder(
+            applicationContext,
+            PatchNoteDatabase::class.java,
+            "patch_note_database"
         ).build()
     }
 }

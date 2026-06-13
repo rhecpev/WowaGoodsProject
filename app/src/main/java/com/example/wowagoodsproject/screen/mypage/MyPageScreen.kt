@@ -63,7 +63,8 @@ fun MyPageScreen(
     viewModel: MyPageViewModel = viewModel(),
     listModeViewModel: ListModeViewModel = viewModel(),
     detailViewModel: GoodsDetailViewModel = viewModel(),
-    onThemeChange: (Int) -> Unit = {}
+    onThemeChange: (Int) -> Unit = {},
+    onNavigateToPatchNotes: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val charaList by viewModel.charaList.collectAsState()
@@ -439,6 +440,10 @@ fun MyPageScreen(
                         }
                     }
                 }
+                Button(
+                    onClick = { onNavigateToPatchNotes() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("업데이트 이력") }
                 Text(
                     text = "v${BuildConfig.VERSION_NAME}",
                     style = AppStyles.textCardSmall,
@@ -446,6 +451,7 @@ fun MyPageScreen(
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
+
             }
         } else when (currentSection) {
             "favorite" -> {
