@@ -48,16 +48,22 @@ object UpdateManager {
         }
     }
     suspend fun checkAppUpdate(): Pair<String, String>? {
-        return try {
-            val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
+        return withContext(Dispatchers.IO) {
+            try {
+                val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
             val jsonObj = org.json.JSONObject(json)
             val latestTag = jsonObj.getString("tag_name")
             val body = jsonObj.optString("body", "")
+            Log.d("AppUpdate", "latestTag: $latestTag")
+            Log.d("AppUpdate", "VERSION_NAME: ${BuildConfig.VERSION_NAME}")
+            Log.d("AppUpdate", "다름: ${latestTag != BuildConfig.VERSION_NAME}")
             if (latestTag != BuildConfig.VERSION_NAME) {
                 Pair(latestTag, body)
             } else null
-        } catch (e: Exception) {
-            null
+            } catch (e: Exception) {
+                Log.d("AppUpdate", "에러: ${e.message}")
+                null
+            }
         }
     }
     suspend fun updateCharacters(): Triple<Int, Int, Int> {
