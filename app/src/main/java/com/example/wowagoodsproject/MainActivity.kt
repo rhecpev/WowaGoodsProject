@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                             androidx.compose.material3.TextButton(onClick = {
                                 val intent = android.content.Intent(
                                     android.content.Intent.ACTION_VIEW,
-                                    android.net.Uri.parse("https://github.com/rhecpev/wuwa-goods-data/releases/latest")
+                                    android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
                                 )
                                 context.startActivity(intent)
                                 showUpdateDialog = false

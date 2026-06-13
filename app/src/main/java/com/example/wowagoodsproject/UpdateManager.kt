@@ -49,9 +49,9 @@ object UpdateManager {
     }
     suspend fun checkAppUpdate(): Pair<String, String>? {
         return try {
-            val json = fetchJson("https://api.github.com/repos/rhecpev/wuwa-goods-data/releases/latest")
+            val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
             val jsonObj = org.json.JSONObject(json)
-            val latestTag = jsonObj.getString("tag_name").removePrefix("v")
+            val latestTag = jsonObj.getString("tag_name")
             val body = jsonObj.optString("body", "")
             if (latestTag != BuildConfig.VERSION_NAME) {
                 Pair(latestTag, body)
