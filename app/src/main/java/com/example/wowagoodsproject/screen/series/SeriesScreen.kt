@@ -521,14 +521,15 @@ fun SeriesScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
+                                                text = series.seriesNm,
+                                                style = AppStyles.textCardTitle
+                                            )
+                                            Text(
                                                 text = "${series.seriesDate} / ${series.seriesCountry}",
                                                 style = AppStyles.textCardSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            Text(
-                                                text = series.seriesNm,
-                                                style = AppStyles.textCardTitle
-                                            )
+
                                         }
                                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                                         HorizontalDivider()
@@ -678,14 +679,15 @@ fun SeriesScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
+                                                text = series.seriesNm,
+                                                style = AppStyles.textCardTitle
+                                            )
+                                            Text(
                                                 text = "${series.seriesDate} / ${series.seriesCountry}",
                                                 style = AppStyles.textCardSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            Text(
-                                                text = series.seriesNm,
-                                                style = AppStyles.textCardTitle
-                                            )
+
                                         }
                                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                                         HorizontalDivider()
