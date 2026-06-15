@@ -83,6 +83,7 @@ fun MyPageScreen(
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
     val showFilterDialog by viewModel.showFilterDialog.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
+    val latestVersion by viewModel.latestVersion.collectAsState()
 
     var charaSearchQuery by remember { mutableStateOf("") }
     var isUserDataExpanded by remember { mutableStateOf(false) }
@@ -438,13 +439,45 @@ fun MyPageScreen(
                     onClick = { onNavigateToPatchNotes() },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("업데이트 이력") }
-                Text(
-                    text = "v${BuildConfig.VERSION_NAME}",
-                    style = AppStyles.textCardSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
+                            )
+                            context.startActivity(intent)
+                        },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(AppStyles.paddingMedium),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "현재 버전: v${BuildConfig.VERSION_NAME}",
+                            style = AppStyles.textCardSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "최신 버전: ${latestVersion?.let { "v$it" } ?: "확인 중..."}",
+                            style = AppStyles.textCardSmall,
+                            color = if (latestVersion != null && latestVersion != BuildConfig.VERSION_NAME)
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "릴리즈 페이지 바로가기 →",
+                            style = AppStyles.textCardSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
 
             }
         } else when (currentSection) {

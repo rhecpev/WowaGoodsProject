@@ -19,15 +19,16 @@ object UpdateManager {
         return withContext(Dispatchers.IO) {
             try {
                 val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
-                val lastCheck = prefs.getLong("last_app_update_check", 0L)
-                val now = System.currentTimeMillis()
-                if (now - lastCheck < 24 * 60 * 60 * 1000L) return@withContext null
-                prefs.edit().putLong("last_app_update_check", now).apply()
+                val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
+                val lastCheckDate = prefs.getString("last_app_update_check_date", "")
+                if (lastCheckDate == today) return@withContext null
+                prefs.edit().putString("last_app_update_check_date", today).apply()
 
                 val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
                 val jsonObj = org.json.JSONObject(json)
                 val latestTag = jsonObj.getString("tag_name")
                 val body = jsonObj.optString("body", "")
+                prefs.edit().putString("cached_latest_version", latestTag).apply()
                 if (latestTag != BuildConfig.VERSION_NAME) {
                     Pair(latestTag, body)
                 } else null

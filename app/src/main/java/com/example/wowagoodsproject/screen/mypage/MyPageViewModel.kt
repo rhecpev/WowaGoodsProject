@@ -26,6 +26,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import android.content.Intent
+import com.example.wowagoodsproject.UpdateManager
 
 data class OfficialGoodsBackup(
     val goodsSeries: String,
@@ -64,11 +65,28 @@ class MyPageViewModel : ViewModel() {
     private val _showFilterDialog = MutableStateFlow(false)
     val showFilterDialog: StateFlow<Boolean> = _showFilterDialog
 
+
+    private val _latestVersion = MutableStateFlow<String?>(null)
+    val latestVersion: StateFlow<String?> = _latestVersion
+
     init {
         loadCharaList()
         loadGottenGoods()
+        checkLatestVersion()
     }
 
+    private fun checkLatestVersion() {
+        viewModelScope.launch {
+            val result = UpdateManager.checkAppUpdate()
+            if (result != null) {
+                _latestVersion.value = result.first
+            } else {
+                // 하루 안 지났으면 SharedPreferences에서 캐시된 값 읽기
+                val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
+                _latestVersion.value = prefs.getString("cached_latest_version", null)
+            }
+        }
+    }
     fun loadCharaList() {
         viewModelScope.launch {
             App.charaDatabase.charaDao().getAllFlow().collectLatest {
