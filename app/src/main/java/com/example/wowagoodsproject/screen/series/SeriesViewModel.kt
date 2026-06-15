@@ -47,6 +47,17 @@ class SeriesViewModel : ViewModel() {
     val filteredSeriesList: StateFlow<List<SeriesEntity>> = _filteredSeriesList
 
     val countries = listOf("전체","버전", "중국", "대만", "한국", "일본", "기타")
+    private val _scrollIndex = MutableStateFlow(0)
+    val scrollIndex: StateFlow<Int> = _scrollIndex
+
+    private val _scrollOffset = MutableStateFlow(0)
+    val scrollOffset: StateFlow<Int> = _scrollOffset
+
+    fun saveScrollPosition(index: Int, offset: Int) {
+        _scrollIndex.value = index
+        _scrollOffset.value = offset
+    }
+
 
     init {
         loadCharaMap()

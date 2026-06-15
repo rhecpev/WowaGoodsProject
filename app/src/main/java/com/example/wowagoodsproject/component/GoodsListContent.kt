@@ -35,7 +35,7 @@ fun GoodsListContent(
     val expandedStates = remember { mutableStateMapOf<Int, Boolean>() }
 
     fun getComponents(setGoods: GoodsEntity) = allGoods.filter {
-        it.category != CATEGORY_SET && it.memo == setGoods.memo
+        it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
     }
 
     fun getGottenStatus(item: GoodsEntity): GottenStatus {

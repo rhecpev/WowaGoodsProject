@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,7 +39,7 @@ class MainActivity : ComponentActivity() {
 
             WowaGoodsProjectTheme(darkTheme = darkTheme) {
                 val context = LocalContext.current
-                var isReady by remember { mutableStateOf(false) }
+                var isReady by rememberSaveable { mutableStateOf(false) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
                 var latestVersion by remember { mutableStateOf("") }
                 var releaseNote by remember { mutableStateOf("") }
@@ -53,7 +54,6 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     scope.launch {
-                        UpdateManager.checkAndUpdate(context)
                         // 앱 버전 체크
                         val result = UpdateManager.checkAppUpdate()
                         if (result != null) {

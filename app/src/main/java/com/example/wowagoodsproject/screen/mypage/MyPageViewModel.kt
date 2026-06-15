@@ -26,7 +26,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import android.content.Intent
-import com.example.wowagoodsproject.UpdateManager
 
 data class OfficialGoodsBackup(
     val goodsSeries: String,
@@ -65,9 +64,6 @@ class MyPageViewModel : ViewModel() {
     private val _showFilterDialog = MutableStateFlow(false)
     val showFilterDialog: StateFlow<Boolean> = _showFilterDialog
 
-    private val _updateStatus = MutableStateFlow<String?>(null)
-    val updateStatus: StateFlow<String?> = _updateStatus
-
     init {
         loadCharaList()
         loadGottenGoods()
@@ -93,11 +89,12 @@ class MyPageViewModel : ViewModel() {
                         allGoods.any {
                             it.goodsCategory != CATEGORY_SET &&
                                     it.goodsMemo == goods.goodsMemo &&
+                                    it.goodsSeries == goods.goodsSeries &&
                                     it.goodsIsGotten
                         }
                     }
                     // 구성품은 제외
-                    goods.goodsMemo.isNotEmpty() && goods.goodsMemo in setMemos && goods.goodsCategory != CATEGORY_SET -> false
+                    goods.goodsMemo.isNotEmpty() && goods.goodsMemo in setMemos && goods.goodsCategory != CATEGORY_SET -> goods.goodsIsGotten
                     // 일반 굿즈는 기존대로
                     else -> goods.goodsIsGotten
                 }
@@ -155,8 +152,7 @@ class MyPageViewModel : ViewModel() {
     fun setCharaFilter(chara: String?) { _selectedCharaFilter.value = chara }
     fun setCategoryFilter(category: String?) { _selectedCategoryFilter.value = category }
     fun setShowFilterDialog(show: Boolean) { _showFilterDialog.value = show }
-    fun clearUpdateStatus() { _updateStatus.value = null }
-    fun setShowCharaFilterDialog(show: Boolean) { _showFilterDialog.value = show }
+
 
     fun exportData(context: Context) {
         viewModelScope.launch {
@@ -332,70 +328,6 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
-    fun updateCharacters() {
-        viewModelScope.launch {
-            try {
-                _updateStatus.value = "업데이트 중..."
-                val result = withContext(Dispatchers.IO) {
-                    UpdateManager.updateCharacters()
-                }
-                val msg = buildString {
-                    if (result.first > 0) append("${result.first}명 추가 ")
-                    if (result.second > 0) append("${result.second}명 업데이트 ")
-                    if (result.third > 0) append("${result.third}명 삭제 ")
-                    if (isEmpty()) append("이미 캐릭터가 최신 상태예요!")
-                    else append("완료!")
-                }
-                _updateStatus.value = null
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, msg, Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                _updateStatus.value = null
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, "업데이트 실패: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
 
-    fun updateGoods() {
-        viewModelScope.launch {
-            try {
-                _updateStatus.value = "업데이트 중..."
-                val result = withContext(Dispatchers.IO) {
-                    UpdateManager.updateSeries()
-                }
-                val result2 = withContext(Dispatchers.IO) {
-                    UpdateManager.updateGoods()
-                }
-                val msg = buildString {
-                    if (result.first > 0) append("${result.first}개 시리즈 추가 ")
-                    if (result.second > 0) append("${result.second}개 시리즈 업데이트 ")
-                    if (result.third > 0) append("${result.third}개 시리즈 삭제 ")
-                    if (isEmpty()) append("이미 시리즈가 최신 상태예요!")
-                    else append("완료!")
-                }
-                val msg2 = buildString {
-                    if (result2.first > 0) append("${result2.first}개 굿즈 추가 ")
-                    if (result2.second > 0) append("${result2.second}개 굿즈 업데이트 ")
-                    if (result2.third > 0) append("${result2.third}개 굿즈 삭제 ")
-                    if (isEmpty()) append("이미 굿즈가 최신 상태예요!")
-                    else append("완료!")
-                }
-                _updateStatus.value = null
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, msg, Toast.LENGTH_SHORT).show()
-                }
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, msg2, Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                _updateStatus.value = null
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, "업데이트 실패: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
+
 }

@@ -54,21 +54,15 @@ class CharacterViewModel : ViewModel() {
     fun selectChara(chara: CharaEntity) {
         _selectedChara.value = chara
         viewModelScope.launch {
-            App.database.goodsDao().getByCharaFlow(chara.charaNm).collectLatest { charaGoods ->
-                _officialGoods.value = charaGoods
-                val seriesList = charaGoods.map { it.goodsSeries }.distinct()
-                _allSeriesGoods.value = seriesList.flatMap {
-                    App.database.goodsDao().getBySeries(it)
-                }
+            val charaGoods = App.database.goodsDao().getByChara(chara.charaNm)
+            _officialGoods.value = charaGoods
+            val seriesList = charaGoods.map { it.goodsSeries }.distinct()
+            _allSeriesGoods.value = seriesList.flatMap {
+                App.database.goodsDao().getBySeries(it)
             }
-        }
-        viewModelScope.launch {
-            App.fanDatabase.fanGoodsDao().getByCharaFlow(chara.charaNm).collectLatest {
-                _fanGoods.value = it
-            }
+            _fanGoods.value = App.fanDatabase.fanGoodsDao().getByChara(chara.charaNm)
         }
     }
-
     fun clearSelectedChara() {
         _selectedChara.value = null
         _officialGoods.value = emptyList()
@@ -101,8 +95,13 @@ class CharacterViewModel : ViewModel() {
 
             // allSeriesGoods 갱신
             val seriesList = _officialGoods.value.map { it.goodsSeries }.distinct()
-            _allSeriesGoods.value = seriesList.flatMap {
-                App.database.goodsDao().getBySeries(it)
+            _selectedChara.value?.let { chara ->
+                val charaGoods = App.database.goodsDao().getByChara(chara.charaNm)
+                _officialGoods.value = charaGoods
+                val seriesList = charaGoods.map { it.goodsSeries }.distinct()
+                _allSeriesGoods.value = seriesList.flatMap {
+                    App.database.goodsDao().getBySeries(it)
+                }
             }
         }
     }

@@ -33,4 +33,7 @@ interface FanGoodsDao {
 
     @Query("SELECT DISTINCT fanGoodsCategory FROM tb_fan_goods WHERE fanGoodsCategory != ''")
     suspend fun getFanCategories(): List<String>
+
+    @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsChara LIKE '%' || :chara || '%' ORDER BY fanGoodsId DESC")
+    suspend fun getByChara(chara: String): List<FanGoodsEntity>
 }

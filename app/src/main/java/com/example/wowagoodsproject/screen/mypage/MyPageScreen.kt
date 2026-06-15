@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.screen.mypage
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,9 +40,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.BuildConfig
+import com.example.wowagoodsproject.UpdateWorker
 import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.component.FanGoodsListContent
 import com.example.wowagoodsproject.component.GoodsDetailDialog
@@ -52,6 +56,7 @@ import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
+import com.example.wowagoodsproject.component.filterGoodsListForBar
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
@@ -78,10 +83,8 @@ fun MyPageScreen(
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
     val showFilterDialog by viewModel.showFilterDialog.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
-    val updateStatus by viewModel.updateStatus.collectAsState()
 
     var charaSearchQuery by remember { mutableStateOf("") }
-    var isDbExpanded by remember { mutableStateOf(false) }
     var isUserDataExpanded by remember { mutableStateOf(false) }
     var selectedThemeMode by remember { mutableIntStateOf(App.getThemeMode()) }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
@@ -129,13 +132,17 @@ fun MyPageScreen(
         charaFilter = selectedCharaFilter,
         categoryFilter = selectedCategoryFilter
     )
-
+// 카운트용 - 세트 제외 구성품 포함
+    val officialGoodsCount = filterGoodsListForBar(
+        list = officialGottenGoods,
+        charaFilter = selectedCharaFilter,
+        categoryFilter = selectedCategoryFilter
+    )
     val filteredFanGoods = filterFanGoodsList(
         list = fanGottenGoods,
         charaFilter = selectedCharaFilter,
         categoryFilter = selectedCategoryFilter
     )
-
 
 
     val searchedCharaList = charaList
@@ -145,7 +152,8 @@ fun MyPageScreen(
     // 세트 굿즈 다이얼로그
     selectedSetGoods?.let { setGoods ->
         val components = allSeriesGoods.filter {
-            it.category != CATEGORY_SET && it.memo == setGoods.memo
+            it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
+
         }
         SetGoodsDetailDialog(
             setGoods = setGoods,
@@ -286,44 +294,8 @@ fun MyPageScreen(
                 }
                 Column {
                     Button(
-                        onClick = { isDbExpanded = !isDbExpanded; isUserDataExpanded = false },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("DB 업데이트")
-                        Spacer(modifier = Modifier.weight(1f))
-                        Icon(
-                            imageVector = if (isDbExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = null
-                        )
-                    }
-                    AnimatedVisibility(visible = isDbExpanded) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = AppStyles.paddingMedium),
-                            verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
-                        ) {
-                            OutlinedButton(
-                                onClick = { viewModel.updateCharacters() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = updateStatus == null
-                            ) {
-                                Text(if (updateStatus != null) "업데이트 중..." else "캐릭터 업데이트")
-                            }
-                            OutlinedButton(
-                                onClick = { viewModel.updateGoods() },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = updateStatus == null
-                            ) {
-                                Text(if (updateStatus != null) "업데이트 중..." else "공식 굿즈 업데이트")
-                            }
-                        }
-                    }
-                }
-                Column {
-                    Button(
                         onClick = {
-                            isUserDataExpanded = !isUserDataExpanded; isDbExpanded = false
+                            isUserDataExpanded = !isUserDataExpanded
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -440,6 +412,28 @@ fun MyPageScreen(
                         }
                     }
                 }
+                OutlinedButton(
+                    onClick = {
+                        val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
+                        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
+                        val lastDate = prefs.getString("manual_update_date", "")
+                        val count = if (lastDate == today) prefs.getInt("manual_update_count", 0) else 0
+                        val limit = 99999 // 테스트용, 나중에 3으로 변경
+
+                        if (count < limit) {
+                            prefs.edit()
+                                .putString("manual_update_date", today)
+                                .putInt("manual_update_count", count + 1)
+                                .apply()
+                            WorkManager.getInstance(context).enqueue(
+                                OneTimeWorkRequestBuilder<UpdateWorker>().build()
+                            )
+                        } else {
+                            Toast.makeText(context, "오늘 수동 업데이트 횟수를 초과했습니다 (${limit}회)", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("수동 업데이트") }
                 Button(
                     onClick = { onNavigateToPatchNotes() },
                     modifier = Modifier.fillMaxWidth()
@@ -529,7 +523,7 @@ fun MyPageScreen(
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { viewModel.setSelectedTab(0) },
-                            text = { Text("공식 (${filteredOfficialGoods.size})") })
+                            text = { Text("공식 (${officialGoodsCount.size})") })
                         Tab(
                             selected = selectedTab == 1,
                             onClick = { viewModel.setSelectedTab(1) },

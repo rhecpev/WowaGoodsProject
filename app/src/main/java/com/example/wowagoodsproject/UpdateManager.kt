@@ -2,7 +2,6 @@ package com.example.wowagoodsproject
 
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.db.patchnote.PatchNoteEntity
@@ -16,56 +15,29 @@ import java.net.URL
 
 object UpdateManager {
 
-    private const val PREF_NAME = "wowa_prefs"
-    private const val KEY_LAST_UPDATE = "last_update"
-    private const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
-
-    suspend fun checkAndUpdate(context: Context) {
-        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        val lastUpdate = prefs.getLong(KEY_LAST_UPDATE, 0L)
-        val now = System.currentTimeMillis()
-
-        if (now - lastUpdate < ONE_DAY_MS) return
-
-        withContext(Dispatchers.IO) {
-            try {
-                val charaResult = updateCharacters()
-                val seriesResult = updateSeries()
-                val goodsResult = updateGoods()
-                prefs.edit().putLong(KEY_LAST_UPDATE, now).apply()
-
-                val total = charaResult.first + charaResult.second + charaResult.third +
-                        seriesResult.first + seriesResult.second + seriesResult.third +
-                        goodsResult.first + goodsResult.second + goodsResult.third
-                if (total > 0) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "DB 업데이트 완료! ${total}개 항목 변경됨", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
     suspend fun checkAppUpdate(): Pair<String, String>? {
         return withContext(Dispatchers.IO) {
             try {
+                val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
+                val lastCheck = prefs.getLong("last_app_update_check", 0L)
+                val now = System.currentTimeMillis()
+                if (now - lastCheck < 24 * 60 * 60 * 1000L) return@withContext null
+                prefs.edit().putLong("last_app_update_check", now).apply()
+
                 val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
-            val jsonObj = org.json.JSONObject(json)
-            val latestTag = jsonObj.getString("tag_name")
-            val body = jsonObj.optString("body", "")
-            Log.d("AppUpdate", "latestTag: $latestTag")
-            Log.d("AppUpdate", "VERSION_NAME: ${BuildConfig.VERSION_NAME}")
-            Log.d("AppUpdate", "다름: ${latestTag != BuildConfig.VERSION_NAME}")
-            if (latestTag != BuildConfig.VERSION_NAME) {
-                Pair(latestTag, body)
-            } else null
+                val jsonObj = org.json.JSONObject(json)
+                val latestTag = jsonObj.getString("tag_name")
+                val body = jsonObj.optString("body", "")
+                if (latestTag != BuildConfig.VERSION_NAME) {
+                    Pair(latestTag, body)
+                } else null
             } catch (e: Exception) {
                 Log.d("AppUpdate", "에러: ${e.message}")
                 null
             }
         }
     }
+
     suspend fun updateCharacters(): Triple<Int, Int, Int> {
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/characters.json")
         val type = object : TypeToken<List<CharaEntity>>() {}.type
@@ -89,8 +61,7 @@ object UpdateManager {
                     localChara.copy(charaUrl = remoteChara.charaUrl)
                 )
                 updatedCount++
-                contentLines.add("[캐릭터 URL 변경] ${remoteChara.charaNm}")
-            }
+                contentLines.add("[캐릭터 URL 변경] ${remoteChara.charaNm}\n  ${localChara.charaUrl} → ${remoteChara.charaUrl}")            }
         }
 
         localCharas.forEach { localChara ->
@@ -146,9 +117,9 @@ object UpdateManager {
                 )
                 updatedCount++
                 if (local.seriesUrl != remote.seriesUrl)
-                    contentLines.add("[시리즈 URL 변경] ${remote.seriesNm}")
+                    contentLines.add("[시리즈 URL 변경] ${remote.seriesNm}\n  ${local.seriesUrl} → ${remote.seriesUrl}")
                 if (local.seriesCharas != remote.seriesCharas)
-                    contentLines.add("[시리즈 캐릭터 변경] ${remote.seriesNm}")
+                    contentLines.add("[시리즈 캐릭터 변경] ${remote.seriesNm}\n  ${local.seriesCharas} → ${remote.seriesCharas}")
             }
         }
 
@@ -172,6 +143,7 @@ object UpdateManager {
 
         return Triple(addedCount, updatedCount, deletedCount)
     }
+
     suspend fun updateGoods(): Triple<Int, Int, Int> {
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/goods.json")
         val type = object : TypeToken<List<GoodsEntity>>() {}.type
@@ -200,15 +172,12 @@ object UpdateManager {
                     local.copy(goodsUrl = remote.goodsUrl)
                 )
                 updatedCount++
-                contentLines.add("[굿즈 URL 변경] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}")
-            }
+                contentLines.add("[굿즈 URL 변경] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}\n  ${local.goodsUrl} → ${remote.goodsUrl}")            }
         }
 
         val remoteKeys = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsPrice}|${it.goodsMemo}" }
         localGoods.forEach { local ->
             if (!remoteKeys.contains("${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsPrice}|${local.goodsMemo}")) {
-                val key = "${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsPrice}|${local.goodsMemo}"
-                Log.d("DeleteGoods", "삭제: $key")
                 App.database.goodsDao().delete(local)
                 deletedCount++
                 contentLines.add("[굿즈 삭제] ${local.goodsSeries} - ${local.goodsChara} - ${local.goodsCategory} - ${local.goodsPrice}")

@@ -132,7 +132,8 @@ fun CharacterScreen(
     // 세트 굿즈 다이얼로그
     selectedSetGoods?.let { setGoods ->
         val components = allSeriesGoods.filter {
-            it.category != CATEGORY_SET && it.memo == setGoods.memo
+            it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
+
         }
         SetGoodsDetailDialog(
             setGoods = setGoods,

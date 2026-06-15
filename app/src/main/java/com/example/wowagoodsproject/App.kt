@@ -8,6 +8,10 @@ import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
 import com.example.wowagoodsproject.db.official.GoodsDatabase
 import com.example.wowagoodsproject.db.series.SeriesDatabase
 import com.example.wowagoodsproject.db.patchnote.PatchNoteDatabase
+import androidx.work.*
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
+
 class App : Application() {
 
     companion object {
@@ -29,10 +33,36 @@ class App : Application() {
                 .edit().putInt("theme_mode", mode).apply()
         }
     }
+    private fun scheduleUpdateWorker() {
+        val now = Calendar.getInstance()
+        val midnight = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            if (before(now)) add(Calendar.DAY_OF_MONTH, 1)
+        }
+        val delay = midnight.timeInMillis - now.timeInMillis
 
+        val request = PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.DAYS)
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_update",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
     override fun onCreate() {
         super.onCreate()
         appContext = applicationContext
+
+
 
         database = Room.databaseBuilder(
             applicationContext,
@@ -62,5 +92,8 @@ class App : Application() {
             PatchNoteDatabase::class.java,
             "patch_note_database"
         ).build()
+
+        // onCreate() 안에 추가
+        scheduleUpdateWorker()
     }
 }

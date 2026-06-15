@@ -41,15 +41,14 @@ class FilterViewModel : ViewModel() {
             FilterType.ALL -> list
             FilterType.GOTTEN -> list.filter { goods ->
                 if (goods.category == CATEGORY_SET) {
-                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.isGotten }
+                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series && it.isGotten }
                 } else {
                     goods.isGotten
                 }
             }
             FilterType.NOT_GOTTEN -> list.filter { goods ->
                 if (goods.category == CATEGORY_SET) {
-                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && !it.isGotten }
-                } else {
+                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series && !it.isGotten }                } else {
                     !goods.isGotten
                 }
             }

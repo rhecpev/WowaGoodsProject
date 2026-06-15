@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -99,7 +100,6 @@ fun SeriesScreen(
         .sorted()
 
 
-
     val filteredGoods = filterGoodsList(
         list = filterViewModel.applyFilter(seriesGoods).second,
         allGoods = seriesGoods,
@@ -120,7 +120,8 @@ fun SeriesScreen(
 
     selectedSetGoods?.let { setGoods ->
         val components = seriesGoods.filter {
-            it.category != CATEGORY_SET && it.memo == setGoods.memo
+            it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
+
         }
         SetGoodsDetailDialog(
             setGoods = setGoods,
@@ -482,12 +483,28 @@ fun SeriesScreen(
                     Text(text = "등록된 시리즈가 없습니다", color = MaterialTheme.colorScheme.onBackground)
                 }
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                val scrollIndex by viewModel.scrollIndex.collectAsState()
+                val scrollOffset by viewModel.scrollOffset.collectAsState()
+                val listState = rememberLazyListState(
+                    initialFirstVisibleItemIndex = scrollIndex,
+                    initialFirstVisibleItemScrollOffset = scrollOffset
+                )
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState
+                ) {
                     itemsIndexed(filteredList) { index, series ->
                         val charas = viewModel.getCharasForSeries(series)
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            onClick = { viewModel.selectSeries(series) },
+                            onClick = {
+                                viewModel.saveScrollPosition(
+                                    listState.firstVisibleItemIndex,
+                                    listState.firstVisibleItemScrollOffset
+                                )
+                                viewModel.selectSeries(series)
+                            },
                             shape = RoundedCornerShape(0.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                         ) {

@@ -44,4 +44,8 @@ interface GoodsDao {
 
     @Query("SELECT DISTINCT goodsCategory FROM tb_goods WHERE goodsCategory != ''")
     suspend fun getAllCategories(): List<String>
+
+    @Query("SELECT * FROM tb_goods WHERE goodsChara LIKE '%' || :chara || '%' ORDER BY goodsReleaseDate DESC")
+    suspend fun getByChara(chara: String): List<GoodsEntity>
+
 }

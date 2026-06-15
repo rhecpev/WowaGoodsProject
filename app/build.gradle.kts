@@ -73,5 +73,6 @@ dependencies {
     implementation(libs.androidx.compose.material3.window.size)
     implementation(libs.gson)
     implementation("io.coil-kt:coil-gif:2.6.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
 }
