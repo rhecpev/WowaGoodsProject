@@ -43,7 +43,7 @@ class App : Application() {
         }
         val delay = midnight.timeInMillis - now.timeInMillis
 
-        val request = PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.DAYS)
+        val request = PeriodicWorkRequestBuilder<UpdateWorker>(6, TimeUnit.HOURS)
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
             .setConstraints(
                 Constraints.Builder()

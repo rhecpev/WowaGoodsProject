@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.work.WorkManager
 import com.example.wowagoodsproject.navigation.MainScreen
 import com.example.wowagoodsproject.ui.theme.AppStyles
 import com.example.wowagoodsproject.ui.theme.WowaGoodsProjectTheme
@@ -54,7 +55,17 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     scope.launch {
-                        // 앱 버전 체크
+                        // 오늘 데이터 업데이트 안 됐으면 실행
+                        val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
+                        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
+                        val lastUpdateDate = prefs.getString("last_data_update_date", "")
+                        if (lastUpdateDate != today) {
+                            prefs.edit().putString("last_data_update_date", today).apply()
+                            WorkManager.getInstance(context).enqueue(
+                                androidx.work.OneTimeWorkRequestBuilder<UpdateWorker>().build()
+                            )
+                        }
+
                         val result = UpdateManager.checkAppUpdate()
                         if (result != null) {
                             latestVersion = result.first
