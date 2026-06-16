@@ -141,7 +141,9 @@ fun CharacterScreen(
             onDismiss = { selectedSetGoods = null },
             onToggleGotten = { component ->
                 viewModel.toggleOfficialGotten(component)
-            }
+            },
+            highlightChara = selectedChara?.charaNm,
+            highlightCategory = selectedCategoryFilter
         )
     }
 
@@ -492,6 +494,7 @@ fun CharacterScreen(
                             gridColumns = gridColumns,
                             filterType = filterType,
                             highlightCategory = selectedCategoryFilter,
+                            highlightChara = selectedChara?.charaNm,
                             onGoodsClick = { detailViewModel.selectGoods(it) },
                             onSetGoodsClick = { selectedSetGoods = it },
                             onComponentClick = { detailViewModel.selectGoods(it) }

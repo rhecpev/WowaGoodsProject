@@ -29,8 +29,10 @@ fun SetGoodsDetailDialog(
     setGoods: GoodsEntity,
     components: List<GoodsEntity>,
     onDismiss: () -> Unit,
-    onToggleGotten: (GoodsEntity) -> Unit
-) {
+    onToggleGotten: (GoodsEntity) -> Unit,
+    highlightChara: String? = null,
+    highlightCategory: String? = null
+){
     var selectedComponent by remember { mutableStateOf<GoodsEntity?>(null) }
     val currentComponent = selectedComponent?.let { selected ->
         components.find { it.goodsId == selected.goodsId }
@@ -133,10 +135,33 @@ fun SetGoodsDetailDialog(
                     ) {
                         Text(text = "구성품", style = AppStyles.textCardTitle)
                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                        val sortedComponents = remember(components, highlightChara, highlightCategory) {
+                            components.sortedWith(
+                                compareByDescending { component ->
+                                    when {
+                                        (highlightChara != null && component.chara.contains(highlightChara)) &&
+                                                (highlightCategory != null && component.category == highlightCategory) -> 2
+                                        (highlightChara != null && component.chara.contains(highlightChara)) ||
+                                                (highlightCategory != null && component.category == highlightCategory) -> 1
+                                        else -> 0
+                                    }
+                                }
+                            )
+                        }
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
                         ) {
-                            items(components) { component ->
+
+                            items(sortedComponents) { component ->
+                                val isHighlighted = when {
+                                    highlightChara != null && highlightCategory != null ->
+                                        component.chara.contains(highlightChara) && component.category == highlightCategory
+                                    highlightChara != null ->
+                                        component.chara.contains(highlightChara)
+                                    highlightCategory != null ->
+                                        component.category == highlightCategory
+                                    else -> false
+                                }
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -144,6 +169,8 @@ fun SetGoodsDetailDialog(
                                         .background(
                                             color = if (selectedComponent?.goodsId == component.goodsId)
                                                 MaterialTheme.colorScheme.primaryContainer
+                                            else if (isHighlighted)
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                             else Color.Transparent,
                                             shape = RoundedCornerShape(8.dp)
                                         )

@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.ui.theme.AppStyles
-
+import androidx.compose.ui.graphics.Color
 @Composable
 fun GoodsListContent(
     goods: List<GoodsEntity>,
@@ -28,6 +29,7 @@ fun GoodsListContent(
     gridColumns: Int,
     filterType: FilterType,
     highlightCategory: String? = null,
+    highlightChara: String? = null,
     onGoodsClick: (GoodsEntity) -> Unit,
     onSetGoodsClick: (GoodsEntity) -> Unit,
     onComponentClick: (GoodsEntity) -> Unit
@@ -138,11 +140,36 @@ fun GoodsListContent(
                             .padding(AppStyles.paddingMedium),
                         horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
                     ) {
-                        items(components) { component ->
+                        val sortedComponents = components.sortedWith(
+                            compareByDescending { component ->
+                                when {
+                                    (highlightChara != null && component.chara.contains(highlightChara)) &&
+                                            (highlightCategory != null && component.category == highlightCategory) -> 2
+                                    (highlightChara != null && component.chara.contains(highlightChara)) ||
+                                            (highlightCategory != null && component.category == highlightCategory) -> 1
+                                    else -> 0
+                                }
+                            }
+                        )
+                        items(sortedComponents) { component ->
+                            val isHighlighted = when {
+                                highlightChara != null && highlightCategory != null ->
+                                    component.chara.contains(highlightChara) && component.category == highlightCategory
+                                highlightChara != null ->
+                                    component.chara.contains(highlightChara)
+                                highlightCategory != null ->
+                                    component.category == highlightCategory
+                                else -> false
+                            }
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
                                     .width(80.dp)
+                                    .background(
+                                        color = if (isHighlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        else Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
                                     .alpha(if (component.isGotten) 1f else 0.3f)
                                     .clickable { onComponentClick(component) }
                             ) {

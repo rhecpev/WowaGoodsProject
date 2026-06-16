@@ -95,5 +95,13 @@ class App : Application() {
 
         // onCreate() 안에 추가
         scheduleUpdateWorker()
+        val prefs = getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
+        val isFirstRun = prefs.getBoolean("is_first_run", true)
+        if (isFirstRun) {
+            prefs.edit().putBoolean("is_first_run", false).apply()
+            WorkManager.getInstance(this).enqueue(
+                androidx.work.OneTimeWorkRequestBuilder<UpdateWorker>().build()
+            )
+        }
     }
 }

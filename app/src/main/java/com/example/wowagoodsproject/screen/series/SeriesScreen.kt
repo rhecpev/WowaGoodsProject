@@ -129,7 +129,9 @@ fun SeriesScreen(
             onDismiss = { selectedSetGoods = null },
             onToggleGotten = { component ->
                 viewModel.toggleGotten(component)
-            }
+            },
+            highlightChara = selectedGoodsCharaFilter, // 각 화면에 맞게
+            highlightCategory = selectedGoodsCategoryFilter
         )
     }
 
@@ -453,6 +455,7 @@ fun SeriesScreen(
                 gridColumns = gridColumns,
                 filterType = filterType,
                 highlightCategory = selectedGoodsCategoryFilter,
+                highlightChara = selectedGoodsCharaFilter,
                 onGoodsClick = { detailViewModel.selectGoods(it) },
                 onSetGoodsClick = { selectedSetGoods = it },
                 onComponentClick = { detailViewModel.selectGoods(it) }

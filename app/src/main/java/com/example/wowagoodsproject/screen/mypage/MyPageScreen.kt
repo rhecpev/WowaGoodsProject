@@ -160,7 +160,9 @@ fun MyPageScreen(
             setGoods = setGoods,
             components = components,
             onDismiss = { selectedSetGoods = null },
-            onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) }
+            onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
+            highlightChara = selectedCharaFilter,
+            highlightCategory = selectedCategoryFilter
         )
     }
 
@@ -572,6 +574,7 @@ fun MyPageScreen(
                                 gridColumns = gridColumns,
                                 filterType = com.example.wowagoodsproject.component.FilterType.ALL,
                                 highlightCategory = selectedCategoryFilter,
+                                highlightChara = selectedCharaFilter,
                                 onGoodsClick = { detailViewModel.selectGoods(it) },
                                 onSetGoodsClick = { selectedSetGoods = it },
                                 onComponentClick = { detailViewModel.selectGoods(it) }
