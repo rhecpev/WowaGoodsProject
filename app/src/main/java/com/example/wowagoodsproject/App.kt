@@ -50,6 +50,11 @@ class App : Application() {
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
             )
+            .setBackoffCriteria(
+                BackoffPolicy.LINEAR,
+                2,
+                TimeUnit.MINUTES
+            )
             .build()
 
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
