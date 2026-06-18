@@ -42,17 +42,24 @@ fun GoodsListContent(
 
     fun getGottenStatus(item: GoodsEntity): GottenStatus {
         if (item.category != CATEGORY_SET) {
-            return if (item.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
+            return when (item.status) {
+                GoodsStatus.GOTTEN -> GottenStatus.GOTTEN
+                GoodsStatus.PENDING -> GottenStatus.PENDING
+                else -> GottenStatus.NOT_GOTTEN
+            }
         }
         val components = getComponents(item)
         return when {
-            components.isEmpty() -> if (item.isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-            components.all { it.isGotten } -> GottenStatus.GOTTEN
-            components.none { it.isGotten } -> GottenStatus.NOT_GOTTEN
+            components.isEmpty() -> when (item.status) {
+                GoodsStatus.GOTTEN -> GottenStatus.GOTTEN
+                GoodsStatus.PENDING -> GottenStatus.PENDING
+                else -> GottenStatus.NOT_GOTTEN
+            }
+            components.all { it.status == GoodsStatus.GOTTEN } -> GottenStatus.GOTTEN
+            components.none { it.status == GoodsStatus.GOTTEN || it.status == GoodsStatus.PENDING } -> GottenStatus.NOT_GOTTEN
             else -> GottenStatus.PARTIAL
         }
     }
-
     fun getComponentCategories(item: GoodsEntity): List<String> {
         if (item.category != CATEGORY_SET) return emptyList()
         return getComponents(item).map { it.category }
@@ -141,12 +148,18 @@ fun GoodsListContent(
                         horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
                     ) {
                         val sortedComponents = components.sortedWith(
-                            compareByDescending { component ->
+                            compareByDescending<GoodsEntity> { component ->
                                 when {
                                     (highlightChara != null && component.chara.contains(highlightChara)) &&
                                             (highlightCategory != null && component.category == highlightCategory) -> 2
                                     (highlightChara != null && component.chara.contains(highlightChara)) ||
                                             (highlightCategory != null && component.category == highlightCategory) -> 1
+                                    else -> 0
+                                }
+                            }.thenByDescending { component ->
+                                when (component.status) {
+                                    GoodsStatus.GOTTEN -> 2
+                                    GoodsStatus.PENDING -> 1
                                     else -> 0
                                 }
                             }
@@ -170,8 +183,7 @@ fun GoodsListContent(
                                         else Color.Transparent,
                                         shape = RoundedCornerShape(8.dp)
                                     )
-                                    .alpha(if (component.isGotten) 1f else 0.3f)
-                                    .clickable { onComponentClick(component) }
+                                    .alpha(if (component.isGotten || component.status == GoodsStatus.PENDING) 1f else 0.3f)                                    .clickable { onComponentClick(component) }
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -191,10 +203,14 @@ fun GoodsListContent(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = component.category,
-                                    style = AppStyles.textCardSmall,
+                                    style = AppStyles.textCardSubtitle,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = if (component.isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
+                                    color = when (component.status) {
+                                        GoodsStatus.GOTTEN -> AppStyles.colorGotten
+                                        GoodsStatus.PENDING -> AppStyles.colorPending
+                                        else -> AppStyles.colorNotGotten
+                                    }
                                 )
                             }
                         }

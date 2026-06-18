@@ -41,6 +41,7 @@ import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.GoodsFilterDialog
 import com.example.wowagoodsproject.component.GoodsListContent
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterGoodsList
@@ -130,7 +131,10 @@ fun SeriesScreen(
             onToggleGotten = { component ->
                 viewModel.toggleGotten(component)
             },
-            highlightChara = selectedGoodsCharaFilter, // 각 화면에 맞게
+            onSetPending = { component ->
+                viewModel.setPending(component)
+            },
+            highlightChara = selectedGoodsCharaFilter,
             highlightCategory = selectedGoodsCategoryFilter
         )
     }
@@ -150,6 +154,11 @@ fun SeriesScreen(
                 officialGoods?.let { viewModel.toggleGotten(it) }
                 detailViewModel.dismissDialog()
             },
+            onSetPending = {
+                officialGoods?.let { viewModel.setPending(it) }
+                detailViewModel.dismissDialog()
+            },
+            isPending = (goods as? GoodsEntity)?.status == GoodsStatus.PENDING,
             onDelete = {},
             showDelete = false
         )

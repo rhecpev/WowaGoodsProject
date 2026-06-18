@@ -2,6 +2,7 @@ package com.example.wowagoodsproject
 
 import android.content.Context
 import android.util.Log
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.db.patchnote.PatchNoteEntity
@@ -165,7 +166,7 @@ object UpdateManager {
                         it.goodsMemo == remote.goodsMemo
             }
             if (local == null) {
-                App.database.goodsDao().insert(remote.copy(goodsId = 0, goodsIsGotten = false))
+                App.database.goodsDao().insert(remote.copy(goodsId = 0, goodsStatus = GoodsStatus.NOT_GOTTEN.name))
                 addedCount++
                 contentLines.add("[굿즈 추가] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}")
             } else if (local.goodsUrl != remote.goodsUrl) {

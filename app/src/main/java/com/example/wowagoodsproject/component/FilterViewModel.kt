@@ -5,9 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 enum class FilterType {
-    ALL, GOTTEN, NOT_GOTTEN
+    ALL, GOTTEN, NOT_GOTTEN, PENDING
 }
-
 class FilterViewModel : ViewModel() {
 
     private val _filterType = MutableStateFlow(FilterType.ALL)
@@ -48,8 +47,16 @@ class FilterViewModel : ViewModel() {
             }
             FilterType.NOT_GOTTEN -> list.filter { goods ->
                 if (goods.category == CATEGORY_SET) {
-                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series && !it.isGotten }                } else {
-                    !goods.isGotten
+                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series && it.status == GoodsStatus.NOT_GOTTEN }
+                } else {
+                    goods.status == GoodsStatus.NOT_GOTTEN
+                }
+            }
+            FilterType.PENDING -> list.filter { goods ->
+                if (goods.category == CATEGORY_SET) {
+                    list.any { it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series && it.status == GoodsStatus.PENDING }
+                } else {
+                    goods.status == GoodsStatus.PENDING
                 }
             }
         }

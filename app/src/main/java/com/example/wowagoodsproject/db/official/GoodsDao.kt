@@ -33,9 +33,8 @@ interface GoodsDao {
 
     @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트' AND goodsIsGotten = 1")
     suspend fun countGottenBySeriesAndChara(series: String, chara: String): Int
-    @Query("UPDATE tb_goods SET goodsIsGotten = 0")
+    @Query("UPDATE tb_goods SET goodsStatus = 'NOT_GOTTEN'")
     suspend fun resetAllGotten()
-
     @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series AND goodsChara = :chara AND goodsCategory = :category AND goodsMemo = :memo LIMIT 1")
     suspend fun getByUniqueKey(series: String, chara: String, category: String, memo: String = ""): GoodsEntity?
 
@@ -47,5 +46,7 @@ interface GoodsDao {
 
     @Query("SELECT * FROM tb_goods WHERE goodsChara LIKE '%' || :chara || '%' ORDER BY goodsReleaseDate DESC")
     suspend fun getByChara(chara: String): List<GoodsEntity>
+
+
 
 }

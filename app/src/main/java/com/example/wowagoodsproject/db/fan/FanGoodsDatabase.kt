@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [FanGoodsEntity::class], version = 2)
+@Database(entities = [FanGoodsEntity::class], version = 3)
 abstract class FanGoodsDatabase : RoomDatabase() {
     abstract fun fanGoodsDao(): FanGoodsDao
 

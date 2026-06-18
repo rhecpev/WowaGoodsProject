@@ -124,6 +124,7 @@ fun GoodsGridItem(
                     GottenStatus.GOTTEN -> "보유"
                     GottenStatus.NOT_GOTTEN -> "미보유"
                     GottenStatus.PARTIAL -> "일부보유"
+                    GottenStatus.PENDING -> "구매예정"
                 },
                 style = AppStyles.textCardSmall.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
@@ -131,6 +132,7 @@ fun GoodsGridItem(
                         GottenStatus.GOTTEN -> AppStyles.colorGotten
                         GottenStatus.NOT_GOTTEN -> AppStyles.colorNotGotten
                         GottenStatus.PARTIAL -> AppStyles.colorPartialGotten
+                        GottenStatus.PENDING -> AppStyles.colorPending
                     }
                 )
             )

@@ -30,6 +30,7 @@ fun SetGoodsDetailDialog(
     components: List<GoodsEntity>,
     onDismiss: () -> Unit,
     onToggleGotten: (GoodsEntity) -> Unit,
+    onSetPending: (GoodsEntity) -> Unit = {},
     highlightChara: String? = null,
     highlightCategory: String? = null
 ){
@@ -94,10 +95,19 @@ fun SetGoodsDetailDialog(
                                     DetailRow(label = "캐릭터", value = comp.chara)
                                     DetailRow(label = "카테고리", value = comp.category)
                                     DetailRow(label = "가격", value = comp.price)
+                                    DetailRow(label = "메모", value = comp.memo)
                                     DetailRow(
-                                        label = "보유",
-                                        value = if (comp.isGotten) "보유" else "미보유",
-                                        valueColor = if (comp.isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
+                                        label = "보유 여부",
+                                        value = when (comp.status) {
+                                            GoodsStatus.GOTTEN -> "보유"
+                                            GoodsStatus.PENDING -> "구매예정"
+                                            else -> "미보유"
+                                        },
+                                        valueColor = when (comp.status) {
+                                            GoodsStatus.GOTTEN -> AppStyles.colorGotten
+                                            GoodsStatus.PENDING -> AppStyles.colorPending
+                                            else -> AppStyles.colorNotGotten
+                                        }
                                     )
                                 }
                             }
@@ -106,6 +116,15 @@ fun SetGoodsDetailDialog(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(if (comp.isGotten) "미보유로 변경" else "보유로 변경")
+                            }
+                            if (!comp.isGotten) {
+                                Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                                Button(
+                                    onClick = { onSetPending(comp) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (comp.status == GoodsStatus.PENDING) "구매예정 취소" else "구매예정")
+                                }
                             }
                         } else {
                             Box(
@@ -137,15 +156,21 @@ fun SetGoodsDetailDialog(
                         Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                         val sortedComponents = remember(components, highlightChara, highlightCategory) {
                             components.sortedWith(
-                                compareByDescending { component ->
-                                    when {
-                                        (highlightChara != null && component.chara.contains(highlightChara)) &&
-                                                (highlightCategory != null && component.category == highlightCategory) -> 2
-                                        (highlightChara != null && component.chara.contains(highlightChara)) ||
-                                                (highlightCategory != null && component.category == highlightCategory) -> 1
-                                        else -> 0
-                                    }
+                                compareByDescending<GoodsEntity> { component ->
+                                when {
+                                    (highlightChara != null && component.chara.contains(highlightChara)) &&
+                                            (highlightCategory != null && component.category == highlightCategory) -> 2
+                                    (highlightChara != null && component.chara.contains(highlightChara)) ||
+                                            (highlightCategory != null && component.category == highlightCategory) -> 1
+                                    else -> 0
                                 }
+                            }.thenByDescending { component ->
+                                when (component.status) {
+                                    GoodsStatus.GOTTEN -> 2
+                                    GoodsStatus.PENDING -> 1
+                                    else -> 0
+                                }
+                            }
                             )
                         }
                         LazyColumn(
@@ -165,8 +190,7 @@ fun SetGoodsDetailDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .alpha(if (component.isGotten) 1f else 0.3f)
-                                        .background(
+                                        .alpha(if (component.isGotten || component.status == GoodsStatus.PENDING) 1f else 0.3f)                                        .background(
                                             color = if (selectedComponent?.goodsId == component.goodsId)
                                                 MaterialTheme.colorScheme.primaryContainer
                                             else if (isHighlighted)
@@ -205,7 +229,11 @@ fun SetGoodsDetailDialog(
                                             style = AppStyles.textCardSubtitle,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            color = if (component.isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
+                                            color = when (component.status) {
+                                                GoodsStatus.GOTTEN -> AppStyles.colorGotten
+                                                GoodsStatus.PENDING -> AppStyles.colorPending
+                                                else -> AppStyles.colorNotGotten
+                                            }
                                         )
                                         Text(
                                             text = component.price,
@@ -214,8 +242,16 @@ fun SetGoodsDetailDialog(
                                         )
                                     }
                                     Text(
-                                        text = if (component.isGotten) "보유" else "미보유",
-                                        style = if (component.isGotten) AppStyles.textGotten else AppStyles.textNotGotten
+                                        text = when (component.status) {
+                                            GoodsStatus.GOTTEN -> "보유"
+                                            GoodsStatus.PENDING -> "구매예정"
+                                            else -> "미보유"
+                                        },
+                                        style = when (component.status) {
+                                            GoodsStatus.GOTTEN -> AppStyles.textGotten
+                                            GoodsStatus.PENDING -> AppStyles.textPending
+                                            else -> AppStyles.textNotGotten
+                                        }
                                     )
                                 }
                                 HorizontalDivider(

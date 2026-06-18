@@ -3,6 +3,7 @@ package com.example.wowagoodsproject.screen.fan
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +40,17 @@ class FanArtViewModel : ViewModel() {
 
     fun toggleGotten(goods: FanGoodsEntity) {
         viewModelScope.launch {
-            val updated = goods.copy(fanGoodsIsGotten = !goods.fanGoodsIsGotten)
+            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
+            val updated = goods.copy(fanGoodsStatus = newStatus.name)
+            App.fanDatabase.fanGoodsDao().update(updated)
+            loadGoods()
+        }
+    }
+
+    fun setPending(goods: FanGoodsEntity) {
+        viewModelScope.launch {
+            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
+            val updated = goods.copy(fanGoodsStatus = newStatus.name)
             App.fanDatabase.fanGoodsDao().update(updated)
             loadGoods()
         }
@@ -51,4 +62,6 @@ class FanArtViewModel : ViewModel() {
             loadGoods()
         }
     }
+
+
 }

@@ -11,6 +11,8 @@ object AppStyles {
     // 색상 - 보유/미보유만 고정색
     val colorGotten = Color(0xFF4CAF50)
     val colorNotGotten = Color(0xFFF44336)
+    val colorPartialGotten = Color(0xFFFF9800)
+    val colorPending = Color(0xFF2196F3) // 파란색
 
     // 텍스트 스타일
     val textCardTitle = TextStyle(
@@ -29,7 +31,6 @@ object AppStyles {
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium
     )
-    val colorPartialGotten = Color(0xFFFF9800)
     val textGotten = TextStyle(
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
@@ -39,6 +40,11 @@ object AppStyles {
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         color = colorNotGotten
+    )
+    val textPending = TextStyle(
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        color = colorPending
     )
 
     // 사이즈

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.component.CATEGORY_SET
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
@@ -76,7 +77,8 @@ class CharacterViewModel : ViewModel() {
 
     fun toggleOfficialGotten(goods: GoodsEntity) {
         viewModelScope.launch {
-            val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
+            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
+            val updated = goods.copy(goodsStatus = newStatus.name)
             App.database.goodsDao().update(updated)
 
             if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
@@ -88,13 +90,42 @@ class CharacterViewModel : ViewModel() {
                     it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
                 }
                 setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsIsGotten }
-                    App.database.goodsDao().update(set.copy(goodsIsGotten = newIsGotten))
+                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
+                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
                 }
             }
 
-            // allSeriesGoods 갱신
-            val seriesList = _officialGoods.value.map { it.goodsSeries }.distinct()
+            _selectedChara.value?.let { chara ->
+                val charaGoods = App.database.goodsDao().getByChara(chara.charaNm)
+                _officialGoods.value = charaGoods
+                val seriesList = charaGoods.map { it.goodsSeries }.distinct()
+                _allSeriesGoods.value = seriesList.flatMap {
+                    App.database.goodsDao().getBySeries(it)
+                }
+            }
+        }
+    }
+
+    fun setOfficialPending(goods: GoodsEntity) {
+        viewModelScope.launch {
+            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
+            val updated = goods.copy(goodsStatus = newStatus.name)
+            App.database.goodsDao().update(updated)
+
+            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
+                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
+                val siblings = allGoods.filter {
+                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                val setGoods = allGoods.find {
+                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                setGoods?.let { set ->
+                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
+                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
+                }
+            }
+
             _selectedChara.value?.let { chara ->
                 val charaGoods = App.database.goodsDao().getByChara(chara.charaNm)
                 _officialGoods.value = charaGoods
@@ -108,7 +139,16 @@ class CharacterViewModel : ViewModel() {
 
     fun toggleFanGotten(goods: FanGoodsEntity) {
         viewModelScope.launch {
-            val updated = goods.copy(fanGoodsIsGotten = !goods.fanGoodsIsGotten)
+            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
+            val updated = goods.copy(fanGoodsStatus = newStatus.name)
+            App.fanDatabase.fanGoodsDao().update(updated)
+        }
+    }
+
+    fun setFanPending(goods: FanGoodsEntity) {
+        viewModelScope.launch {
+            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
+            val updated = goods.copy(fanGoodsStatus = newStatus.name)
             App.fanDatabase.fanGoodsDao().update(updated)
         }
     }
@@ -118,4 +158,5 @@ class CharacterViewModel : ViewModel() {
             App.fanDatabase.fanGoodsDao().delete(goods)
         }
     }
+
 }

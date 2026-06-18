@@ -22,6 +22,7 @@ import com.example.wowagoodsproject.component.FilterViewModel
 import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.GoodsFilterDialog
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
@@ -95,8 +96,13 @@ fun FanArtScreen(
             isGotten = goods.isGotten,
             memo = (goods).fanGoodsMemo,
             onDismiss = { detailViewModel.dismissDialog() },
+            isPending = (goods as? FanGoodsEntity)?.status == GoodsStatus.PENDING,
             onToggleGotten = {
                 viewModel.toggleGotten(fanGoods)
+                detailViewModel.dismissDialog()
+            },
+            onSetPending = {
+                viewModel.setPending(fanGoods)
                 detailViewModel.dismissDialog()
             },
             onDelete = {

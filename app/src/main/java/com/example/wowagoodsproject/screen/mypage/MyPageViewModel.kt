@@ -27,12 +27,13 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import android.content.Intent
 import com.example.wowagoodsproject.UpdateManager
+import com.example.wowagoodsproject.component.GoodsStatus
 
 data class OfficialGoodsBackup(
     val goodsSeries: String,
     val goodsChara: String,
     val goodsCategory: String,
-    val goodsIsGotten: Boolean,
+    val goodsStatus: String = GoodsStatus.NOT_GOTTEN.name,
     val goodsMemo: String = ""
 )
 
@@ -87,6 +88,7 @@ class MyPageViewModel : ViewModel() {
             }
         }
     }
+
     fun loadCharaList() {
         viewModelScope.launch {
             App.charaDatabase.charaDao().getAllFlow().collectLatest {
@@ -98,23 +100,16 @@ class MyPageViewModel : ViewModel() {
     fun loadGottenGoods() {
         viewModelScope.launch {
             val allGoods = App.database.goodsDao().getAll()
-            val setMemos = allGoods.filter { it.goodsCategory == CATEGORY_SET }.map { it.goodsMemo }.toSet()
+            val setMemos =
+                allGoods.filter { it.goodsCategory == CATEGORY_SET }.map { it.goodsMemo }.toSet()
 
             val gottenGoods = allGoods.filter { goods ->
                 when {
-                    // 세트면 구성품 중 하나라도 보유시 표시
                     goods.goodsCategory == CATEGORY_SET -> {
-                        allGoods.any {
-                            it.goodsCategory != CATEGORY_SET &&
-                                    it.goodsMemo == goods.goodsMemo &&
-                                    it.goodsSeries == goods.goodsSeries &&
-                                    it.goodsIsGotten
-                        }
+                        allGoods.any { it.goodsCategory != CATEGORY_SET && it.goodsMemo == goods.goodsMemo && it.goodsSeries == goods.goodsSeries && it.goodsStatus != GoodsStatus.NOT_GOTTEN.name }
                     }
-                    // 구성품은 제외
-                    goods.goodsMemo.isNotEmpty() && goods.goodsMemo in setMemos && goods.goodsCategory != CATEGORY_SET -> goods.goodsIsGotten
-                    // 일반 굿즈는 기존대로
-                    else -> goods.goodsIsGotten
+                    goods.goodsMemo.isNotEmpty() && goods.goodsMemo in setMemos && goods.goodsCategory != CATEGORY_SET -> goods.goodsStatus != GoodsStatus.NOT_GOTTEN.name
+                    else -> goods.goodsStatus != GoodsStatus.NOT_GOTTEN.name
                 }
             }
 
@@ -123,7 +118,8 @@ class MyPageViewModel : ViewModel() {
             _allSeriesGoods.value = seriesList.flatMap {
                 App.database.goodsDao().getBySeries(it)
             }
-            _fanGottenGoods.value = App.fanDatabase.fanGoodsDao().getAll().filter { it.fanGoodsIsGotten }
+            _fanGottenGoods.value =
+                App.fanDatabase.fanGoodsDao().getAll().filter { it.fanGoodsIsGotten }
         }
     }
 
@@ -133,10 +129,10 @@ class MyPageViewModel : ViewModel() {
             App.charaDatabase.charaDao().update(updated)
         }
     }
-
     fun toggleOfficialGotten(goods: GoodsEntity) {
         viewModelScope.launch {
-            val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
+            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
+            val updated = goods.copy(goodsStatus = newStatus.name)
             App.database.goodsDao().update(updated)
 
             if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
@@ -148,8 +144,32 @@ class MyPageViewModel : ViewModel() {
                     it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
                 }
                 setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsIsGotten }
-                    App.database.goodsDao().update(set.copy(goodsIsGotten = newIsGotten))
+                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
+                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
+                }
+            }
+
+            loadGottenGoods()
+        }
+    }
+
+    fun setOfficialPending(goods: GoodsEntity) {
+        viewModelScope.launch {
+            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
+            val updated = goods.copy(goodsStatus = newStatus.name)
+            App.database.goodsDao().update(updated)
+
+            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
+                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
+                val siblings = allGoods.filter {
+                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                val setGoods = allGoods.find {
+                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                setGoods?.let { set ->
+                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
+                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
                 }
             }
 
@@ -159,17 +179,42 @@ class MyPageViewModel : ViewModel() {
 
     fun toggleFanGotten(goods: FanGoodsEntity) {
         viewModelScope.launch {
-            val updated = goods.copy(fanGoodsIsGotten = !goods.fanGoodsIsGotten)
+            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
+            val updated = goods.copy(fanGoodsStatus = newStatus.name)
             App.fanDatabase.fanGoodsDao().update(updated)
             loadGottenGoods()
         }
     }
 
-    fun setSelectedTab(tab: Int) { _selectedTab.value = tab }
-    fun setSection(section: String?) { _currentSection.value = section }
-    fun setCharaFilter(chara: String?) { _selectedCharaFilter.value = chara }
-    fun setCategoryFilter(category: String?) { _selectedCategoryFilter.value = category }
-    fun setShowFilterDialog(show: Boolean) { _showFilterDialog.value = show }
+    fun setFanPending(goods: FanGoodsEntity) {
+        viewModelScope.launch {
+            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
+            val updated = goods.copy(fanGoodsStatus = newStatus.name)
+            App.fanDatabase.fanGoodsDao().update(updated)
+            loadGottenGoods()
+        }
+    }
+
+
+    fun setSelectedTab(tab: Int) {
+        _selectedTab.value = tab
+    }
+
+    fun setSection(section: String?) {
+        _currentSection.value = section
+    }
+
+    fun setCharaFilter(chara: String?) {
+        _selectedCharaFilter.value = chara
+    }
+
+    fun setCategoryFilter(category: String?) {
+        _selectedCategoryFilter.value = category
+    }
+
+    fun setShowFilterDialog(show: Boolean) {
+        _showFilterDialog.value = show
+    }
 
 
     fun exportData(context: Context) {
@@ -185,7 +230,7 @@ class MyPageViewModel : ViewModel() {
                             goodsSeries = it.goodsSeries,
                             goodsChara = it.goodsChara,
                             goodsCategory = it.goodsCategory,
-                            goodsIsGotten = it.goodsIsGotten,
+                            goodsStatus = it.goodsStatus,
                             goodsMemo = it.goodsMemo
                         )
                     }
@@ -218,7 +263,10 @@ class MyPageViewModel : ViewModel() {
                     }
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         val contentValues = android.content.ContentValues().apply {
-                            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "wowa_backup.zip")
+                            put(
+                                android.provider.MediaStore.Downloads.DISPLAY_NAME,
+                                "wowa_backup.zip"
+                            )
                             put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/zip")
                         }
                         val resolver = context.contentResolver
@@ -274,9 +322,15 @@ class MyPageViewModel : ViewModel() {
                             var entry = zip.nextEntry
                             while (entry != null) {
                                 when {
-                                    entry.name == "fan_goods.json" -> fanGoodsJson = zip.bufferedReader().readText()
-                                    entry.name == "official_gotten.json" -> officialJson = zip.bufferedReader().readText()
-                                    entry.name == "favorite_charas.json" -> favoriteCharaJson = zip.bufferedReader().readText()
+                                    entry.name == "fan_goods.json" -> fanGoodsJson =
+                                        zip.bufferedReader().readText()
+
+                                    entry.name == "official_gotten.json" -> officialJson =
+                                        zip.bufferedReader().readText()
+
+                                    entry.name == "favorite_charas.json" -> favoriteCharaJson =
+                                        zip.bufferedReader().readText()
+
                                     entry.name.startsWith("images/") -> {
                                         val fileName = entry.name.removePrefix("images/")
                                         imageMap[fileName] = zip.readBytes()
@@ -317,9 +371,8 @@ class MyPageViewModel : ViewModel() {
                                 backup.goodsMemo
                             )
                             goods?.let {
-                                App.database.goodsDao().update(
-                                    it.copy(goodsIsGotten = backup.goodsIsGotten)
-                                )
+                                App.database.goodsDao()
+                                    .update(it.copy(goodsStatus = backup.goodsStatus))
                             }
                         }
                     }
@@ -345,7 +398,6 @@ class MyPageViewModel : ViewModel() {
             }
         }
     }
-
 
 
 }

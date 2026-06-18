@@ -7,10 +7,12 @@ interface GoodsItem {
     val category: String
     val price: String
     val isGotten: Boolean
-    val memo: String  // 추가
+    val status: GoodsStatus
+    val memo: String
 }
 
 const val CATEGORY_SET = "세트"
 const val CATEGORY_COMPONENT = "구성품"
 
-enum class GottenStatus { GOTTEN, NOT_GOTTEN, PARTIAL }
+enum class GoodsStatus { GOTTEN, NOT_GOTTEN, PENDING }
+enum class GottenStatus { GOTTEN, NOT_GOTTEN, PARTIAL, PENDING }

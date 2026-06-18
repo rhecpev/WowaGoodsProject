@@ -36,4 +36,6 @@ interface FanGoodsDao {
 
     @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsChara LIKE '%' || :chara || '%' ORDER BY fanGoodsId DESC")
     suspend fun getByChara(chara: String): List<FanGoodsEntity>
+
+
 }

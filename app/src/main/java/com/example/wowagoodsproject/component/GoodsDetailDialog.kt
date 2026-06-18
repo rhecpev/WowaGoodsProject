@@ -25,12 +25,14 @@ fun GoodsDetailDialog(
     category: String,
     price: String,
     isGotten: Boolean,
+    isPending: Boolean = false,
     memo: String = "",
     onDismiss: () -> Unit,
     onToggleGotten: () -> Unit,
+    onSetPending: () -> Unit,
     onDelete: () -> Unit,
     showDelete: Boolean = true
-) {
+){
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
 
@@ -93,8 +95,16 @@ fun GoodsDetailDialog(
                             DetailRow(label = "가격", value = price)
                             DetailRow(
                                 label = "보유 여부",
-                                value = if (isGotten) "보유" else "미보유",
-                                valueColor = if (isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
+                                value = when {
+                                    isGotten -> "보유"
+                                    isPending -> "구매예정"
+                                    else -> "미보유"
+                                },
+                                valueColor = when {
+                                    isGotten -> AppStyles.colorGotten
+                                    isPending -> AppStyles.colorPending
+                                    else -> AppStyles.colorNotGotten
+                                }
                             )
                             if (memo.isNotEmpty()) {
                                 DetailRow(label = "메모", value = memo)
@@ -118,8 +128,16 @@ fun GoodsDetailDialog(
                         DetailRow(label = "가격", value = price)
                         DetailRow(
                             label = "보유 여부",
-                            value = if (isGotten) "보유" else "미보유",
-                            valueColor = if (isGotten) AppStyles.colorGotten else AppStyles.colorNotGotten
+                            value = when {
+                                isGotten -> "보유"
+                                isPending -> "구매예정"
+                                else -> "미보유"
+                            },
+                            valueColor = when {
+                                isGotten -> AppStyles.colorGotten
+                                isPending -> AppStyles.colorPending
+                                else -> AppStyles.colorNotGotten
+                            }
                         )
                         if (memo.isNotEmpty()) {
                             DetailRow(label = "메모", value = memo)
@@ -142,11 +160,13 @@ fun GoodsDetailDialog(
                             Text("삭제")
                         }
                     }
-                    Button(
-                        onClick = onToggleGotten,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Button(onClick = onToggleGotten, modifier = Modifier.weight(1f)) {
                         Text(if (isGotten) "미보유로 변경" else "보유로 변경")
+                    }
+                    if (!isGotten) {
+                        Button(onClick = onSetPending, modifier = Modifier.weight(1f)) {
+                            Text(if (isPending) "구매예정 취소" else "구매예정")
+                        }
                     }
                 }
             }

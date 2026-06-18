@@ -28,6 +28,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+            }
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val pm = getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    android.net.Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
+            }
+        }
         setContent {
             val systemDarkTheme = isSystemInDarkTheme()
             var themeMode by remember { mutableStateOf(App.getThemeMode()) }
@@ -55,17 +71,43 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     scope.launch {
-                        // 오늘 데이터 업데이트 안 됐으면 실행
                         val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
                         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
                         val lastUpdateDate = prefs.getString("last_data_update_date", "")
                         if (lastUpdateDate != today) {
                             prefs.edit().putString("last_data_update_date", today).apply()
-                            WorkManager.getInstance(context).enqueue(
-                                androidx.work.OneTimeWorkRequestBuilder<UpdateWorker>().build()
-                            )
-                        }
+                            val charaResult = UpdateManager.updateCharacters()
+                            val seriesResult = UpdateManager.updateSeries()
+                            val goodsResult = UpdateManager.updateGoods()
 
+                            val total = charaResult.first + charaResult.second + charaResult.third +
+                                    seriesResult.first + seriesResult.second + seriesResult.third +
+                                    goodsResult.first + goodsResult.second + goodsResult.third
+
+                            val msg = if (total > 0) "데이터 업데이트 완료! ${total}개 항목 변경됨"
+                            else "데이터가 최신 상태입니다"
+
+                            val channelId = "update_channel"
+                            val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                val channel = android.app.NotificationChannel(
+                                    channelId,
+                                    "데이터 업데이트",
+                                    android.app.NotificationManager.IMPORTANCE_DEFAULT
+                                )
+                                notificationManager.createNotificationChannel(channel)
+                            }
+
+                            val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
+                                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                                .setContentTitle("WowaGoods 업데이트")
+                                .setContentText(msg)
+                                .setAutoCancel(true)
+                                .build()
+
+                            notificationManager.notify(1001, notification)
+                        }
                         val result = UpdateManager.checkAppUpdate()
                         if (result != null) {
                             latestVersion = result.first
@@ -121,10 +163,8 @@ class MainActivity : ComponentActivity() {
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth(0.7f)
                             )
-                            if (needsUpdate) {
-                                Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                                Text(text = "데이터 업데이트 중...")
-                            }
+                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                            Text(text = "데이터 업데이트 중...")
                         }
                     }
                 }

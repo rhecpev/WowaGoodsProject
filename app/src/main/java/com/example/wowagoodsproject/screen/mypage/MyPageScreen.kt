@@ -52,6 +52,7 @@ import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.GoodsFilterDialog
 import com.example.wowagoodsproject.component.GoodsListContent
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
@@ -161,6 +162,7 @@ fun MyPageScreen(
             components = components,
             onDismiss = { selectedSetGoods = null },
             onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
+            onSetPending = { component -> viewModel.setOfficialPending(component) },
             highlightChara = selectedCharaFilter,
             highlightCategory = selectedCategoryFilter
         )
@@ -179,18 +181,21 @@ fun MyPageScreen(
             memo = (goods as? GoodsEntity)?.goodsMemo ?: (goods as? FanGoodsEntity)?.fanGoodsMemo
             ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
+            isPending = goods.status == GoodsStatus.PENDING,
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleOfficialGotten(it) }
                 fanGoods?.let { viewModel.toggleFanGotten(it) }
+                detailViewModel.dismissDialog()
+            },
+            onSetPending = {
+                officialGoods?.let { viewModel.setOfficialPending(it) }
+                fanGoods?.let { viewModel.setFanPending(it) }
                 detailViewModel.dismissDialog()
             },
             onDelete = {},
             showDelete = false
         )
     }
-// 업데이트 슬롯 정보 읽기
-    val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
-    val slotLabels = listOf("00시", "06시", "12시", "18시")
 
     if (showFilterDialog) {
         GoodsFilterDialog(
@@ -445,51 +450,7 @@ fun MyPageScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("업데이트 이력") }
 
-// 자동 업데이트 현황 - 가로 4분할
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
-                    val slotLabels = listOf("00시", "06시", "12시", "18시")
-                    slotLabels.forEachIndexed { index, label ->
-                        val time = prefs.getString("update_slot_${index}_time", "")
-                        val status = prefs.getString("update_slot_${index}_status", "")
-                        Card(
-                            modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(AppStyles.paddingSmall),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = AppStyles.textCardSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = if (time.isNullOrEmpty()) "-" else time,
-                                    style = AppStyles.textCardSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = if (status.isNullOrEmpty()) "미실행" else status,
-                                    style = AppStyles.textCardSmall,
-                                    color = when {
-                                        status.isNullOrEmpty() -> MaterialTheme.colorScheme.onSurfaceVariant
-                                        status == "최신상태" -> AppStyles.colorGotten
-                                        else -> MaterialTheme.colorScheme.primary
-                                    },
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    }
-                }
+
 
                 Card(
                     modifier = Modifier

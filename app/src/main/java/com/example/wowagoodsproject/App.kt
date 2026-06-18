@@ -33,36 +33,7 @@ class App : Application() {
                 .edit().putInt("theme_mode", mode).apply()
         }
     }
-    private fun scheduleUpdateWorker() {
-        val now = Calendar.getInstance()
-        val midnight = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            if (before(now)) add(Calendar.DAY_OF_MONTH, 1)
-        }
-        val delay = midnight.timeInMillis - now.timeInMillis
 
-        val request = PeriodicWorkRequestBuilder<UpdateWorker>(6, TimeUnit.HOURS)
-            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
-            .setBackoffCriteria(
-                BackoffPolicy.LINEAR,
-                2,
-                TimeUnit.MINUTES
-            )
-            .build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "daily_update",
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
-    }
     override fun onCreate() {
         super.onCreate()
         appContext = applicationContext
@@ -98,15 +69,6 @@ class App : Application() {
             "patch_note_database"
         ).build()
 
-        // onCreate() 안에 추가
-        scheduleUpdateWorker()
-        val prefs = getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
-        val isFirstRun = prefs.getBoolean("is_first_run", true)
-        if (isFirstRun) {
-            prefs.edit().putBoolean("is_first_run", false).apply()
-            WorkManager.getInstance(this).enqueue(
-                androidx.work.OneTimeWorkRequestBuilder<UpdateWorker>().build()
-            )
-        }
+
     }
 }

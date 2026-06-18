@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.component.CATEGORY_COMPONENT
 import com.example.wowagoodsproject.component.CATEGORY_SET
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.db.series.SeriesEntity
@@ -148,7 +149,8 @@ class SeriesViewModel : ViewModel() {
 
     fun toggleGotten(goods: GoodsEntity) {
         viewModelScope.launch {
-            val updated = goods.copy(goodsIsGotten = !goods.goodsIsGotten)
+            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
+            val updated = goods.copy(goodsStatus = newStatus.name)
             App.database.goodsDao().update(updated)
 
             if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
@@ -160,8 +162,35 @@ class SeriesViewModel : ViewModel() {
                     it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
                 }
                 setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsIsGotten }
-                    App.database.goodsDao().update(set.copy(goodsIsGotten = newIsGotten))
+                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
+                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
+                }
+            }
+
+            _selectedSeries.value?.let {
+                _seriesGoods.value = App.database.goodsDao().getBySeries(it.seriesNm)
+            }
+            loadSeriesCharaCount()
+        }
+    }
+
+    fun setPending(goods: GoodsEntity) {
+        viewModelScope.launch {
+            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
+            val updated = goods.copy(goodsStatus = newStatus.name)
+            App.database.goodsDao().update(updated)
+
+            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
+                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
+                val siblings = allGoods.filter {
+                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                val setGoods = allGoods.find {
+                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
+                }
+                setGoods?.let { set ->
+                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
+                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
                 }
             }
 

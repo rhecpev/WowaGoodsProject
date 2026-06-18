@@ -38,6 +38,7 @@ import com.example.wowagoodsproject.component.FilterViewModel
 import com.example.wowagoodsproject.component.GoodsDetailDialog
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.GoodsListContent
+import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
@@ -141,6 +142,9 @@ fun CharacterScreen(
             onDismiss = { selectedSetGoods = null },
             onToggleGotten = { component ->
                 viewModel.toggleOfficialGotten(component)
+            },
+            onSetPending = { component ->
+                viewModel.setOfficialPending(component)
             },
             highlightChara = selectedChara?.charaNm,
             highlightCategory = selectedCategoryFilter
@@ -337,6 +341,12 @@ fun CharacterScreen(
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleOfficialGotten(it) }
                 fanGoods?.let { viewModel.toggleFanGotten(it) }
+                detailViewModel.dismissDialog()
+            },
+            isPending = goods.status == GoodsStatus.PENDING,
+            onSetPending = {
+                officialGoods?.let { viewModel.setOfficialPending(it) }
+                fanGoods?.let { viewModel.setFanPending(it) }
                 detailViewModel.dismissDialog()
             },
             onDelete = {},
