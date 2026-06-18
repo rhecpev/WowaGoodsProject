@@ -429,7 +429,7 @@ fun MyPageScreen(
                         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
                         val lastDate = prefs.getString("manual_update_date", "")
                         val count = if (lastDate == today) prefs.getInt("manual_update_count", 0) else 0
-                        val limit = 99999 // 테스트용, 나중에 3으로 변경
+                        val limit = 3 // 테스트용, 나중에 3으로 변경
 
                         if (count < limit) {
                             prefs.edit()
