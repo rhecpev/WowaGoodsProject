@@ -31,12 +31,12 @@ interface GoodsDao {
     @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트'")
     suspend fun countBySeriesAndChara(series: String, chara: String): Int
 
-    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트' AND goodsIsGotten = 1")
+    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트' AND goodsStatus = 'GOTTEN'")
     suspend fun countGottenBySeriesAndChara(series: String, chara: String): Int
     @Query("UPDATE tb_goods SET goodsStatus = 'NOT_GOTTEN'")
     suspend fun resetAllGotten()
-    @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series AND goodsChara = :chara AND goodsCategory = :category AND goodsMemo = :memo LIMIT 1")
-    suspend fun getByUniqueKey(series: String, chara: String, category: String, memo: String = ""): GoodsEntity?
+    @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series AND goodsChara = :chara AND goodsCategory = :category AND goodsMemo = :memo AND goodsPrice = :price LIMIT 1")
+    suspend fun getByUniqueKey(series: String, chara: String, category: String, memo: String = "", price: String = ""): GoodsEntity?
 
     @Query("SELECT * FROM tb_goods ORDER BY goodsReleaseDate DESC")
     fun getAllFlow(): Flow<List<GoodsEntity>>

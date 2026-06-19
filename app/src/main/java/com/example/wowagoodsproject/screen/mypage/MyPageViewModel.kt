@@ -34,7 +34,8 @@ data class OfficialGoodsBackup(
     val goodsChara: String,
     val goodsCategory: String,
     val goodsStatus: String = GoodsStatus.NOT_GOTTEN.name,
-    val goodsMemo: String = ""
+    val goodsMemo: String = "",
+    val goodsPrice: String = ""
 )
 
 class MyPageViewModel : ViewModel() {
@@ -231,7 +232,8 @@ class MyPageViewModel : ViewModel() {
                             goodsChara = it.goodsChara,
                             goodsCategory = it.goodsCategory,
                             goodsStatus = it.goodsStatus,
-                            goodsMemo = it.goodsMemo
+                            goodsMemo = it.goodsMemo,
+                            goodsPrice = it.goodsPrice
                         )
                     }
                     val officialJson = gson.toJson(officialBackup)
@@ -368,7 +370,8 @@ class MyPageViewModel : ViewModel() {
                                 backup.goodsSeries,
                                 backup.goodsChara,
                                 backup.goodsCategory,
-                                backup.goodsMemo
+                                backup.goodsMemo,
+                                backup.goodsPrice
                             )
                             goods?.let {
                                 App.database.goodsDao()

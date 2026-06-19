@@ -40,7 +40,7 @@ object UpdateManager {
         }
     }
 
-    suspend fun updateCharacters(): Triple<Int, Int, Int> {
+    suspend fun updateCharacters(): Triple<Int, Int, Int> = withContext(Dispatchers.IO) {
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/characters.json")
         val type = object : TypeToken<List<CharaEntity>>() {}.type
         val remoteCharas: List<CharaEntity> = Gson().fromJson(json, type)
@@ -83,10 +83,10 @@ object UpdateManager {
             )
         }
 
-        return Triple(addedCount, updatedCount, deletedCount)
+         Triple(addedCount, updatedCount, deletedCount)
     }
 
-    suspend fun updateSeries(): Triple<Int, Int, Int> {
+    suspend fun updateSeries(): Triple<Int, Int, Int> = withContext(Dispatchers.IO){
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/series.json")
         val type = object : TypeToken<List<SeriesEntity>>() {}.type
         val remoteSeries: List<SeriesEntity> = Gson().fromJson(json, type)
@@ -143,10 +143,10 @@ object UpdateManager {
             )
         }
 
-        return Triple(addedCount, updatedCount, deletedCount)
+         Triple(addedCount, updatedCount, deletedCount)
     }
 
-    suspend fun updateGoods(): Triple<Int, Int, Int> {
+    suspend fun updateGoods(): Triple<Int, Int, Int> = withContext(Dispatchers.IO)  {
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/goods.json")
         val type = object : TypeToken<List<GoodsEntity>>() {}.type
         val remoteGoods: List<GoodsEntity> = Gson().fromJson(json, type)
@@ -195,15 +195,18 @@ object UpdateManager {
             )
         }
 
-        return Triple(addedCount, updatedCount, deletedCount)
+         Triple(addedCount, updatedCount, deletedCount)
     }
 
     private fun fetchJson(urlStr: String): String {
+        android.util.Log.d("UpdateManager", "fetchJson: $urlStr")
         val url = URL(urlStr)
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
         connection.connectTimeout = 10000
         connection.readTimeout = 10000
-        return connection.inputStream.bufferedReader().readText()
+        val result = connection.inputStream.bufferedReader().readText()
+        android.util.Log.d("UpdateManager", "fetchJson 완료: ${result.length}자")
+        return result
     }
 }

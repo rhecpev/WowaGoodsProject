@@ -91,6 +91,10 @@ fun MyPageScreen(
     var selectedThemeMode by remember { mutableIntStateOf(App.getThemeMode()) }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
 
+    val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
+    val lastUpdateTime = prefs.getString("last_update_time", null)
+    val lastUpdateTotal = prefs.getInt("last_update_total", -1)
+
     val fileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -134,7 +138,6 @@ fun MyPageScreen(
         charaFilter = selectedCharaFilter,
         categoryFilter = selectedCategoryFilter
     )
-// 카운트용 - 세트 제외 구성품 포함
     val officialGoodsCount = filterGoodsListForBar(
         list = officialGottenGoods,
         charaFilter = selectedCharaFilter,
@@ -146,16 +149,13 @@ fun MyPageScreen(
         categoryFilter = selectedCategoryFilter
     )
 
-
     val searchedCharaList = charaList
         .sortedByDescending { it.charaIsFavorite }
         .filter { it.charaNm.contains(charaSearchQuery, ignoreCase = true) }
 
-    // 세트 굿즈 다이얼로그
     selectedSetGoods?.let { setGoods ->
         val components = allSeriesGoods.filter {
             it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
-
         }
         SetGoodsDetailDialog(
             setGoods = setGoods,
@@ -178,10 +178,9 @@ fun MyPageScreen(
             category = goods.category,
             price = goods.price,
             isGotten = goods.isGotten,
-            memo = (goods as? GoodsEntity)?.goodsMemo ?: (goods as? FanGoodsEntity)?.fanGoodsMemo
-            ?: "",
-            onDismiss = { detailViewModel.dismissDialog() },
             isPending = goods.status == GoodsStatus.PENDING,
+            memo = (goods as? GoodsEntity)?.goodsMemo ?: (goods as? FanGoodsEntity)?.fanGoodsMemo ?: "",
+            onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleOfficialGotten(it) }
                 fanGoods?.let { viewModel.toggleFanGotten(it) }
@@ -233,9 +232,9 @@ fun MyPageScreen(
                                     )
                                 }
                                 TextButton(onClick = {
-                                    viewModel.setSection(null); viewModel.setCharaFilter(
-                                    null
-                                ); viewModel.setCategoryFilter(null)
+                                    viewModel.setSection(null)
+                                    viewModel.setCharaFilter(null)
+                                    viewModel.setCategoryFilter(null)
                                 }) {
                                     Text("뒤로")
                                 }
@@ -290,24 +289,18 @@ fun MyPageScreen(
                 ) {
                     Button(
                         onClick = { viewModel.setSection("favorite") },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(80.dp),
+                        modifier = Modifier.weight(1f).height(80.dp),
                         shape = RoundedCornerShape(4.dp)
                     ) { Text("캐릭터\n선호 설정", textAlign = TextAlign.Center) }
                     Button(
                         onClick = { viewModel.setSection("goods"); viewModel.loadGottenGoods() },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(80.dp),
+                        modifier = Modifier.weight(1f).height(80.dp),
                         shape = RoundedCornerShape(4.dp)
                     ) { Text("보유\n굿즈 목록", textAlign = TextAlign.Center) }
                 }
                 Column {
                     Button(
-                        onClick = {
-                            isUserDataExpanded = !isUserDataExpanded
-                        },
+                        onClick = { isUserDataExpanded = !isUserDataExpanded },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("유저 데이터")
@@ -347,26 +340,13 @@ fun MyPageScreen(
                             horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
                         ) {
                             OutlinedCard(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { selectedThemeMode = 1; onThemeChange(1) },
-                                colors = CardDefaults.outlinedCardColors(
-                                    containerColor = Color(
-                                        0xFFFFFAF0
-                                    )
-                                ),
-                                border = if (selectedThemeMode == 1) androidx.compose.foundation.BorderStroke(
-                                    2.dp,
-                                    MaterialTheme.colorScheme.primary
-                                ) else androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline
-                                )
+                                modifier = Modifier.weight(1f).clickable { selectedThemeMode = 1; onThemeChange(1) },
+                                colors = CardDefaults.outlinedCardColors(containerColor = Color(0xFFFFFAF0)),
+                                border = if (selectedThemeMode == 1) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             ) {
                                 Column(
-                                    modifier = Modifier
-                                        .padding(AppStyles.paddingMedium)
-                                        .fillMaxWidth(),
+                                    modifier = Modifier.padding(AppStyles.paddingMedium).fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Icon(
@@ -376,34 +356,17 @@ fun MyPageScreen(
                                         modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "라이트",
-                                        style = AppStyles.textCardSmall,
-                                        color = Color(0xFF3D2B00)
-                                    )
+                                    Text("라이트", style = AppStyles.textCardSmall, color = Color(0xFF3D2B00))
                                 }
                             }
                             OutlinedCard(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { selectedThemeMode = 2; onThemeChange(2) },
-                                colors = CardDefaults.outlinedCardColors(
-                                    containerColor = Color(
-                                        0xFF0A0A0A
-                                    )
-                                ),
-                                border = if (selectedThemeMode == 2) androidx.compose.foundation.BorderStroke(
-                                    2.dp,
-                                    MaterialTheme.colorScheme.primary
-                                ) else androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outline
-                                )
+                                modifier = Modifier.weight(1f).clickable { selectedThemeMode = 2; onThemeChange(2) },
+                                colors = CardDefaults.outlinedCardColors(containerColor = Color(0xFF0A0A0A)),
+                                border = if (selectedThemeMode == 2) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             ) {
                                 Column(
-                                    modifier = Modifier
-                                        .padding(AppStyles.paddingMedium)
-                                        .fillMaxWidth(),
+                                    modifier = Modifier.padding(AppStyles.paddingMedium).fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Icon(
@@ -413,11 +376,7 @@ fun MyPageScreen(
                                         modifier = Modifier.size(32.dp)
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        "다크",
-                                        style = AppStyles.textCardSmall,
-                                        color = Color(0xFFEEEEEE)
-                                    )
+                                    Text("다크", style = AppStyles.textCardSmall, color = Color(0xFFEEEEEE))
                                 }
                             }
                         }
@@ -425,11 +384,10 @@ fun MyPageScreen(
                 }
                 OutlinedButton(
                     onClick = {
-                        val prefs = context.getSharedPreferences("wowa_prefs", android.content.Context.MODE_PRIVATE)
                         val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
                         val lastDate = prefs.getString("manual_update_date", "")
                         val count = if (lastDate == today) prefs.getInt("manual_update_count", 0) else 0
-                        val limit = 3 // 테스트용, 나중에 3으로 변경
+                        val limit = 3
 
                         if (count < limit) {
                             prefs.edit()
@@ -450,7 +408,38 @@ fun MyPageScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("업데이트 이력") }
 
-
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(AppStyles.paddingMedium),
+                        verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
+                    ) {
+                        Text(text = "데이터 업데이트", style = AppStyles.textCardTitle)
+                        HorizontalDivider()
+                        if (lastUpdateTime == null) {
+                            Text(
+                                text = "업데이트 이력 없음",
+                                style = AppStyles.textCardSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Text(
+                                text = "마지막 업데이트: $lastUpdateTime",
+                                style = AppStyles.textCardSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (lastUpdateTotal > 0) "변경사항 있음 (${lastUpdateTotal}개)" else "최신 상태",
+                                style = AppStyles.textCardSmall,
+                                color = if (lastUpdateTotal > 0) MaterialTheme.colorScheme.primary else AppStyles.colorGotten
+                            )
+                        }
+                    }
+                }
 
                 Card(
                     modifier = Modifier
@@ -491,7 +480,6 @@ fun MyPageScreen(
                         )
                     }
                 }
-
             }
         } else when (currentSection) {
             "favorite" -> {
@@ -506,18 +494,12 @@ fun MyPageScreen(
                     label = { Text("캐릭터 검색") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(
-                            horizontal = AppStyles.paddingMedium,
-                            vertical = AppStyles.paddingSmall
-                        ),
+                        .padding(horizontal = AppStyles.paddingMedium, vertical = AppStyles.paddingSmall),
                     singleLine = true,
                     trailingIcon = {
                         if (charaSearchQuery.isNotEmpty()) {
                             IconButton(onClick = { charaSearchQuery = "" }) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "검색 초기화"
-                                )
+                                Icon(imageVector = Icons.Default.Clear, contentDescription = "검색 초기화")
                             }
                         }
                     }
@@ -541,9 +523,7 @@ fun MyPageScreen(
                             Image(
                                 painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
                                 contentDescription = null,
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline),
+                                modifier = Modifier.size(80.dp).border(1.dp, MaterialTheme.colorScheme.outline),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
@@ -591,7 +571,6 @@ fun MyPageScreen(
                                 onComponentClick = { detailViewModel.selectGoods(it) }
                             )
                         }
-
                         1 -> {
                             FanGoodsListContent(
                                 goods = filteredFanGoods,
