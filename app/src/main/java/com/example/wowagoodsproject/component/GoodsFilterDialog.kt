@@ -44,6 +44,7 @@ fun GoodsFilterDialog(
     var filterSearch by remember { mutableStateOf("") }
 
     val filteredCharaList = charaList
+        .sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
         .map { it.charaNm }
         .filter { it.contains(filterSearch, ignoreCase = true) }
 

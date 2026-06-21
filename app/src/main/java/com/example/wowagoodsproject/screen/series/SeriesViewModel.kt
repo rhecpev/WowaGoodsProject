@@ -200,6 +200,24 @@ class SeriesViewModel : ViewModel() {
             loadSeriesCharaCount()
         }
     }
+    // After - 함수 추가 (setPending 아래)
+    fun bulkToggleGotten(setGoods: GoodsEntity, isGotten: Boolean) {
+        viewModelScope.launch {
+            val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
+            val components = allGoods.filter {
+                it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
+            }
+            val newStatus = if (isGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name
+            components.forEach { comp ->
+                App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
+            }
+            App.database.goodsDao().update(setGoods.copy(goodsStatus = newStatus))
+            _selectedSeries.value?.let {
+                _seriesGoods.value = App.database.goodsDao().getBySeries(it.seriesNm)
+            }
+            loadSeriesCharaCount()
+        }
+    }
 
     fun getCharasForSeries(series: SeriesEntity): List<CharaEntity> {
         if (series.seriesCharas.isEmpty()) return emptyList()

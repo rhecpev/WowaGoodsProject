@@ -46,6 +46,7 @@ import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterGoodsList
 import com.example.wowagoodsproject.component.filterGoodsListForBar
+import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.ui.theme.AppStyles
@@ -79,7 +80,8 @@ fun SeriesScreen(
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
     var showGoodsFilterDialog by remember { mutableStateOf(false) }
 
-    val sortedCharaList = allCharaList.sortedByDescending { it.charaIsFavorite }
+    val sortedCharaList = allCharaList
+        .sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
         .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
     val gridColumns = when (widthSizeClass) {
@@ -92,8 +94,10 @@ fun SeriesScreen(
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
         .distinct()
         .filter { it.isNotEmpty() }
-        .sortedByDescending { charaNm -> allCharaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
-
+        .sortedWith(
+            compareByDescending<String> { charaNm -> allCharaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
+                .thenBy { it }
+        )
     val goodsCategoryList = seriesGoods
         .map { it.category }
         .distinct()
@@ -128,12 +132,9 @@ fun SeriesScreen(
             setGoods = setGoods,
             components = components,
             onDismiss = { selectedSetGoods = null },
-            onToggleGotten = { component ->
-                viewModel.toggleGotten(component)
-            },
-            onSetPending = { component ->
-                viewModel.setPending(component)
-            },
+            onToggleGotten = { component -> viewModel.toggleGotten(component) },
+            onSetPending = { component -> viewModel.setPending(component) },
+            onBulkToggleGotten = { isGotten -> viewModel.bulkToggleGotten(setGoods, isGotten); selectedSetGoods = null },
             highlightChara = selectedGoodsCharaFilter,
             highlightCategory = selectedGoodsCategoryFilter
         )
@@ -467,7 +468,9 @@ fun SeriesScreen(
                 highlightChara = selectedGoodsCharaFilter,
                 onGoodsClick = { detailViewModel.selectGoods(it) },
                 onSetGoodsClick = { selectedSetGoods = it },
-                onComponentClick = { detailViewModel.selectGoods(it) }
+                onComponentClick = { detailViewModel.selectGoods(it) },
+                onBulkToggleGotten = { setGoods, isGotten -> viewModel.bulkToggleGotten(setGoods, isGotten) }
+
             )
         } else {
             TabRow(selectedTabIndex = selectedTab) {

@@ -32,7 +32,9 @@ fun GoodsListContent(
     highlightChara: String? = null,
     onGoodsClick: (GoodsEntity) -> Unit,
     onSetGoodsClick: (GoodsEntity) -> Unit,
-    onComponentClick: (GoodsEntity) -> Unit
+    onComponentClick: (GoodsEntity) -> Unit,
+    onBulkToggleGotten: (GoodsEntity, Boolean) -> Unit  // 추가
+
 ) {
     val expandedStates = remember { mutableStateMapOf<Int, Boolean>() }
 
@@ -141,6 +143,21 @@ fun GoodsListContent(
 
                 if (item.category == CATEGORY_SET && isExpanded) {
                     val components = getComponents(item)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = AppStyles.paddingMedium),
+                        horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                    ) {
+                        Button(
+                            onClick = { onBulkToggleGotten(item, true) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("일괄 보유") }
+                        OutlinedButton(
+                            onClick = { onBulkToggleGotten(item, false) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("일괄 미보유") }
+                    }
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()

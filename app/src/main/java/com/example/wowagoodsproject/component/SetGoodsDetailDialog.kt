@@ -31,6 +31,7 @@ fun SetGoodsDetailDialog(
     onDismiss: () -> Unit,
     onToggleGotten: (GoodsEntity) -> Unit,
     onSetPending: (GoodsEntity) -> Unit = {},
+    onBulkToggleGotten: (Boolean) -> Unit = {},
     highlightChara: String? = null,
     highlightCategory: String? = null
 ){
@@ -264,6 +265,20 @@ fun SetGoodsDetailDialog(
                 }
 
                 Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                ) {
+                    Button(
+                        onClick = { onBulkToggleGotten(true) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("일괄 보유") }
+                    OutlinedButton(
+                        onClick = { onBulkToggleGotten(false) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("일괄 미보유") }
+                }
+                Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()

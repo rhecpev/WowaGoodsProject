@@ -72,8 +72,10 @@ fun FanArtScreen(
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
         .distinct()
         .filter { it.isNotEmpty() }
-        .sortedByDescending { charaNm -> allCharaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
-
+        .sortedWith(
+            compareByDescending<String> { charaNm -> allCharaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
+                .thenBy { it }
+        )
     val goodsCategoryList = goodsList
         .map { it.category }
         .distinct()

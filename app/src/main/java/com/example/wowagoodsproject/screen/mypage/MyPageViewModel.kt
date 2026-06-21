@@ -177,7 +177,21 @@ class MyPageViewModel : ViewModel() {
             loadGottenGoods()
         }
     }
-
+    // After - 추가
+    fun bulkToggleOfficialGotten(setGoods: GoodsEntity, isGotten: Boolean) {
+        viewModelScope.launch {
+            val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
+            val components = allGoods.filter {
+                it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
+            }
+            val newStatus = if (isGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name
+            components.forEach { comp ->
+                App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
+            }
+            App.database.goodsDao().update(setGoods.copy(goodsStatus = newStatus))
+            loadGottenGoods()
+        }
+    }
     fun toggleFanGotten(goods: FanGoodsEntity) {
         viewModelScope.launch {
             val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN

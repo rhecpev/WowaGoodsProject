@@ -34,14 +34,18 @@ class CharacterViewModel : ViewModel() {
     val selectedTab: StateFlow<Int> = _selectedTab
 
     private val _showFavoriteOnly = MutableStateFlow(false)
+
     val showFavoriteOnly: StateFlow<Boolean> = _showFavoriteOnly
 
+    private val _charaGoodsCountMap = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
+    val charaGoodsCountMap: StateFlow<Map<String, Pair<Int, Int>>> = _charaGoodsCountMap
     fun toggleFavoriteOnly() {
         _showFavoriteOnly.value = !_showFavoriteOnly.value
     }
 
     init {
         loadCharaList()
+        loadCharaGoodsCount()
     }
 
     fun loadCharaList() {
@@ -152,7 +156,47 @@ class CharacterViewModel : ViewModel() {
             App.fanDatabase.fanGoodsDao().update(updated)
         }
     }
-
+    // After - 함수 추가 (setOfficialPending 아래)
+    fun bulkToggleOfficialGotten(setGoods: GoodsEntity, isGotten: Boolean) {
+        viewModelScope.launch {
+            val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
+            val components = allGoods.filter {
+                it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
+            }
+            val newStatus = if (isGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name
+            components.forEach { comp ->
+                App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
+            }
+            App.database.goodsDao().update(setGoods.copy(goodsStatus = newStatus))
+            _selectedChara.value?.let { chara ->
+                val charaGoods = App.database.goodsDao().getByChara(chara.charaNm)
+                _officialGoods.value = charaGoods
+                val seriesList = charaGoods.map { it.goodsSeries }.distinct()
+                _allSeriesGoods.value = seriesList.flatMap {
+                    App.database.goodsDao().getBySeries(it)
+                }
+            }
+        }
+    }
+    // After - loadCharaList() 아래에 함수 추가
+    private fun loadCharaGoodsCount() {
+        viewModelScope.launch {
+            App.database.goodsDao().getAllFlow().collectLatest { allGoods ->
+                val countMap = mutableMapOf<String, Pair<Int, Int>>()
+                allGoods.filter { it.goodsCategory != CATEGORY_SET }.forEach { goods ->
+                    goods.goodsChara.split(",").forEach { chara ->
+                        val name = chara.trim()
+                        if (name.isNotEmpty()) {
+                            val current = countMap[name] ?: Pair(0, 0)
+                            val gotten = if (goods.goodsStatus == GoodsStatus.GOTTEN.name) current.first + 1 else current.first
+                            countMap[name] = Pair(gotten, current.second + 1)
+                        }
+                    }
+                }
+                _charaGoodsCountMap.value = countMap
+            }
+        }
+    }
     fun deleteFanGoods(goods: FanGoodsEntity) {
         viewModelScope.launch {
             App.fanDatabase.fanGoodsDao().delete(goods)

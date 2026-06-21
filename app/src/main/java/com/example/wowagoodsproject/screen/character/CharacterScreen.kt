@@ -44,6 +44,7 @@ import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
 import com.example.wowagoodsproject.component.filterGoodsListForBar
+import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
@@ -67,6 +68,7 @@ fun CharacterScreen(
     val filterType by filterViewModel.filterType.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val showFavoriteOnly by viewModel.showFavoriteOnly.collectAsState()
+    val charaGoodsCountMap by viewModel.charaGoodsCountMap.collectAsState()
     val selectedCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
@@ -75,9 +77,9 @@ fun CharacterScreen(
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
 
     val filteredCharaList = if (showFavoriteOnly)
-        charaList.filter { it.charaIsFavorite }
+        charaList.filter { it.charaIsFavorite }.sortedBy { it.charaNm }
     else
-        charaList.sortedByDescending { it.charaIsFavorite }
+        charaList.sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
             .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
     val categoryList =
@@ -140,12 +142,9 @@ fun CharacterScreen(
             setGoods = setGoods,
             components = components,
             onDismiss = { selectedSetGoods = null },
-            onToggleGotten = { component ->
-                viewModel.toggleOfficialGotten(component)
-            },
-            onSetPending = { component ->
-                viewModel.setOfficialPending(component)
-            },
+            onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
+            onSetPending = { component -> viewModel.setOfficialPending(component) },
+            onBulkToggleGotten = { isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten); selectedSetGoods = null },
             highlightChara = selectedChara?.charaNm,
             highlightCategory = selectedCategoryFilter
         )
@@ -472,6 +471,12 @@ fun CharacterScreen(
                                 style = AppStyles.textCardSmall,
                                 color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                             )
+                            val count = charaGoodsCountMap[chara.charaNm] ?: Pair(0, 0)
+                            Text(
+                                text = "(${count.first}/${count.second})",
+                                style = AppStyles.textCardSmall,
+                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
@@ -507,7 +512,9 @@ fun CharacterScreen(
                             highlightChara = selectedChara?.charaNm,
                             onGoodsClick = { detailViewModel.selectGoods(it) },
                             onSetGoodsClick = { selectedSetGoods = it },
-                            onComponentClick = { detailViewModel.selectGoods(it) }
+                            onComponentClick = { detailViewModel.selectGoods(it) },
+                            onBulkToggleGotten = { setGoods, isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten) }
+
                         )
                     }
 

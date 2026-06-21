@@ -58,6 +58,7 @@ import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
 import com.example.wowagoodsproject.component.filterGoodsListForBar
+import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
@@ -150,7 +151,7 @@ fun MyPageScreen(
     )
 
     val searchedCharaList = charaList
-        .sortedByDescending { it.charaIsFavorite }
+        .sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
         .filter { it.charaNm.contains(charaSearchQuery, ignoreCase = true) }
 
     selectedSetGoods?.let { setGoods ->
@@ -163,6 +164,7 @@ fun MyPageScreen(
             onDismiss = { selectedSetGoods = null },
             onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
             onSetPending = { component -> viewModel.setOfficialPending(component) },
+            onBulkToggleGotten = { isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten); selectedSetGoods = null },
             highlightChara = selectedCharaFilter,
             highlightCategory = selectedCategoryFilter
         )
@@ -568,7 +570,9 @@ fun MyPageScreen(
                                 highlightChara = selectedCharaFilter,
                                 onGoodsClick = { detailViewModel.selectGoods(it) },
                                 onSetGoodsClick = { selectedSetGoods = it },
-                                onComponentClick = { detailViewModel.selectGoods(it) }
+                                onComponentClick = { detailViewModel.selectGoods(it) },
+                                onBulkToggleGotten = { setGoods, isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten) }
+
                             )
                         }
                         1 -> {
