@@ -67,6 +67,8 @@ class MyPageViewModel : ViewModel() {
     private val _showFilterDialog = MutableStateFlow(false)
     val showFilterDialog: StateFlow<Boolean> = _showFilterDialog
 
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting: StateFlow<Boolean> = _isImporting
 
     private val _latestVersion = MutableStateFlow<String?>(null)
     val latestVersion: StateFlow<String?> = _latestVersion
@@ -326,6 +328,7 @@ class MyPageViewModel : ViewModel() {
 
     fun importData(context: Context, uri: Uri) {
         viewModelScope.launch {
+            _isImporting.value = true
             try {
                 withContext(Dispatchers.IO) {
                     val gson = Gson()
@@ -365,31 +368,27 @@ class MyPageViewModel : ViewModel() {
                         val type = object : TypeToken<List<FanGoodsEntity>>() {}.type
                         val fanGoods: List<FanGoodsEntity> = gson.fromJson(json, type)
                         App.fanDatabase.fanGoodsDao().deleteAll()
-                        fanGoods.forEach { goods ->
+                        val mappedGoods = fanGoods.map { goods ->
                             val newPath = if (goods.fanGoodsImgPath.isNotEmpty()) {
                                 val fileName = File(goods.fanGoodsImgPath).name
                                 File(context.filesDir, fileName).absolutePath
                             } else ""
-                            App.fanDatabase.fanGoodsDao().insert(
-                                goods.copy(fanGoodsId = 0, fanGoodsImgPath = newPath)
-                            )
+                            goods.copy(fanGoodsId = 0, fanGoodsImgPath = newPath)
                         }
+                        App.fanDatabase.fanGoodsDao().insertAll(mappedGoods)
                     }
                     officialJson?.let { json ->
                         val type = object : TypeToken<List<OfficialGoodsBackup>>() {}.type
                         val backups: List<OfficialGoodsBackup> = gson.fromJson(json, type)
                         App.database.goodsDao().resetAllGotten()
+                        val allLocalGoods = App.database.goodsDao().getAll()
+                        val localGoodsMap = allLocalGoods.associateBy {
+                            "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsMemo}|${it.goodsPrice}"
+                        }
                         backups.forEach { backup ->
-                            val goods = App.database.goodsDao().getByUniqueKey(
-                                backup.goodsSeries,
-                                backup.goodsChara,
-                                backup.goodsCategory,
-                                backup.goodsMemo,
-                                backup.goodsPrice
-                            )
-                            goods?.let {
-                                App.database.goodsDao()
-                                    .update(it.copy(goodsStatus = backup.goodsStatus))
+                            val key = "${backup.goodsSeries}|${backup.goodsChara}|${backup.goodsCategory}|${backup.goodsMemo}|${backup.goodsPrice}"
+                            localGoodsMap[key]?.let { goods ->
+                                App.database.goodsDao().update(goods.copy(goodsStatus = backup.goodsStatus))
                             }
                         }
                     }
@@ -412,9 +411,10 @@ class MyPageViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, "입력 실패: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
+            } finally {
+                _isImporting.value = false
             }
         }
     }
-
 
 }

@@ -101,20 +101,26 @@ class SeriesViewModel : ViewModel() {
     }
 
     private suspend fun loadSeriesCharaCount() {
+        val allGoods = App.database.goodsDao().getAll()
+            .filter { it.goodsCategory != CATEGORY_SET }
+
         val countMap = mutableMapOf<String, Pair<Int, Int>>()
         _seriesList.value.forEach { series ->
             series.seriesCharas.split(",").forEach { chara ->
                 val name = chara.trim()
-                if (name.isNotEmpty()) {
-                    val total = App.database.goodsDao().countBySeriesAndChara(series.seriesNm, name)
-                    val gotten = App.database.goodsDao().countGottenBySeriesAndChara(series.seriesNm, name)
-                    countMap["${series.seriesNm}|$name"] = Pair(gotten, total)
+                if (name.isEmpty()) return@forEach
+                val seriesGoods = allGoods.filter {
+                    it.goodsSeries == series.seriesNm &&
+                            it.goodsChara.contains(name)
                 }
+                countMap["${series.seriesNm}|$name"] = Pair(
+                    seriesGoods.count { it.goodsStatus == GoodsStatus.GOTTEN.name },
+                    seriesGoods.size
+                )
             }
         }
         _seriesCharaCountMap.value = countMap
     }
-
     fun updateFilteredList() {
         val country = countries[_selectedTab.value]
         val byCountry = if (country == "전체") _seriesList.value

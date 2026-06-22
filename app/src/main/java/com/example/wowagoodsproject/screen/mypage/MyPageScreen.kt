@@ -86,6 +86,7 @@ fun MyPageScreen(
     val showFilterDialog by viewModel.showFilterDialog.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val latestVersion by viewModel.latestVersion.collectAsState()
+    val isImporting by viewModel.isImporting.collectAsState()
 
     var charaSearchQuery by remember { mutableStateOf("") }
     var isUserDataExpanded by remember { mutableStateOf(false) }
@@ -164,7 +165,12 @@ fun MyPageScreen(
             onDismiss = { selectedSetGoods = null },
             onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
             onSetPending = { component -> viewModel.setOfficialPending(component) },
-            onBulkToggleGotten = { isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten); selectedSetGoods = null },
+            onBulkToggleGotten = { isGotten ->
+                viewModel.bulkToggleOfficialGotten(
+                    setGoods,
+                    isGotten
+                ); selectedSetGoods = null
+            },
             highlightChara = selectedCharaFilter,
             highlightCategory = selectedCategoryFilter
         )
@@ -181,7 +187,8 @@ fun MyPageScreen(
             price = goods.price,
             isGotten = goods.isGotten,
             isPending = goods.status == GoodsStatus.PENDING,
-            memo = (goods as? GoodsEntity)?.goodsMemo ?: (goods as? FanGoodsEntity)?.fanGoodsMemo ?: "",
+            memo = (goods as? GoodsEntity)?.goodsMemo ?: (goods as? FanGoodsEntity)?.fanGoodsMemo
+            ?: "",
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleOfficialGotten(it) }
@@ -212,378 +219,459 @@ fun MyPageScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(
-            title = "마이페이지",
-            action = {
-                if (currentSection == "goods") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Row {
-                                IconButton(onClick = { viewModel.setShowFilterDialog(true) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.FilterList,
-                                        contentDescription = "필터",
-                                        tint = if (selectedCharaFilter != null || selectedCategoryFilter != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopBar(
+                title = "마이페이지",
+                action = {
+                    if (currentSection == "goods") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row {
+                                    IconButton(onClick = { viewModel.setShowFilterDialog(true) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.FilterList,
+                                            contentDescription = "필터",
+                                            tint = if (selectedCharaFilter != null || selectedCategoryFilter != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
+                                        Icon(
+                                            imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
+                                            contentDescription = "모드 전환"
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        viewModel.setSection(null)
+                                        viewModel.setCharaFilter(null)
+                                        viewModel.setCategoryFilter(null)
+                                    }) {
+                                        Text("뒤로")
+                                    }
                                 }
-                                IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
-                                    Icon(
-                                        imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
-                                        contentDescription = "모드 전환"
-                                    )
-                                }
-                                TextButton(onClick = {
-                                    viewModel.setSection(null)
-                                    viewModel.setCharaFilter(null)
-                                    viewModel.setCategoryFilter(null)
-                                }) {
-                                    Text("뒤로")
+                                Row {
+                                    if (selectedCharaFilter != null) {
+                                        Text(
+                                            text = selectedCharaFilter!!,
+                                            style = AppStyles.textCardSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    if (selectedCharaFilter != null && selectedCategoryFilter != null) {
+                                        Text(
+                                            text = "/",
+                                            style = AppStyles.textCardSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    if (selectedCategoryFilter != null) {
+                                        Text(
+                                            text = selectedCategoryFilter!!,
+                                            style = AppStyles.textCardSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
                                 }
                             }
-                            Row {
-                                if (selectedCharaFilter != null) {
-                                    Text(
-                                        text = selectedCharaFilter!!,
-                                        style = AppStyles.textCardSmall,
-                                        color = MaterialTheme.colorScheme.primary
+                        }
+                    } else if (currentSection != null) {
+                        TextButton(onClick = {
+                            viewModel.setSection(null); charaSearchQuery = ""
+                        }) {
+                            Text("뒤로")
+                        }
+                    }
+                }
+            )
+
+            if (currentSection == null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(AppStyles.paddingLarge),
+                    verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                    ) {
+                        Button(
+                            onClick = { viewModel.setSection("favorite") },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(80.dp),
+                            shape = RoundedCornerShape(4.dp)
+                        ) { Text("캐릭터\n선호 설정", textAlign = TextAlign.Center) }
+                        Button(
+                            onClick = { viewModel.setSection("goods"); viewModel.loadGottenGoods() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(80.dp),
+                            shape = RoundedCornerShape(4.dp)
+                        ) { Text("보유\n굿즈 목록", textAlign = TextAlign.Center) }
+                    }
+                    Column {
+                        Button(
+                            onClick = { isUserDataExpanded = !isUserDataExpanded },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("유저 데이터")
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(
+                                imageVector = if (isUserDataExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = null
+                            )
+                        }
+                        AnimatedVisibility(visible = isUserDataExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = AppStyles.paddingMedium),
+                                verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { viewModel.exportData(context) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("추출") }
+                                OutlinedButton(
+                                    onClick = { fileLauncher.launch(arrayOf("application/zip")) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("입력") }
+                            }
+                        }
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
+                            Text(text = "테마 설정", style = AppStyles.textCardTitle)
+                            Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                            ) {
+                                OutlinedCard(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedThemeMode = 1; onThemeChange(1) },
+                                    colors = CardDefaults.outlinedCardColors(
+                                        containerColor = Color(
+                                            0xFFFFFAF0
+                                        )
+                                    ),
+                                    border = if (selectedThemeMode == 1) androidx.compose.foundation.BorderStroke(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    else androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .padding(AppStyles.paddingMedium)
+                                            .fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedThemeMode == 1) Icons.Default.WbSunny else Icons.Outlined.WbSunny,
+                                            contentDescription = "라이트 모드",
+                                            tint = Color(0xFFB8860B),
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "라이트",
+                                            style = AppStyles.textCardSmall,
+                                            color = Color(0xFF3D2B00)
+                                        )
+                                    }
                                 }
-                                if (selectedCharaFilter != null && selectedCategoryFilter != null) {
-                                    Text(
-                                        text = "/",
-                                        style = AppStyles.textCardSmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                OutlinedCard(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedThemeMode = 2; onThemeChange(2) },
+                                    colors = CardDefaults.outlinedCardColors(
+                                        containerColor = Color(
+                                            0xFF0A0A0A
+                                        )
+                                    ),
+                                    border = if (selectedThemeMode == 2) androidx.compose.foundation.BorderStroke(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
-                                if (selectedCategoryFilter != null) {
-                                    Text(
-                                        text = selectedCategoryFilter!!,
-                                        style = AppStyles.textCardSmall,
-                                        color = MaterialTheme.colorScheme.primary
+                                    else androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .padding(AppStyles.paddingMedium)
+                                            .fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selectedThemeMode == 2) Icons.Default.DarkMode else Icons.Outlined.DarkMode,
+                                            contentDescription = "다크 모드",
+                                            tint = Color(0xFFF3E85A),
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "다크",
+                                            style = AppStyles.textCardSmall,
+                                            color = Color(0xFFEEEEEE)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                } else if (currentSection != null) {
-                    TextButton(onClick = { viewModel.setSection(null); charaSearchQuery = "" }) {
-                        Text("뒤로")
-                    }
-                }
-            }
-        )
+                    OutlinedButton(
+                        onClick = {
+                            val today = java.text.SimpleDateFormat(
+                                "yyyyMMdd",
+                                java.util.Locale.getDefault()
+                            ).format(java.util.Date())
+                            val lastDate = prefs.getString("manual_update_date", "")
+                            val count =
+                                if (lastDate == today) prefs.getInt("manual_update_count", 0) else 0
+                            val limit = 3
 
-        if (currentSection == null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(AppStyles.paddingLarge),
-                verticalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
-                ) {
-                    Button(
-                        onClick = { viewModel.setSection("favorite") },
-                        modifier = Modifier.weight(1f).height(80.dp),
-                        shape = RoundedCornerShape(4.dp)
-                    ) { Text("캐릭터\n선호 설정", textAlign = TextAlign.Center) }
-                    Button(
-                        onClick = { viewModel.setSection("goods"); viewModel.loadGottenGoods() },
-                        modifier = Modifier.weight(1f).height(80.dp),
-                        shape = RoundedCornerShape(4.dp)
-                    ) { Text("보유\n굿즈 목록", textAlign = TextAlign.Center) }
-                }
-                Column {
-                    Button(
-                        onClick = { isUserDataExpanded = !isUserDataExpanded },
+                            if (count < limit) {
+                                prefs.edit()
+                                    .putString("manual_update_date", today)
+                                    .putInt("manual_update_count", count + 1)
+                                    .apply()
+                                WorkManager.getInstance(context).enqueue(
+                                    OneTimeWorkRequestBuilder<UpdateWorker>().build()
+                                )
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "오늘 수동 업데이트 횟수를 초과했습니다 (${limit}회)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
+                    ) { Text("수동 업데이트") }
+                    Button(
+                        onClick = { onNavigateToPatchNotes() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("업데이트 이력") }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Text("유저 데이터")
-                        Spacer(modifier = Modifier.weight(1f))
-                        Icon(
-                            imageVector = if (isUserDataExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                            contentDescription = null
-                        )
-                    }
-                    AnimatedVisibility(visible = isUserDataExpanded) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = AppStyles.paddingMedium),
+                                .padding(AppStyles.paddingMedium),
                             verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
                         ) {
-                            OutlinedButton(
-                                onClick = { viewModel.exportData(context) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text("추출") }
-                            OutlinedButton(
-                                onClick = { fileLauncher.launch(arrayOf("application/zip")) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text("입력") }
-                        }
-                    }
-                }
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
-                        Text(text = "테마 설정", style = AppStyles.textCardTitle)
-                        Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
-                        ) {
-                            OutlinedCard(
-                                modifier = Modifier.weight(1f).clickable { selectedThemeMode = 1; onThemeChange(1) },
-                                colors = CardDefaults.outlinedCardColors(containerColor = Color(0xFFFFFAF0)),
-                                border = if (selectedThemeMode == 1) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                                else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(AppStyles.paddingMedium).fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = if (selectedThemeMode == 1) Icons.Default.WbSunny else Icons.Outlined.WbSunny,
-                                        contentDescription = "라이트 모드",
-                                        tint = Color(0xFFB8860B),
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("라이트", style = AppStyles.textCardSmall, color = Color(0xFF3D2B00))
-                                }
-                            }
-                            OutlinedCard(
-                                modifier = Modifier.weight(1f).clickable { selectedThemeMode = 2; onThemeChange(2) },
-                                colors = CardDefaults.outlinedCardColors(containerColor = Color(0xFF0A0A0A)),
-                                border = if (selectedThemeMode == 2) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                                else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(AppStyles.paddingMedium).fillMaxWidth(),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = if (selectedThemeMode == 2) Icons.Default.DarkMode else Icons.Outlined.DarkMode,
-                                        contentDescription = "다크 모드",
-                                        tint = Color(0xFFF3E85A),
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("다크", style = AppStyles.textCardSmall, color = Color(0xFFEEEEEE))
-                                }
+                            Text(text = "데이터 업데이트", style = AppStyles.textCardTitle)
+                            HorizontalDivider()
+                            if (lastUpdateTime == null) {
+                                Text(
+                                    text = "업데이트 이력 없음",
+                                    style = AppStyles.textCardSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Text(
+                                    text = "마지막 업데이트: $lastUpdateTime",
+                                    style = AppStyles.textCardSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = if (lastUpdateTotal > 0) "변경사항 있음 (${lastUpdateTotal}개)" else "최신 상태",
+                                    style = AppStyles.textCardSmall,
+                                    color = if (lastUpdateTotal > 0) MaterialTheme.colorScheme.primary else AppStyles.colorGotten
+                                )
                             }
                         }
                     }
-                }
-                OutlinedButton(
-                    onClick = {
-                        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
-                        val lastDate = prefs.getString("manual_update_date", "")
-                        val count = if (lastDate == today) prefs.getInt("manual_update_count", 0) else 0
-                        val limit = 3
 
-                        if (count < limit) {
-                            prefs.edit()
-                                .putString("manual_update_date", today)
-                                .putInt("manual_update_count", count + 1)
-                                .apply()
-                            WorkManager.getInstance(context).enqueue(
-                                OneTimeWorkRequestBuilder<UpdateWorker>().build()
-                            )
-                        } else {
-                            Toast.makeText(context, "오늘 수동 업데이트 횟수를 초과했습니다 (${limit}회)", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("수동 업데이트") }
-                Button(
-                    onClick = { onNavigateToPatchNotes() },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("업데이트 이력") }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(AppStyles.paddingMedium),
-                        verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
+                            .clickable {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
+                                )
+                                context.startActivity(intent)
+                            },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Text(text = "데이터 업데이트", style = AppStyles.textCardTitle)
-                        HorizontalDivider()
-                        if (lastUpdateTime == null) {
-                            Text(
-                                text = "업데이트 이력 없음",
-                                style = AppStyles.textCardSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Text(
-                                text = "마지막 업데이트: $lastUpdateTime",
-                                style = AppStyles.textCardSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = if (lastUpdateTotal > 0) "변경사항 있음 (${lastUpdateTotal}개)" else "최신 상태",
-                                style = AppStyles.textCardSmall,
-                                color = if (lastUpdateTotal > 0) MaterialTheme.colorScheme.primary else AppStyles.colorGotten
-                            )
-                        }
-                    }
-                }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val intent = android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
-                            )
-                            context.startActivity(intent)
-                        },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(AppStyles.paddingMedium),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "현재 버전: v${BuildConfig.VERSION_NAME}",
-                            style = AppStyles.textCardSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "최신 버전: ${latestVersion?.let { "v$it" } ?: "확인 중..."}",
-                            style = AppStyles.textCardSmall,
-                            color = if (latestVersion != null && latestVersion != BuildConfig.VERSION_NAME)
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "릴리즈 페이지 바로가기 →",
-                            style = AppStyles.textCardSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-        } else when (currentSection) {
-            "favorite" -> {
-                Text(
-                    text = "선호 캐릭터 설정",
-                    style = AppStyles.textCardTitle,
-                    modifier = Modifier.padding(AppStyles.paddingLarge)
-                )
-                OutlinedTextField(
-                    value = charaSearchQuery,
-                    onValueChange = { charaSearchQuery = it },
-                    label = { Text("캐릭터 검색") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppStyles.paddingMedium, vertical = AppStyles.paddingSmall),
-                    singleLine = true,
-                    trailingIcon = {
-                        if (charaSearchQuery.isNotEmpty()) {
-                            IconButton(onClick = { charaSearchQuery = "" }) {
-                                Icon(imageVector = Icons.Default.Clear, contentDescription = "검색 초기화")
-                            }
-                        }
-                    }
-                )
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(charaGridColumns),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
-                    verticalArrangement = Arrangement.spacedBy(1.dp)
-                ) {
-                    items(searchedCharaList) { chara ->
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
-                                .clickable { viewModel.toggleFavorite(chara) }
-                                .padding(AppStyles.paddingSmall)
+                                .padding(AppStyles.paddingMedium),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
-                                contentDescription = null,
-                                modifier = Modifier.size(80.dp).border(1.dp, MaterialTheme.colorScheme.outline),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                            Icon(
-                                imageVector = if (chara.charaIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = null,
-                                tint = if (chara.charaIsFavorite) Color.Red else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(16.dp)
+                            Text(
+                                text = "현재 버전: v${BuildConfig.VERSION_NAME}",
+                                style = AppStyles.textCardSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = chara.charaNm,
+                                text = "최신 버전: ${latestVersion?.let { "v$it" } ?: "확인 중..."}",
                                 style = AppStyles.textCardSmall,
-                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                color = if (latestVersion != null && latestVersion != BuildConfig.VERSION_NAME)
+                                    MaterialTheme.colorScheme.error
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "릴리즈 페이지 바로가기 →",
+                                style = AppStyles.textCardSmall,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                 }
+            } else when (currentSection) {
+                "favorite" -> {
+                    Text(
+                        text = "선호 캐릭터 설정",
+                        style = AppStyles.textCardTitle,
+                        modifier = Modifier.padding(AppStyles.paddingLarge)
+                    )
+                    OutlinedTextField(
+                        value = charaSearchQuery,
+                        onValueChange = { charaSearchQuery = it },
+                        label = { Text("캐릭터 검색") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = AppStyles.paddingMedium,
+                                vertical = AppStyles.paddingSmall
+                            ),
+                        singleLine = true,
+                        trailingIcon = {
+                            if (charaSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { charaSearchQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "검색 초기화"
+                                    )
+                                }
+                            }
+                        }
+                    )
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(charaGridColumns),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(0.dp),
+                        horizontalArrangement = Arrangement.spacedBy(1.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
+                        items(searchedCharaList) { chara ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                                    .clickable { viewModel.toggleFavorite(chara) }
+                                    .padding(AppStyles.paddingSmall)
+                            ) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .border(1.dp, MaterialTheme.colorScheme.outline),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                                Icon(
+                                    imageVector = if (chara.charaIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = if (chara.charaIsFavorite) Color.Red else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = chara.charaNm,
+                                    style = AppStyles.textCardSmall,
+                                    color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                "goods" -> {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        TabRow(selectedTabIndex = selectedTab) {
+                            Tab(
+                                selected = selectedTab == 0,
+                                onClick = { viewModel.setSelectedTab(0) },
+                                text = { Text("공식 (${officialGoodsCount.size})") })
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = { viewModel.setSelectedTab(1) },
+                                text = { Text("2차창작 (${filteredFanGoods.size})") })
+                        }
+
+                        when (selectedTab) {
+                            0 -> {
+                                GoodsListContent(
+                                    goods = filteredOfficialGoods,
+                                    allGoods = allSeriesGoods,
+                                    isGridMode = isGridMode,
+                                    gridColumns = gridColumns,
+                                    filterType = com.example.wowagoodsproject.component.FilterType.ALL,
+                                    highlightCategory = selectedCategoryFilter,
+                                    highlightChara = selectedCharaFilter,
+                                    onGoodsClick = { detailViewModel.selectGoods(it) },
+                                    onSetGoodsClick = { selectedSetGoods = it },
+                                    onComponentClick = { detailViewModel.selectGoods(it) },
+                                    onBulkToggleGotten = { setGoods, isGotten ->
+                                        viewModel.bulkToggleOfficialGotten(
+                                            setGoods,
+                                            isGotten
+                                        )
+                                    }
+
+                                )
+                            }
+
+                            1 -> {
+                                FanGoodsListContent(
+                                    goods = filteredFanGoods,
+                                    isGridMode = isGridMode,
+                                    gridColumns = gridColumns,
+                                    onGoodsClick = { detailViewModel.selectGoods(it) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
-
-            "goods" -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    TabRow(selectedTabIndex = selectedTab) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { viewModel.setSelectedTab(0) },
-                            text = { Text("공식 (${officialGoodsCount.size})") })
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { viewModel.setSelectedTab(1) },
-                            text = { Text("2차창작 (${filteredFanGoods.size})") })
-                    }
-
-                    when (selectedTab) {
-                        0 -> {
-                            GoodsListContent(
-                                goods = filteredOfficialGoods,
-                                allGoods = allSeriesGoods,
-                                isGridMode = isGridMode,
-                                gridColumns = gridColumns,
-                                filterType = com.example.wowagoodsproject.component.FilterType.ALL,
-                                highlightCategory = selectedCategoryFilter,
-                                highlightChara = selectedCharaFilter,
-                                onGoodsClick = { detailViewModel.selectGoods(it) },
-                                onSetGoodsClick = { selectedSetGoods = it },
-                                onComponentClick = { detailViewModel.selectGoods(it) },
-                                onBulkToggleGotten = { setGoods, isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten) }
-
-                            )
-                        }
-                        1 -> {
-                            FanGoodsListContent(
-                                goods = filteredFanGoods,
-                                isGridMode = isGridMode,
-                                gridColumns = gridColumns,
-                                onGoodsClick = { detailViewModel.selectGoods(it) }
-                            )
-                        }
-                    }
+        }
+        if (isImporting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+                    .clickable(enabled = false) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                    Text(text = "데이터 입력 중...")
                 }
             }
         }
