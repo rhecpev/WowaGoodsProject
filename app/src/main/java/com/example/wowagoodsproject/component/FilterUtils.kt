@@ -25,6 +25,7 @@ fun filterGoodsList(
                 allGoods.any {
                     it.category != CATEGORY_SET &&
                             it.memo == goods.memo &&
+                            it.series == goods.series &&  // 추가
                             it.category == categoryFilter
                 }
             } else {
