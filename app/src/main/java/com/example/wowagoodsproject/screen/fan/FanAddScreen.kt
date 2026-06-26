@@ -431,6 +431,7 @@ fun FanAddScreen(
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .imePadding()
                         .verticalScroll(rememberScrollState())
                 ) {
                     InputFields()
@@ -443,6 +444,7 @@ fun FanAddScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {

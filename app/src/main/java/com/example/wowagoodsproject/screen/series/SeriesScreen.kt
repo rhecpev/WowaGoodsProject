@@ -106,17 +106,16 @@ fun SeriesScreen(
 
 
     val filteredGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(seriesGoods).second,
+        list = filterViewModel.applyFilter(seriesGoods, selectedGoodsCharaFilter).second,
         allGoods = seriesGoods,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
     val AllSeriesGoods = filterGoodsListForBar(
-        list = filterViewModel.applyFilter(seriesGoods).first,
+        list = filterViewModel.applyFilter(seriesGoods, selectedGoodsCharaFilter).first,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
-
     BackHandler(enabled = selectedSeries != null) {
         viewModel.clearSelectedSeries()
         filterViewModel.setFilter(FilterType.ALL)

@@ -83,19 +83,23 @@ fun CharacterScreen(
             .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
     val categoryList =
-        (filterViewModel.applyFilter(officialGoods).second + filterViewModel.applyFilter(fanGoods).second)
+        (filterViewModel.applyFilter(officialGoods, selectedChara?.charaNm).second + filterViewModel.applyFilter(fanGoods).second)
             .map { it.category }
             .distinct()
-            .filter { it.isNotEmpty() && it != CATEGORY_SET }  // CATEGORY_SET 추가
+            .filter { it.isNotEmpty() && it != CATEGORY_SET }
             .sorted()
 
     val filteredCategories = categoryList.filter {
         it.contains(categorySearch, ignoreCase = true)
     }
-
     val filteredOfficialGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(officialGoods).second,
+        list = filterViewModel.applyFilter(officialGoods, selectedChara?.charaNm).second,
         allGoods = allSeriesGoods,
+        categoryFilter = selectedCategoryFilter
+    )
+
+    val AllFilteredOfficialGoods = filterGoodsListForBar(
+        list = filterViewModel.applyFilter(officialGoods, selectedChara?.charaNm).first,
         categoryFilter = selectedCategoryFilter
     )
 
@@ -104,10 +108,7 @@ fun CharacterScreen(
         categoryFilter = selectedCategoryFilter
     )
 
-    val AllFilteredOfficialGoods = filterGoodsListForBar(
-        list = filterViewModel.applyFilter(officialGoods).first,
-        categoryFilter = selectedCategoryFilter
-    )
+
     val AllFilteredFanGoods = filterFanGoodsList(
         list = filterViewModel.applyFilter(fanGoods).first,
         categoryFilter = selectedCategoryFilter

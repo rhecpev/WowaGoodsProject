@@ -51,17 +51,19 @@ fun GoodsListContent(
             }
         }
         val components = getComponents(item)
+        val target = if (highlightChara != null) components.filter { it.chara.contains(highlightChara) } else components
         return when {
-            components.isEmpty() -> when (item.status) {
+            target.isEmpty() -> when (item.status) {
                 GoodsStatus.GOTTEN -> GottenStatus.GOTTEN
                 GoodsStatus.PENDING -> GottenStatus.PENDING
                 else -> GottenStatus.NOT_GOTTEN
             }
-            components.all { it.status == GoodsStatus.GOTTEN } -> GottenStatus.GOTTEN
-            components.none { it.status == GoodsStatus.GOTTEN || it.status == GoodsStatus.PENDING } -> GottenStatus.NOT_GOTTEN
+            target.all { it.status == GoodsStatus.GOTTEN } -> GottenStatus.GOTTEN
+            target.none { it.status == GoodsStatus.GOTTEN || it.status == GoodsStatus.PENDING } -> GottenStatus.NOT_GOTTEN
             else -> GottenStatus.PARTIAL
         }
     }
+
     fun getComponentCategories(item: GoodsEntity): List<String> {
         if (item.category != CATEGORY_SET) return emptyList()
         return getComponents(item).map { it.category }
