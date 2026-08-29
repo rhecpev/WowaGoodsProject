@@ -9,12 +9,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.ui.theme.AppStyles
-import java.io.File
-import java.net.URI
 
 @Composable
 fun GoodsGridItem(
@@ -26,18 +25,9 @@ fun GoodsGridItem(
     isGotten: Boolean,
     gottenStatus: GottenStatus? = null,
     memo: String,
-    components: List<String> = emptyList(),
-    highlightCategory: String? = null,
     onClick: () -> Unit = {}
 ){
-    val encodedPath = if (imgPath.startsWith("http")) {
-        try {
-            URI(null, imgPath.removePrefix("https://"), null).toASCIIString()
-                .let { "https://" + it.removePrefix("https:/") }
-        } catch (e: Exception) {
-            imgPath
-        }
-    } else imgPath
+    val encodedPath = encodeGoodsImagePath(imgPath)
 
     Column(
         modifier = Modifier
@@ -82,35 +72,13 @@ fun GoodsGridItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (components.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "$category [",
-                        style = AppStyles.textCardSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
-                    components.forEachIndexed { index, cat ->
-                        Text(
-                            text = if (index < components.lastIndex) "$cat, " else "$cat]",
-                            style = AppStyles.textCardSmall,
-                            color = if (cat == highlightCategory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
-                        )
-                    }
-                }
-            } else {
-                Text(
-                    text = if (memo.isNotEmpty()) "${category} / ${memo}" else category,
-                    style = AppStyles.textCardSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = if (memo.isNotEmpty()) "${category} / ${memo}" else category,
+                style = AppStyles.textCardSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 text = price,
                 style = AppStyles.textCardSmall,
@@ -127,7 +95,7 @@ fun GoodsGridItem(
                     GottenStatus.PENDING -> "구매예정"
                 },
                 style = AppStyles.textCardSmall.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontWeight = FontWeight.Bold,
                     color = when (status) {
                         GottenStatus.GOTTEN -> AppStyles.colorGotten
                         GottenStatus.NOT_GOTTEN -> AppStyles.colorNotGotten

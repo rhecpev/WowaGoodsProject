@@ -62,8 +62,7 @@ fun MainScreen(
     val seriesSelectedSeries by seriesViewModel.selectedSeries.collectAsState()
     val characterSelectedChara by characterViewModel.selectedChara.collectAsState()
     val myPageCurrentSection by myPageViewModel.currentSection.collectAsState()
-    val isInSubScreen = seriesSelectedSeries != null ||
-            characterSelectedChara != null ||
+    val isInSubScreen = characterSelectedChara != null ||
             myPageCurrentSection != null ||
             currentRoute == "fan_add" ||
             currentRoute == "patch_notes"
@@ -93,6 +92,20 @@ fun MainScreen(
                 myPageViewModel.setCharaFilter(null)
             }
         }
+    }
+
+    fun navigateToSeries(seriesName: String) {
+        characterViewModel.clearSelectedChara()
+        myPageViewModel.setSection(null)
+        navController.navigate(BottomNavItem.Series.route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+        val series = seriesViewModel.seriesList.value.find { it.seriesNm == seriesName }
+        series?.let { seriesViewModel.selectSeries(it) }
     }
 
     if (isLandscape) {
@@ -160,7 +173,8 @@ fun MainScreen(
                         viewModel = characterViewModel,
                         filterViewModel = characterFilterViewModel,
                         listModeViewModel = characterListModeViewModel,
-                        detailViewModel = characterDetailViewModel
+                        detailViewModel = characterDetailViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
                 composable(BottomNavItem.FanArt.route) {
@@ -170,7 +184,8 @@ fun MainScreen(
                         viewModel = fanArtViewModel,
                         filterViewModel = fanFilterViewModel,
                         listModeViewModel = fanListModeViewModel,
-                        detailViewModel = fanDetailViewModel
+                        detailViewModel = fanDetailViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
                 composable(BottomNavItem.MyPage.route) {
@@ -178,7 +193,8 @@ fun MainScreen(
                         widthSizeClass = widthSizeClass,
                         viewModel = myPageViewModel,
                         onThemeChange = onThemeChange,
-                        onNavigateToPatchNotes = { navController.navigate("patch_notes") }
+                        onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
                 composable("fan_add") {
@@ -253,7 +269,8 @@ fun MainScreen(
                         viewModel = characterViewModel,
                         filterViewModel = characterFilterViewModel,
                         listModeViewModel = characterListModeViewModel,
-                        detailViewModel = characterDetailViewModel
+                        detailViewModel = characterDetailViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
                 composable(BottomNavItem.FanArt.route) {
@@ -263,7 +280,8 @@ fun MainScreen(
                         viewModel = fanArtViewModel,
                         filterViewModel = fanFilterViewModel,
                         listModeViewModel = fanListModeViewModel,
-                        detailViewModel = fanDetailViewModel
+                        detailViewModel = fanDetailViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
                 composable(BottomNavItem.MyPage.route) {
@@ -271,7 +289,8 @@ fun MainScreen(
                         widthSizeClass = widthSizeClass,
                         viewModel = myPageViewModel,
                         onThemeChange = onThemeChange,
-                        onNavigateToPatchNotes = { navController.navigate("patch_notes") }
+                        onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
                 composable("fan_add") {

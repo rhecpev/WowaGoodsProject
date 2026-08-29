@@ -12,9 +12,9 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
+import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wowagoodsproject.component.FanGoodsListContent
 import com.example.wowagoodsproject.component.FilterBar
@@ -28,6 +28,8 @@ import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.ui.theme.AppStyles
+import com.example.wowagoodsproject.screen.series.SeriesViewModel
+import com.example.wowagoodsproject.db.official.GoodsEntity
 
 @Composable
 fun FanArtScreen(
@@ -36,8 +38,12 @@ fun FanArtScreen(
     viewModel: FanArtViewModel = viewModel(),
     listModeViewModel: ListModeViewModel = viewModel(),
     detailViewModel: GoodsDetailViewModel = viewModel(),
-    filterViewModel: FilterViewModel = viewModel()
+    filterViewModel: FilterViewModel = viewModel(),
+    onNavigateToSeries: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val seriesViewModel: SeriesViewModel = viewModel()
+    val allSeriesGoods by seriesViewModel.seriesList.collectAsState()
     val goodsList by viewModel.goodsList.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
@@ -110,6 +116,10 @@ fun FanArtScreen(
             onDelete = {
                 viewModel.delete(fanGoods)
                 detailViewModel.dismissDialog()
+            },
+            onSeriesClick = { seriesName ->
+                detailViewModel.dismissDialog()
+                onNavigateToSeries(seriesName)
             }
         )
     }

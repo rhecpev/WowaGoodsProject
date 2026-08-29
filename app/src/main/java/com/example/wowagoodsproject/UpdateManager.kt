@@ -16,6 +16,43 @@ import java.net.URL
 
 object UpdateManager {
 
+    private suspend fun getFileLastModified(owner: String, repo: String, path: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("https://api.github.com/repos/$owner/$repo/commits?path=$path&per_page=1")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+            val json = connection.inputStream.bufferedReader().readText()
+            val jsonArray = org.json.JSONArray(json)
+            return@withContext if (jsonArray.length() > 0) {
+                jsonArray.getJSONObject(0)
+                    .getJSONObject("commit")
+                    .getJSONObject("committer")
+                    .getString("date")
+            } else null
+        } catch (e: Exception) {
+            Log.d("UpdateManager", "수정 날짜 확인 실패: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun checkAndSaveModifiedDate(prefs: android.content.SharedPreferences, key: String, lastModified: String?): Boolean {
+        if (lastModified == null) return false
+        val savedModified = prefs.getString(key, "")
+        if (lastModified == savedModified) return false
+        prefs.edit().putString(key, lastModified).apply()
+        return true
+    }
+
+    private data class UpdateData<T>(
+        val added: MutableList<String> = mutableListOf(),
+        val updated: MutableList<String> = mutableListOf(),
+        val deleted: MutableList<String> = mutableListOf()
+    ) {
+        fun toTriple() = Triple(added.size, updated.size, deleted.size)
+    }
+
     suspend fun checkAppUpdate(): Pair<String, String>? {
         return withContext(Dispatchers.IO) {
             try {
@@ -23,13 +60,17 @@ object UpdateManager {
                 val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
                 val lastCheckDate = prefs.getString("last_app_update_check_date", "")
                 if (lastCheckDate == today) return@withContext null
-                prefs.edit().putString("last_app_update_check_date", today).apply()
 
                 val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
                 val jsonObj = org.json.JSONObject(json)
                 val latestTag = jsonObj.getString("tag_name")
                 val body = jsonObj.optString("body", "")
-                prefs.edit().putString("cached_latest_version", latestTag).apply()
+
+                prefs.edit()
+                    .putString("last_app_update_check_date", today)
+                    .putString("cached_latest_version", latestTag)
+                    .apply()
+
                 if (latestTag != BuildConfig.VERSION_NAME) {
                     Pair(latestTag, body)
                 } else null
@@ -41,70 +82,71 @@ object UpdateManager {
     }
 
     suspend fun updateCharacters(): Triple<Int, Int, Int> = withContext(Dispatchers.IO) {
+        val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
+        val lastModified = getFileLastModified("rhecpev", "wuwa-goods-data", "characters.json")
+
+        if (!checkAndSaveModifiedDate(prefs, "characters_last_modified", lastModified)) {
+            Log.d("UpdateManager", "characters.json 변경 없음")
+            return@withContext Triple(0, 0, 0)
+        }
+
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/characters.json")
         val type = object : TypeToken<List<CharaEntity>>() {}.type
         val remoteCharas: List<CharaEntity> = Gson().fromJson(json, type)
         val localCharas = App.charaDatabase.charaDao().getAll()
-        val remoteNames = remoteCharas.map { it.charaNm }
+        val localMap = localCharas.associateBy { it.charaNm }
+        val remoteNameSet = remoteCharas.map { it.charaNm }.toSet()
 
-        var addedCount = 0
-        var updatedCount = 0
-        var deletedCount = 0
-        val contentLines = mutableListOf<String>()
+        val update = UpdateData<CharaEntity>()
 
         remoteCharas.forEach { remoteChara ->
-            val localChara = localCharas.find { it.charaNm == remoteChara.charaNm }
+            val localChara = localMap[remoteChara.charaNm]
             if (localChara == null) {
                 App.charaDatabase.charaDao().insert(remoteChara.copy(charaId = 0))
-                addedCount++
-                contentLines.add("[캐릭터 추가] ${remoteChara.charaNm}")
+                update.added.add("[캐릭터 추가] ${remoteChara.charaNm}")
             } else if (localChara.charaUrl != remoteChara.charaUrl) {
                 App.charaDatabase.charaDao().update(
                     localChara.copy(charaUrl = remoteChara.charaUrl)
                 )
-                updatedCount++
-                contentLines.add("[캐릭터 URL 변경] ${remoteChara.charaNm}\n  ${localChara.charaUrl} → ${remoteChara.charaUrl}")            }
-        }
-
-        localCharas.forEach { localChara ->
-            if (!remoteNames.contains(localChara.charaNm)) {
-                App.charaDatabase.charaDao().delete(localChara)
-                deletedCount++
-                contentLines.add("[캐릭터 삭제] ${localChara.charaNm}")
+                update.updated.add("[캐릭터 URL 변경] ${remoteChara.charaNm}\n  ${localChara.charaUrl} → ${remoteChara.charaUrl}")
             }
         }
 
-        if (contentLines.isNotEmpty()) {
-            App.patchNoteDatabase.patchNoteDao().insert(
-                PatchNoteEntity(
-                    patchTime = System.currentTimeMillis(),
-                    patchContent = contentLines.joinToString("\n")
-                )
-            )
+        localCharas.forEach { localChara ->
+            if (localChara.charaNm !in remoteNameSet) {
+                App.charaDatabase.charaDao().delete(localChara)
+                update.deleted.add("[캐릭터 삭제] ${localChara.charaNm}")
+            }
         }
 
-         Triple(addedCount, updatedCount, deletedCount)
+        savePatchNote(update.added + update.updated + update.deleted)
+        return@withContext update.toTriple()
     }
 
     suspend fun updateSeries(): Triple<Int, Int, Int> = withContext(Dispatchers.IO){
+        val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
+        val lastModified = getFileLastModified("rhecpev", "wuwa-goods-data", "series.json")
+
+        if (!checkAndSaveModifiedDate(prefs, "series_last_modified", lastModified)) {
+            Log.d("UpdateManager", "series.json 변경 없음")
+            return@withContext Triple(0, 0, 0)
+        }
+
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/series.json")
         val type = object : TypeToken<List<SeriesEntity>>() {}.type
         val remoteSeries: List<SeriesEntity> = Gson().fromJson(json, type)
         val localSeries = App.seriesDatabase.seriesDao().getAll()
+        val localMap = localSeries.associateBy { "${it.seriesNm}|${it.seriesCountry}" }
+        val remoteKeySet = remoteSeries.map { "${it.seriesNm}|${it.seriesCountry}" }.toSet()
 
-        var addedCount = 0
-        var updatedCount = 0
-        var deletedCount = 0
-        val contentLines = mutableListOf<String>()
+        val update = UpdateData<SeriesEntity>()
 
         remoteSeries.forEach { remote ->
-            val local = localSeries.find {
-                it.seriesNm == remote.seriesNm && it.seriesCountry == remote.seriesCountry
-            }
+            val key = "${remote.seriesNm}|${remote.seriesCountry}"
+            val local = localMap[key]
             if (local == null) {
                 App.seriesDatabase.seriesDao().insert(remote.copy(seriesId = 0))
-                addedCount++
-                contentLines.add("[시리즈 추가] ${remote.seriesNm}")
+                update.added.add("[시리즈 추가] ${remote.seriesNm}")
             } else if (
                 local.seriesUrl != remote.seriesUrl ||
                 local.seriesCharas != remote.seriesCharas ||
@@ -117,75 +159,70 @@ object UpdateManager {
                         seriesDate = remote.seriesDate
                     )
                 )
-                updatedCount++
                 if (local.seriesUrl != remote.seriesUrl)
-                    contentLines.add("[시리즈 URL 변경] ${remote.seriesNm}\n  ${local.seriesUrl} → ${remote.seriesUrl}")
+                    update.updated.add("[시리즈 URL 변경] ${remote.seriesNm}\n  ${local.seriesUrl} → ${remote.seriesUrl}")
                 if (local.seriesCharas != remote.seriesCharas)
-                    contentLines.add("[시리즈 캐릭터 변경] ${remote.seriesNm}\n  ${local.seriesCharas} → ${remote.seriesCharas}")
+                    update.updated.add("[시리즈 캐릭터 변경] ${remote.seriesNm}\n  ${local.seriesCharas} → ${remote.seriesCharas}")
             }
         }
 
-        val remoteKeys = remoteSeries.map { "${it.seriesNm}|${it.seriesCountry}" }
         localSeries.forEach { local ->
-            if (!remoteKeys.contains("${local.seriesNm}|${local.seriesCountry}")) {
+            val key = "${local.seriesNm}|${local.seriesCountry}"
+            if (key !in remoteKeySet) {
                 App.seriesDatabase.seriesDao().delete(local)
-                deletedCount++
-                contentLines.add("[시리즈 삭제] ${local.seriesNm}")
+                update.deleted.add("[시리즈 삭제] ${local.seriesNm}")
             }
         }
 
-        if (contentLines.isNotEmpty()) {
-            App.patchNoteDatabase.patchNoteDao().insert(
-                PatchNoteEntity(
-                    patchTime = System.currentTimeMillis(),
-                    patchContent = contentLines.joinToString("\n")
-                )
-            )
-        }
-
-         Triple(addedCount, updatedCount, deletedCount)
+        savePatchNote(update.added + update.updated + update.deleted)
+        return@withContext update.toTriple()
     }
 
-    suspend fun updateGoods(): Triple<Int, Int, Int> = withContext(Dispatchers.IO)  {
+    suspend fun updateGoods(): Triple<Int, Int, Int> = withContext(Dispatchers.IO) {
+        val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
+        val lastModified = getFileLastModified("rhecpev", "wuwa-goods-data", "goods.json")
+
+        if (!checkAndSaveModifiedDate(prefs, "goods_last_modified", lastModified)) {
+            Log.d("UpdateManager", "goods.json 변경 없음")
+            return@withContext Triple(0, 0, 0)
+        }
+
         val json = fetchJson("https://raw.githubusercontent.com/rhecpev/wuwa-goods-data/refs/heads/main/goods.json")
         val type = object : TypeToken<List<GoodsEntity>>() {}.type
         val remoteGoods: List<GoodsEntity> = Gson().fromJson(json, type)
         val localGoods = App.database.goodsDao().getAll()
+        val localMap = localGoods.associateBy { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsPrice}|${it.goodsMemo}" }
+        val remoteKeySet = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsPrice}|${it.goodsMemo}" }.toSet()
 
-        var addedCount = 0
-        var updatedCount = 0
-        var deletedCount = 0
-        val contentLines = mutableListOf<String>()
+        val update = UpdateData<GoodsEntity>()
 
         remoteGoods.forEach { remote ->
-            val local = localGoods.find {
-                it.goodsSeries == remote.goodsSeries &&
-                        it.goodsChara == remote.goodsChara &&
-                        it.goodsCategory == remote.goodsCategory &&
-                        it.goodsPrice == remote.goodsPrice &&
-                        it.goodsMemo == remote.goodsMemo
-            }
+            val key = "${remote.goodsSeries}|${remote.goodsChara}|${remote.goodsCategory}|${remote.goodsPrice}|${remote.goodsMemo}"
+            val local = localMap[key]
             if (local == null) {
                 App.database.goodsDao().insert(remote.copy(goodsId = 0, goodsStatus = GoodsStatus.NOT_GOTTEN.name))
-                addedCount++
-                contentLines.add("[굿즈 추가] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}")
+                update.added.add("[굿즈 추가] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}")
             } else if (local.goodsUrl != remote.goodsUrl) {
                 App.database.goodsDao().update(
                     local.copy(goodsUrl = remote.goodsUrl)
                 )
-                updatedCount++
-                contentLines.add("[굿즈 URL 변경] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}\n  ${local.goodsUrl} → ${remote.goodsUrl}")            }
-        }
-
-        val remoteKeys = remoteGoods.map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsPrice}|${it.goodsMemo}" }
-        localGoods.forEach { local ->
-            if (!remoteKeys.contains("${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsPrice}|${local.goodsMemo}")) {
-                App.database.goodsDao().delete(local)
-                deletedCount++
-                contentLines.add("[굿즈 삭제] ${local.goodsSeries} - ${local.goodsChara} - ${local.goodsCategory} - ${local.goodsPrice}")
+                update.updated.add("[굿즈 URL 변경] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}\n  ${local.goodsUrl} → ${remote.goodsUrl}")
             }
         }
 
+        localGoods.forEach { local ->
+            val key = "${local.goodsSeries}|${local.goodsChara}|${local.goodsCategory}|${local.goodsPrice}|${local.goodsMemo}"
+            if (key !in remoteKeySet) {
+                App.database.goodsDao().delete(local)
+                update.deleted.add("[굿즈 삭제] ${local.goodsSeries} - ${local.goodsChara} - ${local.goodsCategory} - ${local.goodsPrice}")
+            }
+        }
+
+        savePatchNote(update.added + update.updated + update.deleted)
+        return@withContext update.toTriple()
+    }
+
+    private suspend fun savePatchNote(contentLines: List<String>) {
         if (contentLines.isNotEmpty()) {
             App.patchNoteDatabase.patchNoteDao().insert(
                 PatchNoteEntity(
@@ -194,8 +231,6 @@ object UpdateManager {
                 )
             )
         }
-
-         Triple(addedCount, updatedCount, deletedCount)
     }
 
     private fun fetchJson(urlStr: String): String {

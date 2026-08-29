@@ -21,13 +21,12 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.ui.theme.AppStyles
-import java.io.File
-import java.net.URI
 
 @Composable
 fun SetGoodsDetailDialog(
     setGoods: GoodsEntity,
     components: List<GoodsEntity>,
+    initialComponent: GoodsEntity? = null,
     onDismiss: () -> Unit,
     onToggleGotten: (GoodsEntity) -> Unit,
     onSetPending: (GoodsEntity) -> Unit = {},
@@ -35,7 +34,7 @@ fun SetGoodsDetailDialog(
     highlightChara: String? = null,
     highlightCategory: String? = null
 ){
-    var selectedComponent by remember { mutableStateOf<GoodsEntity?>(null) }
+    var selectedComponent by remember(initialComponent) { mutableStateOf(initialComponent) }
     val currentComponent = selectedComponent?.let { selected ->
         components.find { it.goodsId == selected.goodsId }
     }
@@ -55,6 +54,21 @@ fun SetGoodsDetailDialog(
                     .fillMaxSize()
                     .padding(AppStyles.paddingLarge)
             ) {
+                Text(
+                    text = setGoods.memo.ifEmpty { CATEGORY_SET },
+                    style = AppStyles.textCardTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${setGoods.series} · 구성품 ${components.size}개",
+                    style = AppStyles.textCardSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -70,12 +84,7 @@ fun SetGoodsDetailDialog(
                     ) {
                         if (currentComponent != null) {
                             val comp = currentComponent
-                            val compEncodedPath = if (comp.imgPath.startsWith("http")) {
-                                try {
-                                    URI(null, comp.imgPath.removePrefix("https://"), null).toASCIIString()
-                                        .let { "https://" + it.removePrefix("https:/") }
-                                } catch (e: Exception) { comp.imgPath }
-                            } else comp.imgPath
+                            val compEncodedPath = encodeGoodsImagePath(comp.imgPath)
 
                             LazyColumn(
                                 modifier = Modifier.weight(1f)
@@ -209,12 +218,7 @@ fun SetGoodsDetailDialog(
                                             .background(MaterialTheme.colorScheme.surfaceVariant),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        val compEncodedPath = if (component.imgPath.startsWith("http")) {
-                                            try {
-                                                URI(null, component.imgPath.removePrefix("https://"), null).toASCIIString()
-                                                    .let { "https://" + it.removePrefix("https:/") }
-                                            } catch (e: Exception) { component.imgPath }
-                                        } else component.imgPath
+                                        val compEncodedPath = encodeGoodsImagePath(component.imgPath)
                                         Image(
                                             painter = rememberAsyncImagePainter(
                                                 model = if (compEncodedPath.isNotEmpty()) compEncodedPath else null

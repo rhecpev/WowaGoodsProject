@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 private val Gold = Color(0xFFF3E85A)
 private val GoldLight = Color(0xFFE8C97A) // 밝은 금색
@@ -59,6 +60,12 @@ fun WowaGoodsProjectTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val systemUiController = rememberSystemUiController()
+
+    systemUiController.setSystemBarsColor(
+        color = colorScheme.background,
+        darkIcons = !darkTheme
+    )
 
     MaterialTheme(
         colorScheme = colorScheme,

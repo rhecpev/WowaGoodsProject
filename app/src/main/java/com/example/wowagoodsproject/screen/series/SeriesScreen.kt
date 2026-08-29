@@ -15,11 +15,18 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +52,8 @@ import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterGoodsList
-import com.example.wowagoodsproject.component.filterGoodsListForBar
+import com.example.wowagoodsproject.component.findSetGoods
+import com.example.wowagoodsproject.component.getSetComponents
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
@@ -69,6 +77,7 @@ fun SeriesScreen(
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val seriesCharaCountMap by viewModel.seriesCharaCountMap.collectAsState()
+    val seriesList by viewModel.seriesList.collectAsState()
 
     // ViewModel에서 collectAsState로 변경
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
@@ -78,6 +87,7 @@ fun SeriesScreen(
     val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
     var showCharaFilterDialog by remember { mutableStateOf(false) }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
+    var setDialogComponent by remember { mutableStateOf<GoodsEntity?>(null) }
     var showGoodsFilterDialog by remember { mutableStateOf(false) }
 
     val sortedCharaList = allCharaList
@@ -106,13 +116,12 @@ fun SeriesScreen(
 
 
     val filteredGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(seriesGoods, selectedGoodsCharaFilter).second,
-        allGoods = seriesGoods,
+        list = filterViewModel.applyFilter(seriesGoods).second,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
-    val AllSeriesGoods = filterGoodsListForBar(
-        list = filterViewModel.applyFilter(seriesGoods, selectedGoodsCharaFilter).first,
+    val AllSeriesGoods = filterGoodsList(
+        list = filterViewModel.applyFilter(seriesGoods).first,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
@@ -122,25 +131,15 @@ fun SeriesScreen(
         filterViewModel.clearGoodsFilter()
     }
 
-    selectedSetGoods?.let { setGoods ->
-        val components = seriesGoods.filter {
-            it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
-
-        }
-        SetGoodsDetailDialog(
-            setGoods = setGoods,
-            components = components,
-            onDismiss = { selectedSetGoods = null },
-            onToggleGotten = { component -> viewModel.toggleGotten(component) },
-            onSetPending = { component -> viewModel.setPending(component) },
-            onBulkToggleGotten = { isGotten -> viewModel.bulkToggleGotten(setGoods, isGotten); selectedSetGoods = null },
-            highlightChara = selectedGoodsCharaFilter,
-            highlightCategory = selectedGoodsCategoryFilter
-        )
+    // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 다이얼로그가 최신 값을 보여주도록 다시 조회한다.
+    val displayedGoods = selectedGoods?.let { selected ->
+        (selected as? GoodsEntity)?.let { sel -> seriesGoods.find { it.goodsId == sel.goodsId } } ?: selected
     }
 
-    selectedGoods?.let { goods ->
+    displayedGoods?.let { goods ->
         val officialGoods = goods as? GoodsEntity
+        val parentSet = officialGoods?.let { findSetGoods(it, seriesGoods) }
+        val setComponents = parentSet?.let { getSetComponents(it, seriesGoods) } ?: emptyList()
         GoodsDetailDialog(
             imgPath = goods.imgPath,
             series = goods.series,
@@ -149,6 +148,13 @@ fun SeriesScreen(
             price = goods.price,
             isGotten = goods.isGotten,
             memo = (goods as? GoodsEntity)?.goodsMemo ?: "",
+            setGoods = parentSet,
+            setComponentTotal = setComponents.size,
+            setComponentGotten = setComponents.count { it.isGotten },
+            onSetClick = {
+                setDialogComponent = officialGoods
+                selectedSetGoods = parentSet
+            },
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleGotten(it) }
@@ -160,7 +166,30 @@ fun SeriesScreen(
             },
             isPending = (goods as? GoodsEntity)?.status == GoodsStatus.PENDING,
             onDelete = {},
-            showDelete = false
+            showDelete = false,
+            onSeriesClick = { seriesName ->
+                detailViewModel.dismissDialog()
+                val series = seriesList.find { it.seriesNm == seriesName }
+                series?.let { viewModel.selectSeries(it) }
+            }
+        )
+    }
+
+    selectedSetGoods?.let { setGoods ->
+        SetGoodsDetailDialog(
+            setGoods = setGoods,
+            components = getSetComponents(setGoods, seriesGoods),
+            initialComponent = setDialogComponent,
+            onDismiss = { selectedSetGoods = null; setDialogComponent = null },
+            onToggleGotten = { component -> viewModel.toggleGotten(component) },
+            onSetPending = { component -> viewModel.setPending(component) },
+            onBulkToggleGotten = { isGotten ->
+                viewModel.bulkToggleGotten(setGoods, isGotten)
+                selectedSetGoods = null
+                setDialogComponent = null
+            },
+            highlightChara = selectedGoodsCharaFilter,
+            highlightCategory = selectedGoodsCategoryFilter
         )
     }
 
@@ -459,35 +488,41 @@ fun SeriesScreen(
             )
             GoodsListContent(
                 goods = filteredGoods,
-                allGoods = seriesGoods,
                 isGridMode = isGridMode,
                 gridColumns = gridColumns,
-                filterType = filterType,
-                highlightCategory = selectedGoodsCategoryFilter,
-                highlightChara = selectedGoodsCharaFilter,
-                onGoodsClick = { detailViewModel.selectGoods(it) },
-                onSetGoodsClick = { selectedSetGoods = it },
-                onComponentClick = { detailViewModel.selectGoods(it) },
-                onBulkToggleGotten = { setGoods, isGotten -> viewModel.bulkToggleGotten(setGoods, isGotten) }
-
+                onGoodsClick = { detailViewModel.selectGoods(it) }
             )
         } else {
-            TabRow(selectedTabIndex = selectedTab) {
-                viewModel.countries.forEachIndexed { index, country ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { viewModel.setSelectedTab(index) },
-                        text = {
-                            Text(
-                                country,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1
-                            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(selectedTab) {
+                        detectHorizontalDragGestures { change, dragAmount ->
+                            change.consume()
+                            if (dragAmount > 100) {
+                                if (selectedTab > 0) viewModel.setSelectedTab(selectedTab - 1)
+                            } else if (dragAmount < -100) {
+                                if (selectedTab < viewModel.countries.size - 1) viewModel.setSelectedTab(selectedTab + 1)
+                            }
                         }
-                    )
+                    }
+            ) {
+                TabRow(selectedTabIndex = selectedTab) {
+                    viewModel.countries.forEachIndexed { index, country ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { viewModel.setSelectedTab(index) },
+                            text = {
+                                Text(
+                                    country,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1
+                                )
+                            }
+                        )
+                    }
                 }
-            }
-            if (filteredList.isEmpty()) {
+                if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -497,17 +532,29 @@ fun SeriesScreen(
                     Text(text = "등록된 시리즈가 없습니다", color = MaterialTheme.colorScheme.onBackground)
                 }
             } else {
-                val scrollIndex by viewModel.scrollIndex.collectAsState()
-                val scrollOffset by viewModel.scrollOffset.collectAsState()
-                val listState = rememberLazyListState(
-                    initialFirstVisibleItemIndex = scrollIndex,
-                    initialFirstVisibleItemScrollOffset = scrollOffset
-                )
+                val tabScrollPositions by viewModel.tabScrollPositions.collectAsState()
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
-                ) {
+                key(selectedTab) {
+                    val currentTabPosition = tabScrollPositions[selectedTab] ?: Pair(0, 0)
+                    val listState = rememberLazyListState(
+                        initialFirstVisibleItemIndex = currentTabPosition.first,
+                        initialFirstVisibleItemScrollOffset = currentTabPosition.second
+                    )
+
+                    LaunchedEffect(Unit) {
+                        snapshotFlow {
+                            Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+                        }
+                            .distinctUntilChanged()
+                            .collect { (index, offset) ->
+                                viewModel.saveTabScrollPosition(selectedTab, index, offset)
+                            }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState
+                    ) {
                     itemsIndexed(filteredList) { index, series ->
                         val charas = viewModel.getCharasForSeries(series)
                         Card(
@@ -794,6 +841,8 @@ fun SeriesScreen(
                         }
                     }
                 }
+                }
+            }
             }
         }
     }

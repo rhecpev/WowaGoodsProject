@@ -103,17 +103,10 @@ class MyPageViewModel : ViewModel() {
     fun loadGottenGoods() {
         viewModelScope.launch {
             val allGoods = App.database.goodsDao().getAll()
-            val setMemos =
-                allGoods.filter { it.goodsCategory == CATEGORY_SET }.map { it.goodsMemo }.toSet()
 
-            val gottenGoods = allGoods.filter { goods ->
-                when {
-                    goods.goodsCategory == CATEGORY_SET -> {
-                        allGoods.any { it.goodsCategory != CATEGORY_SET && it.goodsMemo == goods.goodsMemo && it.goodsSeries == goods.goodsSeries && it.goodsStatus != GoodsStatus.NOT_GOTTEN.name }
-                    }
-                    goods.goodsMemo.isNotEmpty() && goods.goodsMemo in setMemos && goods.goodsCategory != CATEGORY_SET -> goods.goodsStatus != GoodsStatus.NOT_GOTTEN.name
-                    else -> goods.goodsStatus != GoodsStatus.NOT_GOTTEN.name
-                }
+            // 세트 굿즈는 카운트/목록에서 제외하고 낱개 굿즈만 집계한다.
+            val gottenGoods = allGoods.filter {
+                it.goodsCategory != CATEGORY_SET && it.goodsStatus != GoodsStatus.NOT_GOTTEN.name
             }
 
             _officialGottenGoods.value = gottenGoods
@@ -122,7 +115,7 @@ class MyPageViewModel : ViewModel() {
                 App.database.goodsDao().getBySeries(it)
             }
             _fanGottenGoods.value =
-                App.fanDatabase.fanGoodsDao().getAll().filter { it.fanGoodsIsGotten }
+                App.fanDatabase.fanGoodsDao().getAll().filter { it.isGotten }
         }
     }
 

@@ -48,6 +48,10 @@ class SeriesViewModel : ViewModel() {
     val filteredSeriesList: StateFlow<List<SeriesEntity>> = _filteredSeriesList
 
     val countries = listOf("전체","버전", "중국", "대만", "한국", "일본", "기타")
+
+    private val _tabScrollPositions = MutableStateFlow<Map<Int, Pair<Int, Int>>>(emptyMap())
+    val tabScrollPositions: StateFlow<Map<Int, Pair<Int, Int>>> = _tabScrollPositions
+
     private val _scrollIndex = MutableStateFlow(0)
     val scrollIndex: StateFlow<Int> = _scrollIndex
 
@@ -57,6 +61,16 @@ class SeriesViewModel : ViewModel() {
     fun saveScrollPosition(index: Int, offset: Int) {
         _scrollIndex.value = index
         _scrollOffset.value = offset
+    }
+
+    fun saveTabScrollPosition(tabIndex: Int, scrollIndex: Int, scrollOffset: Int) {
+        val positions = _tabScrollPositions.value.toMutableMap()
+        positions[tabIndex] = Pair(scrollIndex, scrollOffset)
+        _tabScrollPositions.value = positions
+    }
+
+    fun getTabScrollPosition(tabIndex: Int): Pair<Int, Int> {
+        return _tabScrollPositions.value[tabIndex] ?: Pair(0, 0)
     }
 
 
@@ -87,14 +101,15 @@ class SeriesViewModel : ViewModel() {
 
     private suspend fun loadCharaGoodsCount() {
         val allGoods = App.database.goodsDao().getAll()
+            .filter { it.goodsCategory != CATEGORY_SET }
         val countMap = mutableMapOf<String, Pair<Int, Int>>()
         allGoods.forEach { goods ->
             goods.goodsChara.split(",").forEach { chara ->
                 val name = chara.trim()
+                if (name.isEmpty()) return@forEach
                 val current = countMap[name] ?: Pair(0, 0)
-                val gotten = if (goods.goodsIsGotten) current.first + 1 else current.first
-                val total = current.second + 1
-                countMap[name] = Pair(gotten, total)
+                val gotten = if (goods.goodsStatus == GoodsStatus.GOTTEN.name) current.first + 1 else current.first
+                countMap[name] = Pair(gotten, current.second + 1)
             }
         }
         _charaGoodsCountMap.value = countMap

@@ -74,5 +74,6 @@ dependencies {
     implementation(libs.gson)
     implementation("io.coil-kt:coil-gif:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
 
 }

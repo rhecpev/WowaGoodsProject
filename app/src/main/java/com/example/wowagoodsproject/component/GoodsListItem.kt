@@ -13,8 +13,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.ui.theme.AppStyles
-import java.io.File
-import java.net.URI
 
 @Composable
 fun GoodsListItem(
@@ -22,31 +20,18 @@ fun GoodsListItem(
     series: String,
     chara: String,
     category: String,
-    isExpanded: Boolean = false,
     price: String,
     isGotten: Boolean,
     gottenStatus: GottenStatus? = null,
     memo: String,
-    components: List<String> = emptyList(),
-    highlightCategory: String? = null, // 추가
     onClick: () -> Unit = {}
 ){
-    val encodedPath = if (imgPath.startsWith("http")) {
-        try {
-            URI(null, imgPath.removePrefix("https://"), null).toASCIIString()
-                .let { "https://" + it.removePrefix("https:/") }
-        } catch (e: Exception) {
-            imgPath
-        }
-    } else imgPath
+    val encodedPath = encodeGoodsImagePath(imgPath)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                if (isExpanded) MaterialTheme.colorScheme.secondaryContainer
-                else MaterialTheme.colorScheme.surface
-            )
+            .background(MaterialTheme.colorScheme.surface)
             .clickable { onClick() }
     ) {
         Row(
@@ -92,35 +77,13 @@ fun GoodsListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (components.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "$category [",
-                            style = AppStyles.textCardSubtitle,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
-                        )
-                        components.forEachIndexed { index, cat ->
-                            Text(
-                                text = if (index < components.lastIndex) "$cat, " else "$cat]",
-                                style = AppStyles.textCardSubtitle,
-                                color = if (cat == highlightCategory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                } else {
-                    Text(
-                        text = if (memo.isNotEmpty()) "${category} / ${memo}" else category,
-                        style = AppStyles.textCardSubtitle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = if (memo.isNotEmpty()) "${category} / ${memo}" else category,
+                    style = AppStyles.textCardSubtitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Text(
                     text = price,
                     style = AppStyles.textPrice,

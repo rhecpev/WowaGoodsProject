@@ -29,7 +29,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.widget.Toast
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.component.FanGoodsListContent
@@ -43,12 +45,14 @@ import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
-import com.example.wowagoodsproject.component.filterGoodsListForBar
+import com.example.wowagoodsproject.component.findSetGoods
+import com.example.wowagoodsproject.component.getSetComponents
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.ui.theme.AppStyles
+import com.example.wowagoodsproject.screen.series.SeriesViewModel
 
 @Composable
 fun CharacterScreen(
@@ -56,8 +60,12 @@ fun CharacterScreen(
     viewModel: CharacterViewModel = viewModel(),
     detailViewModel: GoodsDetailViewModel = viewModel(),
     filterViewModel: FilterViewModel = viewModel(),
-    listModeViewModel: ListModeViewModel = viewModel()
+    listModeViewModel: ListModeViewModel = viewModel(),
+    onNavigateToSeries: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val seriesViewModel: SeriesViewModel = viewModel()
+    val seriesList by seriesViewModel.seriesList.collectAsState()
     val charaList by viewModel.charaList.collectAsState()
     val selectedChara by viewModel.selectedChara.collectAsState()
     val officialGoods by viewModel.officialGoods.collectAsState()
@@ -75,6 +83,7 @@ fun CharacterScreen(
     var showCategoryFilterDialog by remember { mutableStateOf(false) }
     var categorySearch by remember { mutableStateOf("") }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
+    var setDialogComponent by remember { mutableStateOf<GoodsEntity?>(null) }
 
     val filteredCharaList = if (showFavoriteOnly)
         charaList.filter { it.charaIsFavorite }.sortedBy { it.charaNm }
@@ -83,7 +92,7 @@ fun CharacterScreen(
             .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
     val categoryList =
-        (filterViewModel.applyFilter(officialGoods, selectedChara?.charaNm).second + filterViewModel.applyFilter(fanGoods).second)
+        (filterViewModel.applyFilter(officialGoods).second + filterViewModel.applyFilter(fanGoods).second)
             .map { it.category }
             .distinct()
             .filter { it.isNotEmpty() && it != CATEGORY_SET }
@@ -93,13 +102,12 @@ fun CharacterScreen(
         it.contains(categorySearch, ignoreCase = true)
     }
     val filteredOfficialGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(officialGoods, selectedChara?.charaNm).second,
-        allGoods = allSeriesGoods,
+        list = filterViewModel.applyFilter(officialGoods).second,
         categoryFilter = selectedCategoryFilter
     )
 
-    val AllFilteredOfficialGoods = filterGoodsListForBar(
-        list = filterViewModel.applyFilter(officialGoods, selectedChara?.charaNm).first,
+    val AllFilteredOfficialGoods = filterGoodsList(
+        list = filterViewModel.applyFilter(officialGoods).first,
         categoryFilter = selectedCategoryFilter
     )
 
@@ -131,24 +139,6 @@ fun CharacterScreen(
         filterViewModel.setFilter(com.example.wowagoodsproject.component.FilterType.ALL)
         filterViewModel.clearGoodsFilter()
         categorySearch = ""
-    }
-
-    // 세트 굿즈 다이얼로그
-    selectedSetGoods?.let { setGoods ->
-        val components = allSeriesGoods.filter {
-            it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
-
-        }
-        SetGoodsDetailDialog(
-            setGoods = setGoods,
-            components = components,
-            onDismiss = { selectedSetGoods = null },
-            onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
-            onSetPending = { component -> viewModel.setOfficialPending(component) },
-            onBulkToggleGotten = { isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten); selectedSetGoods = null },
-            highlightChara = selectedChara?.charaNm,
-            highlightCategory = selectedCategoryFilter
-        )
     }
 
     // 카테고리 필터 다이얼로그
@@ -325,9 +315,20 @@ fun CharacterScreen(
         }
     }
 
-    selectedGoods?.let { goods ->
+    // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 다이얼로그가 최신 값을 보여주도록 다시 조회한다.
+    val displayedGoods = selectedGoods?.let { selected ->
+        when (selected) {
+            is GoodsEntity -> allSeriesGoods.find { it.goodsId == selected.goodsId } ?: selected
+            is FanGoodsEntity -> fanGoods.find { it.fanGoodsId == selected.fanGoodsId } ?: selected
+            else -> selected
+        }
+    }
+
+    displayedGoods?.let { goods ->
         val officialGoods = goods as? GoodsEntity
         val fanGoods = goods as? FanGoodsEntity
+        val parentSet = officialGoods?.let { findSetGoods(it, allSeriesGoods) }
+        val setComponents = parentSet?.let { getSetComponents(it, allSeriesGoods) } ?: emptyList()
         GoodsDetailDialog(
             imgPath = goods.imgPath,
             series = goods.series,
@@ -337,6 +338,13 @@ fun CharacterScreen(
             isGotten = goods.isGotten,
             memo = (goods as? GoodsEntity)?.goodsMemo ?: (goods as? FanGoodsEntity)?.fanGoodsMemo
             ?: "",
+            setGoods = parentSet,
+            setComponentTotal = setComponents.size,
+            setComponentGotten = setComponents.count { it.isGotten },
+            onSetClick = {
+                setDialogComponent = officialGoods
+                selectedSetGoods = parentSet
+            },
             onDismiss = { detailViewModel.dismissDialog() },
             onToggleGotten = {
                 officialGoods?.let { viewModel.toggleOfficialGotten(it) }
@@ -350,7 +358,30 @@ fun CharacterScreen(
                 detailViewModel.dismissDialog()
             },
             onDelete = {},
-            showDelete = false
+            showDelete = false,
+            onSeriesClick = { seriesName ->
+                detailViewModel.dismissDialog()
+                onNavigateToSeries(seriesName)
+            }
+        )
+    }
+
+    // 세트 굿즈 다이얼로그
+    selectedSetGoods?.let { setGoods ->
+        SetGoodsDetailDialog(
+            setGoods = setGoods,
+            components = getSetComponents(setGoods, allSeriesGoods),
+            initialComponent = setDialogComponent,
+            onDismiss = { selectedSetGoods = null; setDialogComponent = null },
+            onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
+            onSetPending = { component -> viewModel.setOfficialPending(component) },
+            onBulkToggleGotten = { isGotten ->
+                viewModel.bulkToggleOfficialGotten(setGoods, isGotten)
+                selectedSetGoods = null
+                setDialogComponent = null
+            },
+            highlightChara = selectedChara?.charaNm,
+            highlightCategory = selectedCategoryFilter
         )
     }
 
@@ -505,17 +536,9 @@ fun CharacterScreen(
                     0 -> {
                         GoodsListContent(
                             goods = filteredOfficialGoods,
-                            allGoods = allSeriesGoods,
                             isGridMode = isGridMode,
                             gridColumns = gridColumns,
-                            filterType = filterType,
-                            highlightCategory = selectedCategoryFilter,
-                            highlightChara = selectedChara?.charaNm,
-                            onGoodsClick = { detailViewModel.selectGoods(it) },
-                            onSetGoodsClick = { selectedSetGoods = it },
-                            onComponentClick = { detailViewModel.selectGoods(it) },
-                            onBulkToggleGotten = { setGoods, isGotten -> viewModel.bulkToggleOfficialGotten(setGoods, isGotten) }
-
+                            onGoodsClick = { detailViewModel.selectGoods(it) }
                         )
                     }
 

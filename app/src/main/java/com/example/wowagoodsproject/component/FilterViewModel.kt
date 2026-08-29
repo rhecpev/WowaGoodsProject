@@ -35,43 +35,13 @@ class FilterViewModel : ViewModel() {
         _selectedCategoryFilter.value = null
     }
 
-    fun <T : GoodsItem> applyFilter(list: List<T>, charaFilter: String? = null): Pair<List<T>, List<T>> {
+    /** 세트 굿즈는 목록에 노출하지 않으므로 낱개 굿즈 상태만 판정한다. */
+    fun <T : GoodsItem> applyFilter(list: List<T>): Pair<List<T>, List<T>> {
         val filtered = when (_filterType.value) {
             FilterType.ALL -> list
-            FilterType.GOTTEN -> list.filter { goods ->
-                if (goods.category == CATEGORY_SET) {
-                    val components = list.filter {
-                        it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series
-                    }
-                    val target = if (charaFilter != null) components.filter { it.chara.contains(charaFilter) } else components
-                    if (charaFilter != null) target.isNotEmpty() && target.any { it.isGotten }
-                    else target.isNotEmpty() && target.all { it.isGotten }
-                } else {
-                    goods.isGotten
-                }
-            }
-            FilterType.NOT_GOTTEN -> list.filter { goods ->
-                if (goods.category == CATEGORY_SET) {
-                    val components = list.filter {
-                        it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series
-                    }
-                    val target = if (charaFilter != null) components.filter { it.chara.contains(charaFilter) } else components
-                    target.any { it.status == GoodsStatus.NOT_GOTTEN }
-                } else {
-                    goods.status == GoodsStatus.NOT_GOTTEN
-                }
-            }
-            FilterType.PENDING -> list.filter { goods ->
-                if (goods.category == CATEGORY_SET) {
-                    val components = list.filter {
-                        it.category != CATEGORY_SET && it.memo == goods.memo && it.series == goods.series
-                    }
-                    val target = if (charaFilter != null) components.filter { it.chara.contains(charaFilter) } else components
-                    target.any { it.status == GoodsStatus.PENDING }
-                } else {
-                    goods.status == GoodsStatus.PENDING
-                }
-            }
+            FilterType.GOTTEN -> list.filter { it.isGotten }
+            FilterType.NOT_GOTTEN -> list.filter { it.status == GoodsStatus.NOT_GOTTEN }
+            FilterType.PENDING -> list.filter { it.status == GoodsStatus.PENDING }
         }
         return Pair(list, filtered)
     }
