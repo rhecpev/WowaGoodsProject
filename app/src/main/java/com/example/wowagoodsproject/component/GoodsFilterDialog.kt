@@ -71,7 +71,7 @@ fun GoodsFilterDialog(
                     ) {
                         Text(text = "필터", style = AppStyles.textCardTitle)
                         Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                        TabRow(selectedTabIndex = dialogTab) {
+                        SecondaryTabRow(selectedTabIndex = dialogTab) {
                             Tab(
                                 selected = dialogTab == 0,
                                 onClick = { dialogTab = 0; filterSearch = "" },
@@ -139,7 +139,7 @@ fun GoodsFilterDialog(
                 Column(modifier = Modifier.padding(AppStyles.paddingLarge)) {
                     Text(text = "필터", style = AppStyles.textCardTitle)
                     Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                    TabRow(selectedTabIndex = dialogTab) {
+                    SecondaryTabRow(selectedTabIndex = dialogTab) {
                         Tab(
                             selected = dialogTab == 0,
                             onClick = { dialogTab = 0; filterSearch = "" },

@@ -7,6 +7,8 @@ import com.example.wowagoodsproject.db.character.CharaDatabase
 import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
 import com.example.wowagoodsproject.db.official.GoodsDatabase
 import com.example.wowagoodsproject.db.series.SeriesDatabase
+import com.example.wowagoodsproject.db.changed.ChangedGoodsDatabase
+import com.example.wowagoodsproject.db.news.NewsDatabase
 import com.example.wowagoodsproject.db.patchnote.PatchNoteDatabase
 import androidx.work.*
 import java.util.Calendar
@@ -21,6 +23,8 @@ class App : Application() {
         lateinit var seriesDatabase: SeriesDatabase
 
         lateinit var patchNoteDatabase: PatchNoteDatabase
+        lateinit var newsDatabase: NewsDatabase
+        lateinit var changedGoodsDatabase: ChangedGoodsDatabase
         lateinit var appContext: Context
 
         fun getThemeMode(): Int {
@@ -44,13 +48,13 @@ class App : Application() {
             applicationContext,
             GoodsDatabase::class.java,
             "goods_database"
-        ).addMigrations(GoodsDatabase.MIGRATION_1_2).build()
+        ).addMigrations(GoodsDatabase.MIGRATION_1_2, GoodsDatabase.MIGRATION_2_3).build()
 
         fanDatabase = Room.databaseBuilder(
             applicationContext,
             FanGoodsDatabase::class.java,
             "fan_goods_database"
-        ).addMigrations(FanGoodsDatabase.MIGRATION_1_2).build()
+        ).addMigrations(FanGoodsDatabase.MIGRATION_1_2, FanGoodsDatabase.MIGRATION_2_3).build()
 
         charaDatabase = Room.databaseBuilder(
             applicationContext,
@@ -67,6 +71,18 @@ class App : Application() {
             applicationContext,
             PatchNoteDatabase::class.java,
             "patch_note_database"
+        ).build()
+
+        newsDatabase = Room.databaseBuilder(
+            applicationContext,
+            NewsDatabase::class.java,
+            "news_database"
+        ).build()
+
+        changedGoodsDatabase = Room.databaseBuilder(
+            applicationContext,
+            ChangedGoodsDatabase::class.java,
+            "changed_goods_database"
         ).build()
 
 

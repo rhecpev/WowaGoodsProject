@@ -70,13 +70,32 @@ class MyPageViewModel : ViewModel() {
     private val _isImporting = MutableStateFlow(false)
     val isImporting: StateFlow<Boolean> = _isImporting
 
+    private val _importProgress = MutableStateFlow(0f)
+    val importProgress: StateFlow<Float> = _importProgress
+
+    private fun reportImport(fraction: Float) {
+        _importProgress.value = fraction.coerceIn(0f, 1f)
+    }
+
     private val _latestVersion = MutableStateFlow<String?>(null)
     val latestVersion: StateFlow<String?> = _latestVersion
+
+    private val _unreadNewsCount = MutableStateFlow(0)
+    val unreadNewsCount: StateFlow<Int> = _unreadNewsCount
 
     init {
         loadCharaList()
         loadGottenGoods()
         checkLatestVersion()
+        observeUnreadNews()
+    }
+
+    private fun observeUnreadNews() {
+        viewModelScope.launch {
+            App.newsDatabase.newsDao().getUnreadCountFlow().collectLatest {
+                _unreadNewsCount.value = it
+            }
+        }
     }
 
     private fun checkLatestVersion() {
@@ -119,12 +138,6 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
-    fun toggleFavorite(chara: CharaEntity) {
-        viewModelScope.launch {
-            val updated = chara.copy(charaIsFavorite = !chara.charaIsFavorite)
-            App.charaDatabase.charaDao().update(updated)
-        }
-    }
     fun toggleOfficialGotten(goods: GoodsEntity) {
         viewModelScope.launch {
             val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
@@ -322,6 +335,7 @@ class MyPageViewModel : ViewModel() {
     fun importData(context: Context, uri: Uri) {
         viewModelScope.launch {
             _isImporting.value = true
+            _importProgress.value = 0f
             try {
                 withContext(Dispatchers.IO) {
                     val gson = Gson()
@@ -353,9 +367,16 @@ class MyPageViewModel : ViewModel() {
                             }
                         }
                     }
-                    imageMap.forEach { (fileName, bytes) ->
-                        val imgFile = File(context.filesDir, fileName)
-                        imgFile.writeBytes(bytes)
+                    reportImport(0.25f)
+
+                    if (imageMap.isEmpty()) {
+                        reportImport(0.45f)
+                    } else {
+                        imageMap.entries.forEachIndexed { i, (fileName, bytes) ->
+                            val imgFile = File(context.filesDir, fileName)
+                            imgFile.writeBytes(bytes)
+                            reportImport(0.25f + 0.20f * (i + 1) / imageMap.size)
+                        }
                     }
                     fanGoodsJson?.let { json ->
                         val type = object : TypeToken<List<FanGoodsEntity>>() {}.type
@@ -370,6 +391,7 @@ class MyPageViewModel : ViewModel() {
                         }
                         App.fanDatabase.fanGoodsDao().insertAll(mappedGoods)
                     }
+                    reportImport(0.6f)
                     officialJson?.let { json ->
                         val type = object : TypeToken<List<OfficialGoodsBackup>>() {}.type
                         val backups: List<OfficialGoodsBackup> = gson.fromJson(json, type)
@@ -378,23 +400,31 @@ class MyPageViewModel : ViewModel() {
                         val localGoodsMap = allLocalGoods.associateBy {
                             "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsMemo}|${it.goodsPrice}"
                         }
-                        backups.forEach { backup ->
+                        backups.forEachIndexed { i, backup ->
                             val key = "${backup.goodsSeries}|${backup.goodsChara}|${backup.goodsCategory}|${backup.goodsMemo}|${backup.goodsPrice}"
                             localGoodsMap[key]?.let { goods ->
                                 App.database.goodsDao().update(goods.copy(goodsStatus = backup.goodsStatus))
                             }
+                            if (backups.isNotEmpty()) {
+                                reportImport(0.6f + 0.32f * (i + 1) / backups.size)
+                            }
                         }
                     }
+                    reportImport(0.92f)
                     favoriteCharaJson?.let { json ->
                         val type = object : TypeToken<List<String>>() {}.type
                         val favoriteCharas: List<String> = gson.fromJson(json, type)
                         val allCharas = App.charaDatabase.charaDao().getAll()
-                        allCharas.forEach { chara ->
+                        allCharas.forEachIndexed { i, chara ->
                             App.charaDatabase.charaDao().update(
                                 chara.copy(charaIsFavorite = favoriteCharas.contains(chara.charaNm))
                             )
+                            if (allCharas.isNotEmpty()) {
+                                reportImport(0.92f + 0.08f * (i + 1) / allCharas.size)
+                            }
                         }
                     }
+                    reportImport(1f)
                 }
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, "입력 완료!", Toast.LENGTH_SHORT).show()

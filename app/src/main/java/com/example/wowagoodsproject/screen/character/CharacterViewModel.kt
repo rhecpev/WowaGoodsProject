@@ -56,6 +56,14 @@ class CharacterViewModel : ViewModel() {
         }
     }
 
+    fun toggleFavorite(chara: CharaEntity) {
+        viewModelScope.launch {
+            App.charaDatabase.charaDao().update(
+                chara.copy(charaIsFavorite = !chara.charaIsFavorite)
+            )
+        }
+    }
+
     fun selectChara(chara: CharaEntity) {
         _selectedChara.value = chara
         viewModelScope.launch {

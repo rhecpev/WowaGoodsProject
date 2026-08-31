@@ -19,8 +19,8 @@ android {
         applicationId = "com.example.wowagoodsproject"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,6 +45,10 @@ android {
 
 kotlin {
     jvmToolchain(17)
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -74,6 +78,5 @@ dependencies {
     implementation(libs.gson)
     implementation("io.coil-kt:coil-gif:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
 
 }

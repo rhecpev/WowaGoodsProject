@@ -11,8 +11,15 @@ abstract class FanGoodsDatabase : RoomDatabase() {
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsMemo TEXT NOT NULL DEFAULT ''")
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsMemo TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsStatus TEXT NOT NULL DEFAULT 'NOT_GOTTEN'")
+                db.execSQL("UPDATE tb_fan_goods SET fanGoodsStatus = 'GOTTEN' WHERE fanGoodsIsGotten = 1")
             }
         }
     }

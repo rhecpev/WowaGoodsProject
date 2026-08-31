@@ -1,0 +1,85 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "6b9b8097802a80f4e68a1fb48220cfc3",
+    "entities": [
+      {
+        "tableName": "tb_fan_goods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fanGoodsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fanGoodsReleaseDate` TEXT NOT NULL, `fanGoodsSeries` TEXT NOT NULL, `fanGoodsPrice` TEXT NOT NULL, `fanGoodsChara` TEXT NOT NULL, `fanGoodsCategory` TEXT NOT NULL, `fanGoodsImgPath` TEXT NOT NULL, `fanGoodsIsGotten` INTEGER NOT NULL, `fanGoodsStatus` TEXT NOT NULL, `fanGoodsMemo` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "fanGoodsId",
+            "columnName": "fanGoodsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsReleaseDate",
+            "columnName": "fanGoodsReleaseDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsSeries",
+            "columnName": "fanGoodsSeries",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsPrice",
+            "columnName": "fanGoodsPrice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsChara",
+            "columnName": "fanGoodsChara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsCategory",
+            "columnName": "fanGoodsCategory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsImgPath",
+            "columnName": "fanGoodsImgPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsIsGotten",
+            "columnName": "fanGoodsIsGotten",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsStatus",
+            "columnName": "fanGoodsStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fanGoodsMemo",
+            "columnName": "fanGoodsMemo",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "fanGoodsId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6b9b8097802a80f4e68a1fb48220cfc3')"
+    ]
+  }
+}

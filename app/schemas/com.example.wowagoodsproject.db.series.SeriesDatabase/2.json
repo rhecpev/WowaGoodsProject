@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "e6b663526ae53bf40c11ddd750a3ad4c",
+    "entities": [
+      {
+        "tableName": "tb_series",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`seriesId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `seriesNm` TEXT NOT NULL, `seriesUrl` TEXT NOT NULL, `seriesCountry` TEXT NOT NULL, `seriesCharas` TEXT NOT NULL, `seriesDate` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "seriesId",
+            "columnName": "seriesId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesNm",
+            "columnName": "seriesNm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesUrl",
+            "columnName": "seriesUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesCountry",
+            "columnName": "seriesCountry",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesCharas",
+            "columnName": "seriesCharas",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesDate",
+            "columnName": "seriesDate",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "seriesId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e6b663526ae53bf40c11ddd750a3ad4c')"
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "49e1dd137a5b54c69e80080599d843ab",
+    "entities": [
+      {
+        "tableName": "tb_goods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`goodsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `goodsReleaseDate` TEXT NOT NULL, `goodsSeries` TEXT NOT NULL, `goodsPrice` TEXT NOT NULL, `goodsChara` TEXT NOT NULL, `goodsCategory` TEXT NOT NULL, `goodsIsGotten` INTEGER NOT NULL, `goodsStatus` TEXT NOT NULL, `goodsUrl` TEXT NOT NULL, `goodsMemo` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "goodsId",
+            "columnName": "goodsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsReleaseDate",
+            "columnName": "goodsReleaseDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsSeries",
+            "columnName": "goodsSeries",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsPrice",
+            "columnName": "goodsPrice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsChara",
+            "columnName": "goodsChara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsCategory",
+            "columnName": "goodsCategory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsIsGotten",
+            "columnName": "goodsIsGotten",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsStatus",
+            "columnName": "goodsStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsUrl",
+            "columnName": "goodsUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsMemo",
+            "columnName": "goodsMemo",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "goodsId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '49e1dd137a5b54c69e80080599d843ab')"
+    ]
+  }
+}

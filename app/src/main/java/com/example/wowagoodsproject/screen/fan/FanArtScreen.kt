@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
@@ -157,7 +157,7 @@ fun FanArtScreen(
                                     }
                                     IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
                                         Icon(
-                                            imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
+                                            imageVector = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                                             contentDescription = "모드 전환"
                                         )
                                     }

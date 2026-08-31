@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
                 var showUpdateDialog by remember { mutableStateOf(false) }
                 var latestVersion by remember { mutableStateOf("") }
                 var releaseNote by remember { mutableStateOf("") }
+                val updateProgress by UpdateManager.progress.collectAsState()
                 val scope = rememberCoroutineScope()
 
                 LaunchedEffect(Unit) {
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
                         val lastUpdateDate = prefs.getString("last_data_update_date", "")
                         if (lastUpdateDate != today) {
                             try {
+                                UpdateManager.resetProgress()
                                 val charaResult = UpdateManager.updateCharacters()
                                 val seriesResult = UpdateManager.updateSeries()
                                 val goodsResult = UpdateManager.updateGoods()
@@ -142,10 +145,19 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             LinearProgressIndicator(
+                                progress = { updateProgress.fraction },
                                 modifier = Modifier.fillMaxWidth(0.7f)
                             )
                             Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
-                            Text(text = "데이터 업데이트 중...")
+                            Text(text = "데이터 업데이트 중... ${updateProgress.percent}%")
+                            if (updateProgress.label.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
+                                Text(
+                                    text = updateProgress.label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

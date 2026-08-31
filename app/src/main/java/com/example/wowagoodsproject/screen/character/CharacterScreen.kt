@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -18,7 +19,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
@@ -402,7 +403,7 @@ fun CharacterScreen(
                                 }
                                 IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
                                     Icon(
-                                        imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
+                                        imageVector = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                                         contentDescription = "모드 전환"
                                     )
                                 }
@@ -485,29 +486,49 @@ fun CharacterScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                                .background(MaterialTheme.colorScheme.surface)
                                 .clickable { viewModel.selectChara(chara) }
                                 .padding(AppStyles.paddingSmall)
                         ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .border(1.dp, MaterialTheme.colorScheme.outline),
-                                contentScale = ContentScale.Crop
-                            )
+                            Box {
+                                Image(
+                                    painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .border(1.dp, MaterialTheme.colorScheme.outline),
+                                    contentScale = ContentScale.Crop
+                                )
+                                // 캐릭터 아이콘 위에 겹쳐 놓는 선호 표시. 눌러서 바로 토글한다.
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(3.dp)
+                                        .size(26.dp)
+                                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                        .clickable { viewModel.toggleFavorite(chara) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (chara.charaIsFavorite) Icons.Default.Favorite
+                                        else Icons.Default.FavoriteBorder,
+                                        contentDescription = if (chara.charaIsFavorite) "선호 해제" else "선호 설정",
+                                        tint = if (chara.charaIsFavorite) Color.Red else Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = chara.charaNm,
                                 style = AppStyles.textCardSmall,
-                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             val count = charaGoodsCountMap[chara.charaNm] ?: Pair(0, 0)
                             Text(
                                 text = "(${count.first}/${count.second})",
                                 style = AppStyles.textCardSmall,
-                                color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -515,7 +536,7 @@ fun CharacterScreen(
             }
         } else {
             Column(modifier = Modifier.fillMaxSize()) {
-                TabRow(selectedTabIndex = selectedTab) {
+                SecondaryTabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { viewModel.setSelectedTab(0) },

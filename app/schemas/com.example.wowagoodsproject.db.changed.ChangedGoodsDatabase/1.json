@@ -1,0 +1,127 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "155ea4a08650a82d446189070c1c4e91",
+    "entities": [
+      {
+        "tableName": "tb_changed_goods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`changedId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `changedTime` INTEGER NOT NULL, `oldSeries` TEXT NOT NULL, `oldChara` TEXT NOT NULL, `oldCategory` TEXT NOT NULL, `oldPrice` TEXT NOT NULL, `oldMemo` TEXT NOT NULL, `oldUrl` TEXT NOT NULL, `oldStatus` TEXT NOT NULL, `newSeries` TEXT NOT NULL, `newChara` TEXT NOT NULL, `newCategory` TEXT NOT NULL, `newPrice` TEXT NOT NULL, `newMemo` TEXT NOT NULL, `newUrl` TEXT NOT NULL, `changedDetail` TEXT NOT NULL, `isRestored` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "changedId",
+            "columnName": "changedId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "changedTime",
+            "columnName": "changedTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldSeries",
+            "columnName": "oldSeries",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldChara",
+            "columnName": "oldChara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldCategory",
+            "columnName": "oldCategory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldPrice",
+            "columnName": "oldPrice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldMemo",
+            "columnName": "oldMemo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldUrl",
+            "columnName": "oldUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oldStatus",
+            "columnName": "oldStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newSeries",
+            "columnName": "newSeries",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newChara",
+            "columnName": "newChara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newCategory",
+            "columnName": "newCategory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newPrice",
+            "columnName": "newPrice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newMemo",
+            "columnName": "newMemo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newUrl",
+            "columnName": "newUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "changedDetail",
+            "columnName": "changedDetail",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRestored",
+            "columnName": "isRestored",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "changedId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '155ea4a08650a82d446189070c1c4e91')"
+    ]
+  }
+}

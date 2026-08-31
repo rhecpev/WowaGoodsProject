@@ -1,12 +1,15 @@
 package com.example.wowagoodsproject.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import android.app.Activity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.graphics.Color
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 private val Gold = Color(0xFFF3E85A)
 private val GoldLight = Color(0xFFE8C97A) // 밝은 금색
@@ -60,12 +63,19 @@ fun WowaGoodsProjectTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val systemUiController = rememberSystemUiController()
+    val view = LocalView.current
 
-    systemUiController.setSystemBarsColor(
-        color = colorScheme.background,
-        darkIcons = !darkTheme
-    )
+    // 상태바/내비게이션바 아이콘 명암을 테마에 맞춘다.
+    // (바 배경은 enableEdgeToEdge() 로 투명하게 두고 앱 배경이 그대로 비치게 한다)
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,

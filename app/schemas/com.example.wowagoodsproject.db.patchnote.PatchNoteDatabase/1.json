@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "0e951d55f08c33bd9e610470f246d23d",
+    "entities": [
+      {
+        "tableName": "tb_patch_notes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`patchId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `patchTime` INTEGER NOT NULL, `patchContent` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "patchId",
+            "columnName": "patchId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "patchTime",
+            "columnName": "patchTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "patchContent",
+            "columnName": "patchContent",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "patchId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0e951d55f08c33bd9e610470f246d23d')"
+    ]
+  }
+}

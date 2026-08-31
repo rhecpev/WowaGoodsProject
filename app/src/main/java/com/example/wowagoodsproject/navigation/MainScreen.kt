@@ -28,6 +28,7 @@ import com.example.wowagoodsproject.screen.fan.FanArtScreen
 import com.example.wowagoodsproject.screen.fan.FanAddScreen
 import com.example.wowagoodsproject.screen.mypage.MyPageScreen
 import com.example.wowagoodsproject.screen.mypage.PatchNotesScreen
+import com.example.wowagoodsproject.screen.news.NewsScreen
 import com.example.wowagoodsproject.screen.series.SeriesScreen
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -65,7 +66,8 @@ fun MainScreen(
     val isInSubScreen = characterSelectedChara != null ||
             myPageCurrentSection != null ||
             currentRoute == "fan_add" ||
-            currentRoute == "patch_notes"
+            currentRoute == "patch_notes" ||
+            currentRoute == "news"
     val navBackground = MaterialTheme.colorScheme.surface
     val navSelected = MaterialTheme.colorScheme.primary
     val navUnselected = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
@@ -194,6 +196,7 @@ fun MainScreen(
                         viewModel = myPageViewModel,
                         onThemeChange = onThemeChange,
                         onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToNews = { navController.navigate("news") },
                         onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
@@ -202,6 +205,12 @@ fun MainScreen(
                 }
                 composable("patch_notes") {
                     PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable("news") {
+                    NewsScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
                 }
             }
         }
@@ -290,6 +299,7 @@ fun MainScreen(
                         viewModel = myPageViewModel,
                         onThemeChange = onThemeChange,
                         onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToNews = { navController.navigate("news") },
                         onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
@@ -298,6 +308,12 @@ fun MainScreen(
                 }
                 composable("patch_notes") {
                     PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable("news") {
+                    NewsScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
                 }
             }
         }

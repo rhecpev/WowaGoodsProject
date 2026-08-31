@@ -1,0 +1,91 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "0320cde0e18c15220348df69d470e663",
+    "entities": [
+      {
+        "tableName": "tb_news",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`newsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `newsType` TEXT NOT NULL, `newsTime` INTEGER NOT NULL, `newsSeries` TEXT NOT NULL, `newsChara` TEXT NOT NULL, `newsCategory` TEXT NOT NULL, `newsPrice` TEXT NOT NULL, `newsImgUrl` TEXT NOT NULL, `newsDetail` TEXT NOT NULL, `newsChangedId` INTEGER NOT NULL, `newsIsRead` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "newsId",
+            "columnName": "newsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsType",
+            "columnName": "newsType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsTime",
+            "columnName": "newsTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsSeries",
+            "columnName": "newsSeries",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsChara",
+            "columnName": "newsChara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsCategory",
+            "columnName": "newsCategory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsPrice",
+            "columnName": "newsPrice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsImgUrl",
+            "columnName": "newsImgUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsDetail",
+            "columnName": "newsDetail",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsChangedId",
+            "columnName": "newsChangedId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "newsIsRead",
+            "columnName": "newsIsRead",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "newsId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0320cde0e18c15220348df69d470e663')"
+    ]
+  }
+}
