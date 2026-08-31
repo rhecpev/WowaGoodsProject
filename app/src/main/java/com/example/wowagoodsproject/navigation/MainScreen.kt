@@ -63,6 +63,7 @@ fun MainScreen(
     val seriesSelectedSeries by seriesViewModel.selectedSeries.collectAsState()
     val characterSelectedChara by characterViewModel.selectedChara.collectAsState()
     val myPageCurrentSection by myPageViewModel.currentSection.collectAsState()
+    val unreadNewsCount by myPageViewModel.unreadNewsCount.collectAsState()
     val isInSubScreen = characterSelectedChara != null ||
             myPageCurrentSection != null ||
             currentRoute == "fan_add" ||
@@ -142,10 +143,21 @@ fun MainScreen(
                             },
                             label = { Text(item.label) },
                             icon = {
-                                Icon(
-                                    imageVector = if (currentRoute == item.route) Icons.Default.Star else Icons.Default.StarBorder,
-                                    contentDescription = null
-                                )
+                                BadgedBox(
+                                    badge = {
+                                        // 마이페이지 탭에만 안 읽은 소식 개수를 띄운다.
+                                        if (item.route == BottomNavItem.MyPage.route && unreadNewsCount > 0) {
+                                            Badge {
+                                                Text(if (unreadNewsCount > 99) "99+" else "$unreadNewsCount")
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (currentRoute == item.route) Icons.Default.Star else Icons.Default.StarBorder,
+                                        contentDescription = null
+                                    )
+                                }
                             },
                             colors = NavigationRailItemDefaults.colors(
                                 selectedIconColor = navSelected,
@@ -240,10 +252,21 @@ fun MainScreen(
                                 },
                                 label = { Text(item.label) },
                                 icon = {
-                                    Icon(
-                                        imageVector = if (currentRoute == item.route) Icons.Default.Star else Icons.Default.StarBorder,
-                                        contentDescription = null
-                                    )
+                                    BadgedBox(
+                                        badge = {
+                                            // 마이페이지 탭에만 안 읽은 소식 개수를 띄운다.
+                                            if (item.route == BottomNavItem.MyPage.route && unreadNewsCount > 0) {
+                                                Badge {
+                                                    Text(if (unreadNewsCount > 99) "99+" else "$unreadNewsCount")
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (currentRoute == item.route) Icons.Default.Star else Icons.Default.StarBorder,
+                                            contentDescription = null
+                                        )
+                                    }
                                 },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = navSelected,
