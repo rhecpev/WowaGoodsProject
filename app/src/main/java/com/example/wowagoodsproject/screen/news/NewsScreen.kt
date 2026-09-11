@@ -71,12 +71,10 @@ fun NewsScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(
             title = "소식",
-            action = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (news.isNotEmpty()) {
-                        TextButton(onClick = { showClearDialog = true }) { Text("전체 삭제") }
-                    }
-                    TextButton(onClick = onNavigateBack) { Text("뒤로") }
+            onBack = onNavigateBack,
+            actions = {
+                if (news.isNotEmpty()) {
+                    TextButton(onClick = { showClearDialog = true }) { Text("전체 삭제") }
                 }
             }
         )

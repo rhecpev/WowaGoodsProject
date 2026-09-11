@@ -154,6 +154,7 @@ class CharacterViewModel : ViewModel() {
             val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
             val updated = goods.copy(fanGoodsStatus = newStatus.name)
             App.fanDatabase.fanGoodsDao().update(updated)
+            reloadFanGoods()
         }
     }
 
@@ -162,6 +163,14 @@ class CharacterViewModel : ViewModel() {
             val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
             val updated = goods.copy(fanGoodsStatus = newStatus.name)
             App.fanDatabase.fanGoodsDao().update(updated)
+            reloadFanGoods()
+        }
+    }
+
+    /** 2차창작 굿즈 상태를 바꾼 뒤 목록/상세가 옛 값을 보여주지 않도록 다시 읽는다. */
+    private suspend fun reloadFanGoods() {
+        _selectedChara.value?.let { chara ->
+            _fanGoods.value = App.fanDatabase.fanGoodsDao().getByChara(chara.charaNm)
         }
     }
     // After - 함수 추가 (setOfficialPending 아래)

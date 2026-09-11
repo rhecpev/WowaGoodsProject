@@ -39,6 +39,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.component.CATEGORY_SET
+import com.example.wowagoodsproject.component.SearchField
+import com.example.wowagoodsproject.navigation.TopBar
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -135,12 +137,10 @@ fun FanAddScreen(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(text = "카테고리 선택", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = categorySearch,
-                        onValueChange = { categorySearch = it },
-                        label = { Text("검색") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                    SearchField(
+                        query = categorySearch,
+                        onQueryChange = { categorySearch = it },
+                        placeholder = "검색하거나 새 카테고리 입력"
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyColumn(
@@ -409,14 +409,14 @@ fun FanAddScreen(
         }
     }
 
-    if (isLandscape) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopBar(title = "2차창작 굿즈 등록", onBack = onNavigateBack)
+
+        if (isLandscape) {
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -439,28 +439,26 @@ fun FanAddScreen(
                     ActionButtons()
                 }
             }
-        }
-    } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
-        ) {
-            Text(text = "2차창작 굿즈 등록", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(16.dp))
-            ImageBox(
+        } else {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            ImageButtons()
-            Spacer(modifier = Modifier.height(8.dp))
-            InputFields()
-            Spacer(modifier = Modifier.height(8.dp))
-            ActionButtons()
+                    .fillMaxSize()
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                ImageBox(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ImageButtons()
+                Spacer(modifier = Modifier.height(8.dp))
+                InputFields()
+                Spacer(modifier = Modifier.height(8.dp))
+                ActionButtons()
+            }
         }
     }
 }

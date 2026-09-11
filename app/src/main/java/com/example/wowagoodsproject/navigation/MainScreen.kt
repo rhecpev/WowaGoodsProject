@@ -3,9 +3,6 @@ package com.example.wowagoodsproject.navigation
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
@@ -154,7 +151,7 @@ fun MainScreen(
                                     }
                                 ) {
                                     Icon(
-                                        imageVector = if (currentRoute == item.route) Icons.Default.Star else Icons.Default.StarBorder,
+                                        imageVector = if (currentRoute == item.route) item.selectedIcon else item.unselectedIcon,
                                         contentDescription = null
                                     )
                                 }
@@ -263,7 +260,7 @@ fun MainScreen(
                                         }
                                     ) {
                                         Icon(
-                                            imageVector = if (currentRoute == item.route) Icons.Default.Star else Icons.Default.StarBorder,
+                                            imageVector = if (currentRoute == item.route) item.selectedIcon else item.unselectedIcon,
                                             contentDescription = null
                                         )
                                     }

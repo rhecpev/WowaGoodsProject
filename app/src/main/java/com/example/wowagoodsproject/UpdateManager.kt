@@ -16,6 +16,8 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -29,6 +31,12 @@ object UpdateManager {
     private val _progress = MutableStateFlow(UpdateProgress())
     val progress: StateFlow<UpdateProgress> = _progress
 
+    private val _isRunning = MutableStateFlow(false)
+    /** 데이터 동기화가 돌고 있는지. 시작 화면과 수동 업데이트 팝업이 이 값을 보고 로딩바를 띄운다. */
+    val isRunning: StateFlow<Boolean> = _isRunning
+
+    private val updateMutex = Mutex()
+
     /** 파일별 진행률 가중치. goods.json 이 가장 크므로 비중을 높게 준다. */
     private val steps = listOf(
         Triple("characters.json", "캐릭터", 0.15f),
@@ -38,6 +46,29 @@ object UpdateManager {
 
     fun resetProgress() {
         _progress.value = UpdateProgress()
+    }
+
+    /**
+     * 캐릭터 → 시리즈 → 굿즈 순으로 전체 동기화하고 바뀐 항목 수를 돌려준다.
+     * 앱 시작 시 자동 업데이트와 수동 업데이트(UpdateWorker)가 함께 쓰며, 동시에 두 번 돌지 않는다.
+     * 성공하면 마이페이지에 보여줄 마지막 업데이트 시각/변경 개수를 저장한다.
+     */
+    suspend fun runFullUpdate(): Int = updateMutex.withLock {
+        _isRunning.value = true
+        resetProgress()
+        try {
+            val results = listOf(updateCharacters(), updateSeries(), updateGoods())
+            val total = results.sumOf { it.first + it.second + it.third }
+            val timeStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+                .format(java.util.Date())
+            App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE).edit()
+                .putString("last_update_time", timeStr)
+                .putInt("last_update_total", total)
+                .apply()
+            total
+        } finally {
+            _isRunning.value = false
+        }
     }
 
     /** localFraction 은 해당 파일 내부에서의 진행률(0f~1f). 전체 진행률로 환산해 보고한다. */

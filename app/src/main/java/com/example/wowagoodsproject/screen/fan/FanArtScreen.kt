@@ -1,21 +1,20 @@
 package com.example.wowagoodsproject.screen.fan
 
-
 import androidx.compose.foundation.layout.*
-
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.wowagoodsproject.component.ActiveFilter
+import com.example.wowagoodsproject.component.ActiveFilterChips
 import com.example.wowagoodsproject.component.FanGoodsListContent
 import com.example.wowagoodsproject.component.FilterBar
 import com.example.wowagoodsproject.component.FilterViewModel
@@ -27,9 +26,7 @@ import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
-import com.example.wowagoodsproject.ui.theme.AppStyles
-import com.example.wowagoodsproject.screen.series.SeriesViewModel
-import com.example.wowagoodsproject.db.official.GoodsEntity
+import com.example.wowagoodsproject.navigation.TopBarAction
 
 @Composable
 fun FanArtScreen(
@@ -41,9 +38,6 @@ fun FanArtScreen(
     filterViewModel: FilterViewModel = viewModel(),
     onNavigateToSeries: (String) -> Unit = {}
 ) {
-    val context = LocalContext.current
-    val seriesViewModel: SeriesViewModel = viewModel()
-    val allSeriesGoods by seriesViewModel.seriesList.collectAsState()
     val goodsList by viewModel.goodsList.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
@@ -52,7 +46,6 @@ fun FanArtScreen(
 
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
-
 
     val filteredList = filterFanGoodsList(
         list = filterViewModel.applyFilter(goodsList).second,
@@ -65,7 +58,6 @@ fun FanArtScreen(
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
-
 
     val gridColumns = when (widthSizeClass) {
         WindowWidthSizeClass.Compact -> 2
@@ -88,31 +80,28 @@ fun FanArtScreen(
         .filter { it.isNotEmpty() }
         .sorted()
 
-
     LaunchedEffect(Unit) {
         viewModel.loadGoods()
     }
 
-    selectedGoods?.let { goods ->
-        val fanGoods = goods as FanGoodsEntity
+    // 상태를 바꾼 뒤에도 상세 시트가 최신 값을 보여주도록 목록에서 다시 찾는다.
+    val displayedGoods = (selectedGoods as? FanGoodsEntity)?.let { selected ->
+        goodsList.find { it.fanGoodsId == selected.fanGoodsId } ?: selected
+    }
+
+    displayedGoods?.let { fanGoods ->
         GoodsDetailDialog(
-            imgPath = goods.imgPath,
-            series = goods.series,
-            chara = goods.chara,
-            category = goods.category,
-            price = goods.price,
-            isGotten = goods.isGotten,
-            memo = (goods).fanGoodsMemo,
+            imgPath = fanGoods.imgPath,
+            series = fanGoods.series,
+            chara = fanGoods.chara,
+            category = fanGoods.category,
+            price = fanGoods.price,
+            isGotten = fanGoods.isGotten,
+            memo = fanGoods.fanGoodsMemo,
             onDismiss = { detailViewModel.dismissDialog() },
-            isPending = (goods as? FanGoodsEntity)?.status == GoodsStatus.PENDING,
-            onToggleGotten = {
-                viewModel.toggleGotten(fanGoods)
-                detailViewModel.dismissDialog()
-            },
-            onSetPending = {
-                viewModel.setPending(fanGoods)
-                detailViewModel.dismissDialog()
-            },
+            isPending = fanGoods.status == GoodsStatus.PENDING,
+            onToggleGotten = { viewModel.toggleGotten(fanGoods) },
+            onSetPending = { viewModel.setPending(fanGoods) },
             onDelete = {
                 viewModel.delete(fanGoods)
                 detailViewModel.dismissDialog()
@@ -123,7 +112,6 @@ fun FanArtScreen(
             }
         )
     }
-
 
     if (showGoodsFilterDialog) {
         GoodsFilterDialog(
@@ -138,80 +126,59 @@ fun FanArtScreen(
             onDismiss = { showGoodsFilterDialog = false }
         )
     }
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(
-            title = "2차창작",
-            action = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row() {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row() {
-                                    IconButton(onClick = { showGoodsFilterDialog = true }) {
-                                        Icon(
-                                            imageVector = Icons.Default.FilterList,
-                                            contentDescription = "필터",
-                                            tint = if (selectedGoodsCharaFilter != null || selectedGoodsCategoryFilter != null)                                                MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                    IconButton(onClick = { listModeViewModel.toggleGridMode() }) {
-                                        Icon(
-                                            imageVector = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                                            contentDescription = "모드 전환"
-                                        )
-                                    }
-                                    TextButton(onClick = onNavigateToAdd) {
-                                        Text("+ 추가")
-                                    }
-                                }
-                                Row() {
-                                    if (selectedGoodsCharaFilter != null) {
-                                        Text(
-                                            text = selectedGoodsCharaFilter!!,
-                                            style = AppStyles.textCardSmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                    }
-                                    if (selectedGoodsCharaFilter != null && selectedGoodsCategoryFilter != null) {
-                                        Text(
-                                            text = "/",
-                                            style = AppStyles.textCardSmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                    }
-                                    if (selectedGoodsCategoryFilter != null) {
-                                        Text(
-                                            text = selectedGoodsCategoryFilter!!,
-                                            style = AppStyles.textCardSmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                    }
-                                }
-                            }
 
-                        }
-
-                    }
-
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopBar(
+                title = "2차창작",
+                actions = {
+                    TopBarAction(
+                        icon = Icons.Default.FilterList,
+                        contentDescription = "필터",
+                        onClick = { showGoodsFilterDialog = true },
+                        active = selectedGoodsCharaFilter != null || selectedGoodsCategoryFilter != null
+                    )
+                    TopBarAction(
+                        icon = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                        contentDescription = "보기 방식 전환",
+                        onClick = { listModeViewModel.toggleGridMode() }
+                    )
                 }
-            }
-        )
+            )
 
-        FilterBar(
-            filterType = filterType,
-            onFilterChange = { filterViewModel.setFilter(it) },
-            goodsList = AllFilteredList
-        )
+            ActiveFilterChips(
+                filters = listOfNotNull(
+                    selectedGoodsCharaFilter?.let { ActiveFilter(it) { filterViewModel.setCharaFilter(null) } },
+                    selectedGoodsCategoryFilter?.let { ActiveFilter(it) { filterViewModel.setCategoryFilter(null) } }
+                ),
+                onClearAll = { filterViewModel.clearGoodsFilter() }
+            )
 
-        FanGoodsListContent(
-            goods = filteredList,
-            isGridMode = isGridMode,
-            gridColumns = gridColumns,
-            onGoodsClick = { detailViewModel.selectGoods(it) }
+            FilterBar(
+                filterType = filterType,
+                onFilterChange = { filterViewModel.setFilter(it) },
+                goodsList = AllFilteredList
+            )
+
+            FanGoodsListContent(
+                goods = filteredList,
+                isGridMode = isGridMode,
+                gridColumns = gridColumns,
+                onGoodsClick = { detailViewModel.selectGoods(it) },
+                // 목록 끝이 등록 버튼에 가려지지 않게 아래 여백을 둔다.
+                contentPadding = PaddingValues(bottom = 88.dp)
+            )
+        }
+
+        ExtendedFloatingActionButton(
+            onClick = onNavigateToAdd,
+            icon = { Icon(Icons.Default.Add, contentDescription = null) },
+            text = { Text("굿즈 등록") },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
         )
     }
 }

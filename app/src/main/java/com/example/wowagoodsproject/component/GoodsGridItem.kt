@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
@@ -28,6 +27,7 @@ fun GoodsGridItem(
     onClick: () -> Unit = {}
 ){
     val encodedPath = encodeGoodsImagePath(imgPath)
+    val status = gottenStatus ?: if (isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
 
     Column(
         modifier = Modifier
@@ -50,10 +50,17 @@ fun GoodsGridItem(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
+            GottenStatusBadge(
+                status = status,
+                filled = true,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+            )
         }
         HorizontalDivider(
             thickness = 1.dp,
-            color = MaterialTheme.colorScheme.outline
+            color = MaterialTheme.colorScheme.outlineVariant
         )
         Column(
             modifier = Modifier.padding(AppStyles.paddingMedium)
@@ -75,7 +82,7 @@ fun GoodsGridItem(
             Text(
                 text = if (memo.isNotEmpty()) "${category} / ${memo}" else category,
                 style = AppStyles.textCardSmall,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -85,24 +92,6 @@ fun GoodsGridItem(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
-            )
-            val status = gottenStatus ?: if (isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
-            Text(
-                text = when (status) {
-                    GottenStatus.GOTTEN -> "보유"
-                    GottenStatus.NOT_GOTTEN -> "미보유"
-                    GottenStatus.PARTIAL -> "일부보유"
-                    GottenStatus.PENDING -> "구매예정"
-                },
-                style = AppStyles.textCardSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = when (status) {
-                        GottenStatus.GOTTEN -> AppStyles.colorGotten
-                        GottenStatus.NOT_GOTTEN -> AppStyles.colorNotGotten
-                        GottenStatus.PARTIAL -> AppStyles.colorPartialGotten
-                        GottenStatus.PENDING -> AppStyles.colorPending
-                    }
-                )
             )
         }
     }

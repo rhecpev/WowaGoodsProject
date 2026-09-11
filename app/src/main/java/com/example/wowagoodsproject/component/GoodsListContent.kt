@@ -1,16 +1,15 @@
 package com.example.wowagoodsproject.component
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.wowagoodsproject.db.official.GoodsEntity
-import com.example.wowagoodsproject.ui.theme.AppStyles
 
 @Composable
 fun GoodsListContent(
@@ -20,14 +19,7 @@ fun GoodsListContent(
     onGoodsClick: (GoodsEntity) -> Unit
 ) {
     if (goods.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = "등록된 굿즈가 없습니다", color = MaterialTheme.colorScheme.onBackground)
-        }
+        EmptyState(icon = Icons.Outlined.Inventory2, title = "굿즈가 없습니다")
         return
     }
 
@@ -45,7 +37,7 @@ fun GoodsListContent(
                                 category = item.category,
                                 price = item.price,
                                 isGotten = item.isGotten,
-                                gottenStatus = item.status.toGottenStatus(),
+                                gottenStatus = item.status.asGottenStatus(),
                                 memo = item.memo,
                                 onClick = { onGoodsClick(item) }
                             )
@@ -55,7 +47,7 @@ fun GoodsListContent(
                         Box(modifier = Modifier.weight(1f))
                     }
                 }
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     } else {
@@ -68,22 +60,15 @@ fun GoodsListContent(
                     category = item.category,
                     price = item.price,
                     isGotten = item.isGotten,
-                    gottenStatus = item.status.toGottenStatus(),
+                    gottenStatus = item.status.asGottenStatus(),
                     memo = item.memo,
                     onClick = { onGoodsClick(item) }
                 )
 
                 if (index < goods.lastIndex) {
-                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
-                    Spacer(modifier = Modifier.height(AppStyles.paddingMedium))
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }
     }
-}
-
-private fun GoodsStatus.toGottenStatus() = when (this) {
-    GoodsStatus.GOTTEN -> GottenStatus.GOTTEN
-    GoodsStatus.PENDING -> GottenStatus.PENDING
-    GoodsStatus.NOT_GOTTEN -> GottenStatus.NOT_GOTTEN
 }

@@ -13,6 +13,7 @@ object AppStyles {
     val colorNotGotten = Color(0xFFF44336)
     val colorPartialGotten = Color(0xFFFF9800)
     val colorPending = Color(0xFF2196F3) // 파란색
+    val colorFavorite = Color(0xFFE5484D) // 선호 캐릭터 하트
 
     // 텍스트 스타일
     val textCardTitle = TextStyle(
