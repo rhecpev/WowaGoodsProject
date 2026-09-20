@@ -48,13 +48,21 @@ class App : Application() {
             applicationContext,
             GoodsDatabase::class.java,
             "goods_database"
-        ).addMigrations(GoodsDatabase.MIGRATION_1_2, GoodsDatabase.MIGRATION_2_3).build()
+        ).addMigrations(
+            GoodsDatabase.MIGRATION_1_2,
+            GoodsDatabase.MIGRATION_2_3,
+            GoodsDatabase.MIGRATION_3_4
+        ).build()
 
         fanDatabase = Room.databaseBuilder(
             applicationContext,
             FanGoodsDatabase::class.java,
             "fan_goods_database"
-        ).addMigrations(FanGoodsDatabase.MIGRATION_1_2, FanGoodsDatabase.MIGRATION_2_3).build()
+        ).addMigrations(
+            FanGoodsDatabase.MIGRATION_1_2,
+            FanGoodsDatabase.MIGRATION_2_3,
+            FanGoodsDatabase.MIGRATION_3_4
+        ).build()
 
         charaDatabase = Room.databaseBuilder(
             applicationContext,

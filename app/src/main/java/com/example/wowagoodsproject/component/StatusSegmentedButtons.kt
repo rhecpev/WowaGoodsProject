@@ -16,11 +16,13 @@ fun statusColor(status: GoodsStatus): Color = when (status) {
 /**
  * 미보유 / 구매예정 / 보유 중 하나를 고르는 세그먼트 버튼.
  * "보유로 변경", "구매예정 취소" 같은 토글 버튼 여러 개 대신 현재 상태를 한눈에 보고 바로 바꿀 수 있다.
+ *
+ * @param current 현재 상태. null 이면 아무 칸도 선택되지 않는다(여러 굿즈를 한 번에 다룰 때 상태가 섞인 경우).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusSegmentedButtons(
-    current: GoodsStatus,
+    current: GoodsStatus?,
     onSelect: (GoodsStatus) -> Unit,
     modifier: Modifier = Modifier
 ) {

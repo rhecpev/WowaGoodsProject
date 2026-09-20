@@ -17,7 +17,9 @@ data class GoodsEntity(
     val goodsIsGotten: Boolean = false,
     val goodsStatus: String = GoodsStatus.NOT_GOTTEN.name,
     val goodsUrl: String = "",
-    val goodsMemo: String = ""
+    val goodsMemo: String = "",
+    val goodsPurchaseDate: String = "",
+    val goodsPurchaseStore: String = ""
 ) : GoodsItem {
     override val imgPath get() = goodsUrl
     override val series get() = goodsSeries
@@ -27,4 +29,6 @@ data class GoodsEntity(
     override val isGotten get() = goodsStatus == GoodsStatus.GOTTEN.name
     override val status get() = GoodsStatus.valueOf(goodsStatus)
     override val memo get() = goodsMemo
+    override val purchaseDate get() = goodsPurchaseDate
+    override val purchaseStore get() = goodsPurchaseStore
 }

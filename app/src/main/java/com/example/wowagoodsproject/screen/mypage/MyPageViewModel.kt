@@ -29,14 +29,56 @@ import android.content.Intent
 import com.example.wowagoodsproject.UpdateManager
 import com.example.wowagoodsproject.component.GoodsStatus
 
+/**
+ * 백업 파일에 담기는 공식 굿즈 한 줄.
+ *
+ * 모든 칸이 nullable 인 이유: 예전 버전에서 만든 zip 에는 나중에 생긴 칸(상태·메모·구매 정보)이
+ * 아예 없고, Gson 은 그 자리에 코틀린 기본값 대신 null 을 넣는다.
+ * 그대로 엔티티에 옮기면 non-null 칸에 null 이 들어가 복원이 통째로 실패한다.
+ */
 data class OfficialGoodsBackup(
-    val goodsSeries: String,
-    val goodsChara: String,
-    val goodsCategory: String,
-    val goodsStatus: String = GoodsStatus.NOT_GOTTEN.name,
-    val goodsMemo: String = "",
-    val goodsPrice: String = ""
+    val goodsSeries: String? = null,
+    val goodsChara: String? = null,
+    val goodsCategory: String? = null,
+    val goodsStatus: String? = null,
+    val goodsMemo: String? = null,
+    val goodsPrice: String? = null,
+    val goodsPurchaseDate: String? = null,
+    val goodsPurchaseStore: String? = null
 )
+
+/** 백업 파일에 담기는 2차창작 굿즈. nullable 인 이유는 [OfficialGoodsBackup] 과 같다. */
+data class FanGoodsBackup(
+    val fanGoodsReleaseDate: String? = null,
+    val fanGoodsSeries: String? = null,
+    val fanGoodsPrice: String? = null,
+    val fanGoodsChara: String? = null,
+    val fanGoodsCategory: String? = null,
+    val fanGoodsImgPath: String? = null,
+    val fanGoodsIsGotten: Boolean? = null,
+    val fanGoodsStatus: String? = null,
+    val fanGoodsMemo: String? = null,
+    val fanGoodsPurchaseDate: String? = null,
+    val fanGoodsPurchaseStore: String? = null
+) {
+    /** @param imgPath 백업 안 이미지를 앱 폴더에 풀어 놓은 뒤의 경로 */
+    fun toEntity(imgPath: String) = FanGoodsEntity(
+        fanGoodsId = 0,
+        fanGoodsReleaseDate = fanGoodsReleaseDate.orEmpty(),
+        fanGoodsSeries = fanGoodsSeries.orEmpty(),
+        fanGoodsPrice = fanGoodsPrice.orEmpty(),
+        fanGoodsChara = fanGoodsChara.orEmpty(),
+        fanGoodsCategory = fanGoodsCategory.orEmpty(),
+        fanGoodsImgPath = imgPath,
+        fanGoodsIsGotten = fanGoodsIsGotten ?: false,
+        // 상태 칸이 생기기 전 백업이면 보유 여부로 상태를 되살린다.
+        fanGoodsStatus = fanGoodsStatus
+            ?: if (fanGoodsIsGotten == true) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
+        fanGoodsMemo = fanGoodsMemo.orEmpty(),
+        fanGoodsPurchaseDate = fanGoodsPurchaseDate.orEmpty(),
+        fanGoodsPurchaseStore = fanGoodsPurchaseStore.orEmpty()
+    )
+}
 
 class MyPageViewModel : ViewModel() {
 
@@ -51,6 +93,12 @@ class MyPageViewModel : ViewModel() {
 
     private val _fanGottenGoods = MutableStateFlow<List<FanGoodsEntity>>(emptyList())
     val fanGottenGoods: StateFlow<List<FanGoodsEntity>> = _fanGottenGoods
+
+    private val _pendingOfficialGoods = MutableStateFlow<List<GoodsEntity>>(emptyList())
+    val pendingOfficialGoods: StateFlow<List<GoodsEntity>> = _pendingOfficialGoods
+
+    private val _pendingFanGoods = MutableStateFlow<List<FanGoodsEntity>>(emptyList())
+    val pendingFanGoods: StateFlow<List<FanGoodsEntity>> = _pendingFanGoods
 
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab
@@ -124,8 +172,9 @@ class MyPageViewModel : ViewModel() {
             val allGoods = App.database.goodsDao().getAll()
 
             // 세트 굿즈는 카운트/목록에서 제외하고 낱개 굿즈만 집계한다.
+            // 구매예정은 '구매예정 굿즈' 페이지에서 따로 보므로 여기서는 보유만 센다.
             val gottenGoods = allGoods.filter {
-                it.goodsCategory != CATEGORY_SET && it.goodsStatus != GoodsStatus.NOT_GOTTEN.name
+                it.goodsCategory != CATEGORY_SET && it.goodsStatus == GoodsStatus.GOTTEN.name
             }
 
             _officialGottenGoods.value = gottenGoods
@@ -133,8 +182,50 @@ class MyPageViewModel : ViewModel() {
             _allSeriesGoods.value = seriesList.flatMap {
                 App.database.goodsDao().getBySeries(it)
             }
-            _fanGottenGoods.value =
-                App.fanDatabase.fanGoodsDao().getAll().filter { it.isGotten }
+            val allFanGoods = App.fanDatabase.fanGoodsDao().getAll()
+            _fanGottenGoods.value = allFanGoods.filter { it.isGotten }
+
+            // 구매예정 목록도 같은 조회 결과에서 뽑아 둔다(세트 굿즈는 제외).
+            _pendingOfficialGoods.value = allGoods.filter {
+                it.goodsCategory != CATEGORY_SET && it.status == GoodsStatus.PENDING
+            }
+            _pendingFanGoods.value = allFanGoods.filter { it.status == GoodsStatus.PENDING }
+        }
+    }
+
+    /**
+     * 고른 구매예정 굿즈에 구매일/구입처를 한 번에 적어 넣는다.
+     * null 을 넘긴 항목은 건드리지 않고, 빈 문자열은 지우라는 뜻이다.
+     */
+    fun applyPurchaseInfo(
+        officialIds: Set<Int>,
+        fanIds: Set<Int>,
+        purchaseDate: String?,
+        purchaseStore: String?
+    ) {
+        if (purchaseDate == null && purchaseStore == null) return
+        viewModelScope.launch {
+            _pendingOfficialGoods.value
+                .filter { it.goodsId in officialIds }
+                .forEach { goods ->
+                    App.database.goodsDao().update(
+                        goods.copy(
+                            goodsPurchaseDate = purchaseDate ?: goods.goodsPurchaseDate,
+                            goodsPurchaseStore = purchaseStore ?: goods.goodsPurchaseStore
+                        )
+                    )
+                }
+            _pendingFanGoods.value
+                .filter { it.fanGoodsId in fanIds }
+                .forEach { goods ->
+                    App.fanDatabase.fanGoodsDao().update(
+                        goods.copy(
+                            fanGoodsPurchaseDate = purchaseDate ?: goods.fanGoodsPurchaseDate,
+                            fanGoodsPurchaseStore = purchaseStore ?: goods.fanGoodsPurchaseStore
+                        )
+                    )
+                }
+            loadGottenGoods()
         }
     }
 
@@ -186,13 +277,14 @@ class MyPageViewModel : ViewModel() {
         }
     }
     // After - 추가
-    fun bulkToggleOfficialGotten(setGoods: GoodsEntity, isGotten: Boolean) {
+    /** 세트 구성품 + 세트 자신을 한 번에 같은 상태로 바꾼다. */
+    fun bulkSetOfficialStatus(setGoods: GoodsEntity, status: GoodsStatus) {
         viewModelScope.launch {
             val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
             val components = allGoods.filter {
                 it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
             }
-            val newStatus = if (isGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name
+            val newStatus = status.name
             components.forEach { comp ->
                 App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
             }
@@ -255,7 +347,9 @@ class MyPageViewModel : ViewModel() {
                             goodsCategory = it.goodsCategory,
                             goodsStatus = it.goodsStatus,
                             goodsMemo = it.goodsMemo,
-                            goodsPrice = it.goodsPrice
+                            goodsPrice = it.goodsPrice,
+                            goodsPurchaseDate = it.goodsPurchaseDate,
+                            goodsPurchaseStore = it.goodsPurchaseStore
                         )
                     }
                     val officialJson = gson.toJson(officialBackup)
@@ -379,15 +473,15 @@ class MyPageViewModel : ViewModel() {
                         }
                     }
                     fanGoodsJson?.let { json ->
-                        val type = object : TypeToken<List<FanGoodsEntity>>() {}.type
-                        val fanGoods: List<FanGoodsEntity> = gson.fromJson(json, type)
+                        val type = object : TypeToken<List<FanGoodsBackup>>() {}.type
+                        val fanGoods: List<FanGoodsBackup> = gson.fromJson(json, type)
                         App.fanDatabase.fanGoodsDao().deleteAll()
-                        val mappedGoods = fanGoods.map { goods ->
-                            val newPath = if (goods.fanGoodsImgPath.isNotEmpty()) {
-                                val fileName = File(goods.fanGoodsImgPath).name
-                                File(context.filesDir, fileName).absolutePath
+                        val mappedGoods = fanGoods.map { backup ->
+                            val oldPath = backup.fanGoodsImgPath.orEmpty()
+                            val newPath = if (oldPath.isNotEmpty()) {
+                                File(context.filesDir, File(oldPath).name).absolutePath
                             } else ""
-                            goods.copy(fanGoodsId = 0, fanGoodsImgPath = newPath)
+                            backup.toEntity(newPath)
                         }
                         App.fanDatabase.fanGoodsDao().insertAll(mappedGoods)
                     }
@@ -401,9 +495,22 @@ class MyPageViewModel : ViewModel() {
                             "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsMemo}|${it.goodsPrice}"
                         }
                         backups.forEachIndexed { i, backup ->
-                            val key = "${backup.goodsSeries}|${backup.goodsChara}|${backup.goodsCategory}|${backup.goodsMemo}|${backup.goodsPrice}"
+                            // null 을 그대로 문자열에 끼우면 "null" 이 되어 짝을 못 찾는다.
+                            val key = listOf(
+                                backup.goodsSeries.orEmpty(),
+                                backup.goodsChara.orEmpty(),
+                                backup.goodsCategory.orEmpty(),
+                                backup.goodsMemo.orEmpty(),
+                                backup.goodsPrice.orEmpty()
+                            ).joinToString("|")
                             localGoodsMap[key]?.let { goods ->
-                                App.database.goodsDao().update(goods.copy(goodsStatus = backup.goodsStatus))
+                                App.database.goodsDao().update(
+                                    goods.copy(
+                                        goodsStatus = backup.goodsStatus ?: GoodsStatus.NOT_GOTTEN.name,
+                                        goodsPurchaseDate = backup.goodsPurchaseDate.orEmpty(),
+                                        goodsPurchaseStore = backup.goodsPurchaseStore.orEmpty()
+                                    )
+                                )
                             }
                             if (backups.isNotEmpty()) {
                                 reportImport(0.6f + 0.32f * (i + 1) / backups.size)

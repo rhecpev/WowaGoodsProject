@@ -233,8 +233,8 @@ fun CharacterScreen(
             onDismiss = { selectedSetGoods = null; setDialogComponent = null },
             onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
             onSetPending = { component -> viewModel.setOfficialPending(component) },
-            onBulkToggleGotten = { isGotten ->
-                viewModel.bulkToggleOfficialGotten(setGoods, isGotten)
+            onBulkSetStatus = { status ->
+                viewModel.bulkSetOfficialStatus(setGoods, status)
                 selectedSetGoods = null
                 setDialogComponent = null
             },

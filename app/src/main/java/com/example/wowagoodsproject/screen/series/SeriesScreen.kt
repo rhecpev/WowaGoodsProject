@@ -174,8 +174,8 @@ fun SeriesScreen(
             onDismiss = { selectedSetGoods = null; setDialogComponent = null },
             onToggleGotten = { component -> viewModel.toggleGotten(component) },
             onSetPending = { component -> viewModel.setPending(component) },
-            onBulkToggleGotten = { isGotten ->
-                viewModel.bulkToggleGotten(setGoods, isGotten)
+            onBulkSetStatus = { status ->
+                viewModel.bulkSetStatus(setGoods, status)
                 selectedSetGoods = null
                 setDialogComponent = null
             },

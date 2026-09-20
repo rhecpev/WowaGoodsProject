@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +26,7 @@ import com.example.wowagoodsproject.component.ProgressDialog
 import com.example.wowagoodsproject.component.ProgressPanel
 import com.example.wowagoodsproject.navigation.MainScreen
 import com.example.wowagoodsproject.ui.theme.AppStyles
+import com.example.wowagoodsproject.ui.theme.AppTheme
 import com.example.wowagoodsproject.ui.theme.WowaGoodsProjectTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,16 +38,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
-            val systemDarkTheme = isSystemInDarkTheme()
-            var themeMode by remember { mutableStateOf(App.getThemeMode()) }
+            var themeMode by remember { mutableIntStateOf(App.getThemeMode()) }
+            val appTheme = AppTheme.fromId(themeMode)
 
-            val darkTheme = when (themeMode) {
-                1 -> false
-                2 -> true
-                else -> systemDarkTheme
-            }
-
-            WowaGoodsProjectTheme(darkTheme = darkTheme) {
+            WowaGoodsProjectTheme(theme = appTheme) {
                 var isReady by remember { mutableStateOf(false) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
                 var latestVersion by remember { mutableStateOf("") }

@@ -41,7 +41,7 @@ fun SetGoodsDetailDialog(
     onDismiss: () -> Unit,
     onToggleGotten: (GoodsEntity) -> Unit,
     onSetPending: (GoodsEntity) -> Unit = {},
-    onBulkToggleGotten: (Boolean) -> Unit = {},
+    onBulkSetStatus: (GoodsStatus) -> Unit = {},
     highlightChara: String? = null,
     highlightCategory: String? = null
 ){
@@ -181,19 +181,17 @@ fun SetGoodsDetailDialog(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { onBulkToggleGotten(false) },
-                        modifier = Modifier.weight(1f)
-                    ) { Text("일괄 미보유") }
-                    Button(
-                        onClick = { onBulkToggleGotten(true) },
-                        modifier = Modifier.weight(1f)
-                    ) { Text("일괄 보유") }
-                }
+                Text(
+                    text = "구성품 ${components.size}개 일괄 변경",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                // 구성품 상태가 이미 하나로 맞춰져 있으면 그 칸을 선택된 상태로 보여준다(섞여 있으면 선택 없음).
+                StatusSegmentedButtons(
+                    current = components.map { it.status }.distinct().singleOrNull(),
+                    onSelect = onBulkSetStatus
+                )
             }
         }
     }

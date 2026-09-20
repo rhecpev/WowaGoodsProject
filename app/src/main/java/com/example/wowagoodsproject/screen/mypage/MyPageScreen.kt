@@ -6,17 +6,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FilterList
@@ -27,17 +29,20 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -70,6 +75,7 @@ import com.example.wowagoodsproject.navigation.TopBarAction
 import com.example.wowagoodsproject.component.ActiveFilter
 import com.example.wowagoodsproject.component.ActiveFilterChips
 import com.example.wowagoodsproject.ui.theme.AppStyles
+import com.example.wowagoodsproject.ui.theme.AppTheme
 
 @Composable
 fun MyPageScreen(
@@ -98,9 +104,14 @@ fun MyPageScreen(
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val unreadNewsCount by viewModel.unreadNewsCount.collectAsState()
+    val pendingOfficialGoods by viewModel.pendingOfficialGoods.collectAsState()
+    val pendingFanGoods by viewModel.pendingFanGoods.collectAsState()
     val isUpdating by UpdateManager.isRunning.collectAsState()
 
     var selectedThemeMode by remember { mutableIntStateOf(App.getThemeMode()) }
+    // 구매예정 목록에서 일괄 적용할 굿즈들
+    var selectedPendingOfficialIds by remember { mutableStateOf(emptySet<Int>()) }
+    var selectedPendingFanIds by remember { mutableStateOf(emptySet<Int>()) }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
     var setDialogComponent by remember { mutableStateOf<GoodsEntity?>(null) }
 
@@ -202,6 +213,8 @@ fun MyPageScreen(
         viewModel.setSection(null)
         viewModel.setCharaFilter(null)
         viewModel.setCategoryFilter(null)
+        selectedPendingOfficialIds = emptySet()
+        selectedPendingFanIds = emptySet()
     }
 
     val gridColumns = when (widthSizeClass) {
@@ -210,35 +223,51 @@ fun MyPageScreen(
         else -> 4
     }
 
-    val goodsCharaList = (officialGottenGoods + fanGottenGoods)
-        .flatMap { it.chara.split(",").map { c -> c.trim() } }
-        .distinct()
-        .filter { it.isNotEmpty() }
-        .sortedByDescending { charaNm -> charaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
+    // 아래 목록들은 굿즈 수만큼 도는 계산이라 화면이 다시 그려질 때마다 하면 안 된다.
+    // (테마 변경처럼 화면 전체가 recomposition 될 때 특히 비싸다)
+    val favoriteCharaNames = remember(charaList) {
+        charaList.filter { it.charaIsFavorite }.map { it.charaNm }.toSet()
+    }
 
-    val combinedCategoryList = (officialGottenGoods + fanGottenGoods)
-        .map { it.category }
-        .distinct()
-        .filter { it.isNotEmpty() && it != CATEGORY_SET }
-        .sorted()
+    val goodsCharaList = remember(officialGottenGoods, fanGottenGoods, favoriteCharaNames) {
+        (officialGottenGoods + fanGottenGoods)
+            .flatMap { it.chara.split(",").map { c -> c.trim() } }
+            .distinct()
+            .filter { it.isNotEmpty() }
+            .sortedByDescending { charaNm -> charaNm in favoriteCharaNames }
+    }
 
-    val filteredOfficialGoods = filterGoodsList(
-        list = officialGottenGoods,
-        charaFilter = selectedCharaFilter,
-        categoryFilter = selectedCategoryFilter
-    )
-    val filteredFanGoods = filterFanGoodsList(
-        list = fanGottenGoods,
-        charaFilter = selectedCharaFilter,
-        categoryFilter = selectedCategoryFilter
-    )
+    val combinedCategoryList = remember(officialGottenGoods, fanGottenGoods) {
+        (officialGottenGoods + fanGottenGoods)
+            .map { it.category }
+            .distinct()
+            .filter { it.isNotEmpty() && it != CATEGORY_SET }
+            .sorted()
+    }
+
+    val filteredOfficialGoods = remember(officialGottenGoods, selectedCharaFilter, selectedCategoryFilter) {
+        filterGoodsList(
+            list = officialGottenGoods,
+            charaFilter = selectedCharaFilter,
+            categoryFilter = selectedCategoryFilter
+        )
+    }
+    val filteredFanGoods = remember(fanGottenGoods, selectedCharaFilter, selectedCategoryFilter) {
+        filterFanGoodsList(
+            list = fanGottenGoods,
+            charaFilter = selectedCharaFilter,
+            categoryFilter = selectedCategoryFilter
+        )
+    }
 
     // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 다이얼로그가 최신 값을 보여주도록 다시 조회한다.
-    val displayedGoods = selectedGoods?.let { selected ->
-        when (selected) {
-            is GoodsEntity -> allSeriesGoods.find { it.goodsId == selected.goodsId } ?: selected
-            is FanGoodsEntity -> fanGottenGoods.find { it.fanGoodsId == selected.fanGoodsId } ?: selected
-            else -> selected
+    val displayedGoods = remember(selectedGoods, allSeriesGoods, fanGottenGoods) {
+        selectedGoods?.let { selected ->
+            when (selected) {
+                is GoodsEntity -> allSeriesGoods.find { it.goodsId == selected.goodsId } ?: selected
+                is FanGoodsEntity -> fanGottenGoods.find { it.fanGoodsId == selected.fanGoodsId } ?: selected
+                else -> selected
+            }
         }
     }
 
@@ -292,8 +321,8 @@ fun MyPageScreen(
             onDismiss = { selectedSetGoods = null; setDialogComponent = null },
             onToggleGotten = { component -> viewModel.toggleOfficialGotten(component) },
             onSetPending = { component -> viewModel.setOfficialPending(component) },
-            onBulkToggleGotten = { isGotten ->
-                viewModel.bulkToggleOfficialGotten(setGoods, isGotten)
+            onBulkSetStatus = { status ->
+                viewModel.bulkSetOfficialStatus(setGoods, status)
                 selectedSetGoods = null
                 setDialogComponent = null
             },
@@ -329,9 +358,15 @@ fun MyPageScreen(
             viewModel.setSection(null)
             viewModel.setCharaFilter(null)
             viewModel.setCategoryFilter(null)
+            selectedPendingOfficialIds = emptySet()
+            selectedPendingFanIds = emptySet()
         }
         TopBar(
-            title = if (currentSection == "goods") "보유 굿즈" else "마이페이지",
+            title = when (currentSection) {
+                "goods" -> "보유 굿즈"
+                "pending" -> "구매예정 굿즈"
+                else -> "마이페이지"
+            },
             onBack = if (currentSection != null) closeSection else null,
             actions = {
                 if (currentSection == "goods") {
@@ -391,6 +426,23 @@ fun MyPageScreen(
                     fanCount = fanGottenGoods.size,
                     onClick = { viewModel.setSection("goods"); viewModel.loadGottenGoods() }
                 )
+
+                SettingsGroup(title = "굿즈") {
+                    val pendingTotal = pendingOfficialGoods.size + pendingFanGoods.size
+                    SettingsRow(
+                        icon = Icons.Default.ShoppingCart,
+                        title = "구매예정 굿즈",
+                        subtitle = if (pendingTotal > 0) "구매일·구입처를 정리해 두세요"
+                        else "구매예정으로 표시한 굿즈가 없습니다",
+                        trailing = if (pendingTotal > 0) {
+                            { StatusPill(text = "${pendingTotal}개", color = AppStyles.colorPending) }
+                        } else null,
+                        onClick = {
+                            viewModel.setSection("pending")
+                            viewModel.loadGottenGoods()
+                        }
+                    )
+                }
 
                 SettingsGroup(title = "유저 데이터") {
                     SettingsRow(
@@ -478,35 +530,94 @@ fun MyPageScreen(
                 }
 
                 Column {
-                    SectionLabel("화면 테마")
+                    // 제목 줄에 지금 쓰는 테마 이름을 적어 두고, 아래는 색 동그라미만 둔다.
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(AppStyles.paddingMedium)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ThemeCard(
-                            label = "라이트",
-                            icon = if (selectedThemeMode == 1) Icons.Default.WbSunny else Icons.Outlined.WbSunny,
-                            containerColor = Color(0xFFFFFAF0),
-                            iconTint = Color(0xFFB8860B),
-                            labelColor = Color(0xFF3D2B00),
-                            selected = selectedThemeMode == 1,
-                            modifier = Modifier.weight(1f),
-                            onClick = { selectedThemeMode = 1; onThemeChange(1) }
+                        Text(
+                            text = "화면 테마",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f)
                         )
-                        ThemeCard(
-                            label = "다크",
-                            icon = if (selectedThemeMode == 2) Icons.Default.DarkMode else Icons.Outlined.DarkMode,
-                            containerColor = Color(0xFF0A0A0A),
-                            iconTint = Color(0xFFF3E85A),
-                            labelColor = Color(0xFFEEEEEE),
-                            selected = selectedThemeMode == 2,
-                            modifier = Modifier.weight(1f),
-                            onClick = { selectedThemeMode = 2; onThemeChange(2) }
+                        Text(
+                            text = AppTheme.fromId(selectedThemeMode).label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        // 테마 수가 늘어도 한 줄에 들어가도록 폭을 똑같이 나눠 갖는다.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectableGroup()
+                                .padding(horizontal = AppStyles.paddingMedium, vertical = 10.dp)
+                        ) {
+                            AppTheme.entries.forEach { theme ->
+                                ThemeSwatchButton(
+                                    theme = theme,
+                                    selected = selectedThemeMode == theme.id,
+                                    onSelect = {
+                                        selectedThemeMode = theme.id
+                                        onThemeChange(theme.id)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
             }
         } else when (currentSection) {
+            "pending" -> {
+                PendingGoodsSection(
+                    officialGoods = pendingOfficialGoods,
+                    fanGoods = pendingFanGoods,
+                    selectedOfficialIds = selectedPendingOfficialIds,
+                    selectedFanIds = selectedPendingFanIds,
+                    onToggleOfficial = { id ->
+                        selectedPendingOfficialIds =
+                            if (id in selectedPendingOfficialIds) selectedPendingOfficialIds - id
+                            else selectedPendingOfficialIds + id
+                    },
+                    onToggleFan = { id ->
+                        selectedPendingFanIds =
+                            if (id in selectedPendingFanIds) selectedPendingFanIds - id
+                            else selectedPendingFanIds + id
+                    },
+                    onSelectAll = {
+                        selectedPendingOfficialIds = pendingOfficialGoods.map { it.goodsId }.toSet()
+                        selectedPendingFanIds = pendingFanGoods.map { it.fanGoodsId }.toSet()
+                    },
+                    onClearSelection = {
+                        selectedPendingOfficialIds = emptySet()
+                        selectedPendingFanIds = emptySet()
+                    },
+                    onApply = { purchaseDate, purchaseStore ->
+                        viewModel.applyPurchaseInfo(
+                            officialIds = selectedPendingOfficialIds,
+                            fanIds = selectedPendingFanIds,
+                            purchaseDate = purchaseDate,
+                            purchaseStore = purchaseStore
+                        )
+                        selectedPendingOfficialIds = emptySet()
+                        selectedPendingFanIds = emptySet()
+                        Toast.makeText(context, "구매 정보를 적용했습니다", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+
             "goods" -> {
                 Column(modifier = Modifier.fillMaxSize()) {
                     SecondaryTabRow(selectedTabIndex = selectedTab) {
@@ -745,47 +856,48 @@ private fun StatusPill(text: String, color: Color) {
     )
 }
 
-/** 라이트/다크 테마 선택 카드 */
+/**
+ * 눌러서 테마를 바꾸는 색 동그라미.
+ * 바깥은 테마 배경색, 안쪽은 메인 색상이고, 고른 것만 테두리가 굵어지고 체크가 들어간다.
+ * 시스템 테마는 배경을 밝게/어둡게 반반으로 칠해 자동이라는 걸 보여준다.
+ */
 @Composable
-private fun ThemeCard(
-    label: String,
-    icon: ImageVector,
-    containerColor: Color,
-    iconTint: Color,
-    labelColor: Color,
+private fun ThemeSwatchButton(
+    theme: AppTheme,
     selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    OutlinedCard(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.outlinedCardColors(containerColor = containerColor),
-        border = BorderStroke(
-            width = if (selected) 2.dp else 1.dp,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(vertical = 18.dp)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = iconTint,
-                modifier = Modifier.size(32.dp)
+    val ringColor =
+        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val ringWidth = if (selected) 2.5.dp else 1.dp
+    Box(
+        modifier = modifier
+            // 동그라미가 작아 손가락이 닿기 어려우므로 나눠 가진 칸 전체를 누를 수 있게 한다.
+            .height(40.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = onSelect
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = label,
-                style = AppStyles.textCardSmall.copy(
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                ),
-                color = labelColor
+            .semantics { contentDescription = theme.label },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.size(26.dp)) {
+            val alt = theme.swatchBackgroundAlt
+            if (alt == null) {
+                drawCircle(color = theme.swatchBackground)
+            } else {
+                drawArc(color = theme.swatchBackground, startAngle = 90f, sweepAngle = 180f, useCenter = true)
+                drawArc(color = alt, startAngle = 270f, sweepAngle = 180f, useCenter = true)
+            }
+            drawCircle(color = theme.swatch, radius = size.minDimension / 2f * 0.62f)
+            val stroke = ringWidth.toPx()
+            drawCircle(
+                color = ringColor,
+                radius = size.minDimension / 2f - stroke / 2f,
+                style = Stroke(width = stroke)
             )
         }
     }

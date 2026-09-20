@@ -11,6 +11,12 @@ interface GoodsItem {
     val isGotten: Boolean
     val status: GoodsStatus
     val memo: String
+
+    /** 구매예정 굿즈에 적어 두는 구매일. "yyyy-MM-dd", 안 정했으면 빈 문자열. */
+    val purchaseDate: String
+
+    /** 구매예정 굿즈를 살 곳. 안 정했으면 빈 문자열. */
+    val purchaseStore: String
 }
 
 const val CATEGORY_SET = "세트"

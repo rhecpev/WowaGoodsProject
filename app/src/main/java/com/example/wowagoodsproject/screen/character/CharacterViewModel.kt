@@ -174,13 +174,14 @@ class CharacterViewModel : ViewModel() {
         }
     }
     // After - 함수 추가 (setOfficialPending 아래)
-    fun bulkToggleOfficialGotten(setGoods: GoodsEntity, isGotten: Boolean) {
+    /** 세트 구성품 + 세트 자신을 한 번에 같은 상태로 바꾼다. */
+    fun bulkSetOfficialStatus(setGoods: GoodsEntity, status: GoodsStatus) {
         viewModelScope.launch {
             val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
             val components = allGoods.filter {
                 it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
             }
-            val newStatus = if (isGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name
+            val newStatus = status.name
             components.forEach { comp ->
                 App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
             }
