@@ -58,19 +58,22 @@ fun PendingGoodsSection(
     onToggleFan: (Int) -> Unit,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
-    onApply: (purchaseDate: String?, purchaseStore: String?) -> Unit,
+    onApply: (officialIds: Set<Int>, fanIds: Set<Int>, purchaseDate: String?, purchaseStore: String?) -> Unit,
+    isFiltered: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var showPurchaseDialog by remember { mutableStateOf(false) }
 
     val totalCount = officialGoods.size + fanGoods.size
-    val selectedCount = selectedOfficialIds.size + selectedFanIds.size
+
+    // 필터로 가려진 굿즈가 선택에 남아 있어도 화면에 보이는 것만 다룬다.
+    val visibleOfficial = officialGoods.filter { it.goodsId in selectedOfficialIds }
+    val visibleFan = fanGoods.filter { it.fanGoodsId in selectedFanIds }
+    val selectedCount = visibleOfficial.size + visibleFan.size
     val allSelected = totalCount > 0 && selectedCount == totalCount
 
     // 고른 굿즈들의 현재 값. 하나로 같을 때만 다이얼로그에 미리 채워 준다.
-    val selectedItems: List<GoodsItem> =
-        officialGoods.filter { it.goodsId in selectedOfficialIds } +
-                fanGoods.filter { it.fanGoodsId in selectedFanIds }
+    val selectedItems: List<GoodsItem> = visibleOfficial + visibleFan
     val commonDate = selectedItems.map { it.purchaseDate }.distinct().singleOrNull() ?: ""
     val commonStore = selectedItems.map { it.purchaseStore }.distinct().singleOrNull() ?: ""
 
@@ -82,7 +85,12 @@ fun PendingGoodsSection(
             onDismiss = { showPurchaseDialog = false },
             onConfirm = { date, store ->
                 showPurchaseDialog = false
-                onApply(date, store)
+                onApply(
+                    visibleOfficial.map { it.goodsId }.toSet(),
+                    visibleFan.map { it.fanGoodsId }.toSet(),
+                    date,
+                    store
+                )
             }
         )
     }
@@ -101,12 +109,14 @@ fun PendingGoodsSection(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "구매예정으로 표시한 굿즈가 없습니다",
+                    text = if (isFiltered) "조건에 맞는 굿즈가 없습니다"
+                    else "구매예정으로 표시한 굿즈가 없습니다",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "굿즈 상세에서 '구매예정'을 고르면 여기에 모입니다",
+                    text = if (isFiltered) "위에서 필터를 바꾸거나 지워 보세요"
+                    else "굿즈 상세에서 '구매예정'을 고르면 여기에 모입니다",
                     style = AppStyles.textCardSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -123,7 +133,11 @@ fun PendingGoodsSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (selectedCount > 0) "${selectedCount}개 선택됨" else "총 ${totalCount}개",
+                text = when {
+                    selectedCount > 0 -> "${selectedCount}개 선택됨"
+                    isFiltered -> "조건에 맞는 ${totalCount}개"
+                    else -> "총 ${totalCount}개"
+                },
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = if (selectedCount > 0) MaterialTheme.colorScheme.primary

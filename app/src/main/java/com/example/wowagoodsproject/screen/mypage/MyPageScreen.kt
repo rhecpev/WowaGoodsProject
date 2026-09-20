@@ -260,6 +260,38 @@ fun MyPageScreen(
         )
     }
 
+    // 구매예정 목록에도 같은 캐릭터/카테고리 필터를 쓴다. 고를 수 있는 값은 구매예정 굿즈에서 뽑는다.
+    val pendingCharaList = remember(pendingOfficialGoods, pendingFanGoods, favoriteCharaNames) {
+        (pendingOfficialGoods + pendingFanGoods)
+            .flatMap { it.chara.split(",").map { c -> c.trim() } }
+            .distinct()
+            .filter { it.isNotEmpty() }
+            .sortedByDescending { charaNm -> charaNm in favoriteCharaNames }
+    }
+
+    val pendingCategoryList = remember(pendingOfficialGoods, pendingFanGoods) {
+        (pendingOfficialGoods + pendingFanGoods)
+            .map { it.category }
+            .distinct()
+            .filter { it.isNotEmpty() && it != CATEGORY_SET }
+            .sorted()
+    }
+
+    val filteredPendingOfficial = remember(pendingOfficialGoods, selectedCharaFilter, selectedCategoryFilter) {
+        filterGoodsList(
+            list = pendingOfficialGoods,
+            charaFilter = selectedCharaFilter,
+            categoryFilter = selectedCategoryFilter
+        )
+    }
+    val filteredPendingFan = remember(pendingFanGoods, selectedCharaFilter, selectedCategoryFilter) {
+        filterFanGoodsList(
+            list = pendingFanGoods,
+            charaFilter = selectedCharaFilter,
+            categoryFilter = selectedCategoryFilter
+        )
+    }
+
     // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 다이얼로그가 최신 값을 보여주도록 다시 조회한다.
     val displayedGoods = remember(selectedGoods, allSeriesGoods, fanGottenGoods) {
         selectedGoods?.let { selected ->
@@ -332,10 +364,11 @@ fun MyPageScreen(
     }
 
     if (showFilterDialog) {
+        val filterCharaNames = if (currentSection == "pending") pendingCharaList else goodsCharaList
         GoodsFilterDialog(
             widthSizeClass = widthSizeClass,
-            charaList = charaList.filter { chara -> goodsCharaList.contains(chara.charaNm) },
-            categoryList = combinedCategoryList,
+            charaList = charaList.filter { chara -> filterCharaNames.contains(chara.charaNm) },
+            categoryList = if (currentSection == "pending") pendingCategoryList else combinedCategoryList,
             selectedCharaFilter = selectedCharaFilter,
             selectedCategoryFilter = selectedCategoryFilter,
             onCharaSelect = { viewModel.setCharaFilter(it) },
@@ -369,13 +402,16 @@ fun MyPageScreen(
             },
             onBack = if (currentSection != null) closeSection else null,
             actions = {
-                if (currentSection == "goods") {
+                // 필터는 보유/구매예정 양쪽에서 쓰고, 보기 방식 전환은 보유 굿즈에만 있다.
+                if (currentSection == "goods" || currentSection == "pending") {
                     TopBarAction(
                         icon = Icons.Default.FilterList,
                         contentDescription = "필터",
                         onClick = { viewModel.setShowFilterDialog(true) },
                         active = selectedCharaFilter != null || selectedCategoryFilter != null
                     )
+                }
+                if (currentSection == "goods") {
                     TopBarAction(
                         icon = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                         contentDescription = "보기 방식 전환",
@@ -403,7 +439,7 @@ fun MyPageScreen(
                 }
             }
         )
-        if (currentSection == "goods") {
+        if (currentSection == "goods" || currentSection == "pending") {
             ActiveFilterChips(
                 filters = listOfNotNull(
                     selectedCharaFilter?.let { ActiveFilter(it) { viewModel.setCharaFilter(null) } },
@@ -582,8 +618,9 @@ fun MyPageScreen(
         } else when (currentSection) {
             "pending" -> {
                 PendingGoodsSection(
-                    officialGoods = pendingOfficialGoods,
-                    fanGoods = pendingFanGoods,
+                    officialGoods = filteredPendingOfficial,
+                    fanGoods = filteredPendingFan,
+                    isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null,
                     selectedOfficialIds = selectedPendingOfficialIds,
                     selectedFanIds = selectedPendingFanIds,
                     onToggleOfficial = { id ->
@@ -597,17 +634,18 @@ fun MyPageScreen(
                             else selectedPendingFanIds + id
                     },
                     onSelectAll = {
-                        selectedPendingOfficialIds = pendingOfficialGoods.map { it.goodsId }.toSet()
-                        selectedPendingFanIds = pendingFanGoods.map { it.fanGoodsId }.toSet()
+                        // 필터가 걸려 있으면 보이는 것만 고른다.
+                        selectedPendingOfficialIds = filteredPendingOfficial.map { it.goodsId }.toSet()
+                        selectedPendingFanIds = filteredPendingFan.map { it.fanGoodsId }.toSet()
                     },
                     onClearSelection = {
                         selectedPendingOfficialIds = emptySet()
                         selectedPendingFanIds = emptySet()
                     },
-                    onApply = { purchaseDate, purchaseStore ->
+                    onApply = { officialIds, fanIds, purchaseDate, purchaseStore ->
                         viewModel.applyPurchaseInfo(
-                            officialIds = selectedPendingOfficialIds,
-                            fanIds = selectedPendingFanIds,
+                            officialIds = officialIds,
+                            fanIds = fanIds,
                             purchaseDate = purchaseDate,
                             purchaseStore = purchaseStore
                         )
