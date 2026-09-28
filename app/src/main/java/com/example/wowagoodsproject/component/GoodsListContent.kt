@@ -16,7 +16,9 @@ fun GoodsListContent(
     goods: List<GoodsEntity>,
     isGridMode: Boolean,
     gridColumns: Int,
-    onGoodsClick: (GoodsEntity) -> Unit
+    onGoodsClick: (GoodsEntity) -> Unit,
+    /** null 이면 선택 모드가 아니다. */
+    selectedIds: Set<Int>? = null
 ) {
     if (goods.isEmpty()) {
         EmptyState(icon = Icons.Outlined.Inventory2, title = "굿즈가 없습니다")
@@ -39,6 +41,8 @@ fun GoodsListContent(
                                 isGotten = item.isGotten,
                                 gottenStatus = item.status.asGottenStatus(),
                                 memo = item.memo,
+                                quantity = item.quantity,
+                                selected = selectedIds?.let { item.goodsId in it },
                                 onClick = { onGoodsClick(item) }
                             )
                         }
@@ -62,6 +66,8 @@ fun GoodsListContent(
                     isGotten = item.isGotten,
                     gottenStatus = item.status.asGottenStatus(),
                     memo = item.memo,
+                    quantity = item.quantity,
+                    selected = selectedIds?.let { item.goodsId in it },
                     onClick = { onGoodsClick(item) }
                 )
 

@@ -1,5 +1,15 @@
 package com.example.wowagoodsproject.component
 
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +39,10 @@ import java.io.File
 
 /**
  * 굿즈 상세. 화면 아래에서 올라오는 바텀시트로 띄운다.
- * 큰 이미지 → 시리즈(누르면 이동)·캐릭터 → 가격/카테고리/메모 → 보유 상태 세그먼트 → 세트 정보 순.
+ * 큰 이미지 → 시리즈(누르면 이동)·캐릭터 → 가격/카테고리/메모 → 보유 상태 세그먼트 → (구매 정보) → 세트 정보 순.
+ *
+ * [onSavePendingInfo] 를 넘기면 '구매예정'을 고를 때 구입처/구매일/수령예정일 입력 다이얼로그를 먼저 띄우고,
+ * 확인하면 상태와 구매 정보를 함께 저장한다. 구매예정인 동안은 구매 정보를 보여주고 고칠 수 있다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +64,11 @@ fun GoodsDetailDialog(
     onSetPending: () -> Unit,
     onDelete: () -> Unit,
     showDelete: Boolean = true,
-    onSeriesClick: (String) -> Unit = {}
+    onSeriesClick: (String) -> Unit = {},
+    purchaseInfo: PurchaseInfo = PurchaseInfo(),
+    onSavePendingInfo: ((PurchaseInfo) -> Unit)? = null,
+    quantity: Int = 1,
+    onQuantityChange: ((Int) -> Unit)? = null
 ){
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
@@ -72,11 +89,39 @@ fun GoodsDetailDialog(
     var shownStatus by remember(status) { mutableStateOf(status) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showFullImage by remember { mutableStateOf(false) }
+    var showPurchaseDialog by remember { mutableStateOf(false) }
+    // 누르자마자 숫자가 바뀌어 보이게 먼저 반영하고, DB 값이 돌아오면 그 값으로 맞춘다.
+    var shownQuantity by remember(quantity) { mutableIntStateOf(quantity) }
+    val onChangeQuantity: ((Int) -> Unit)? = onQuantityChange?.let { save ->
+        { q -> shownQuantity = q; save(q) }
+    }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val onSelectStatus: (GoodsStatus) -> Unit = { target ->
-        shownStatus = target
-        applyStatusChange(status, target, onToggleGotten, onSetPending)
+        if (target == GoodsStatus.PENDING && onSavePendingInfo != null) {
+            // 구매 정보를 받은 뒤에 상태를 바꾼다. 취소하면 그대로 둔다.
+            showPurchaseDialog = true
+        } else {
+            shownStatus = target
+            applyStatusChange(status, target, onToggleGotten, onSetPending)
+        }
+    }
+    val shownPurchaseInfo =
+        if (shownStatus == GoodsStatus.PENDING && onSavePendingInfo != null) purchaseInfo else null
+
+    if (showPurchaseDialog && onSavePendingInfo != null) {
+        val editing = status == GoodsStatus.PENDING
+        PurchaseInfoDialog(
+            initial = purchaseInfo,
+            title = if (editing) "구매 정보 수정" else "구매예정으로 표시",
+            confirmText = if (editing) "저장" else "구매예정으로",
+            onDismiss = { showPurchaseDialog = false },
+            onConfirm = { edit ->
+                showPurchaseDialog = false
+                shownStatus = GoodsStatus.PENDING
+                onSavePendingInfo(edit.applyTo(purchaseInfo))
+            }
+        )
     }
 
     if (showDeleteConfirm) {
@@ -134,6 +179,10 @@ fun GoodsDetailDialog(
                         memo = memo,
                         status = shownStatus,
                         onSelectStatus = onSelectStatus,
+                        purchaseInfo = shownPurchaseInfo,
+                        onEditPurchase = { showPurchaseDialog = true },
+                        quantity = shownQuantity,
+                        onQuantityChange = onChangeQuantity,
                         setGoods = setGoods,
                         setComponentTotal = setComponentTotal,
                         setComponentGotten = setComponentGotten,
@@ -162,6 +211,10 @@ fun GoodsDetailDialog(
                     memo = memo,
                     status = shownStatus,
                     onSelectStatus = onSelectStatus,
+                    purchaseInfo = shownPurchaseInfo,
+                    onEditPurchase = { showPurchaseDialog = true },
+                    quantity = shownQuantity,
+                    onQuantityChange = onChangeQuantity,
                     setGoods = setGoods,
                     setComponentTotal = setComponentTotal,
                     setComponentGotten = setComponentGotten,
@@ -215,6 +268,10 @@ private fun DetailBody(
     memo: String,
     status: GoodsStatus,
     onSelectStatus: (GoodsStatus) -> Unit,
+    purchaseInfo: PurchaseInfo?,
+    onEditPurchase: () -> Unit,
+    quantity: Int,
+    onQuantityChange: ((Int) -> Unit)?,
     setGoods: GoodsItem?,
     setComponentTotal: Int,
     setComponentGotten: Int,
@@ -283,6 +340,17 @@ private fun DetailBody(
         Spacer(modifier = Modifier.height(8.dp))
         StatusSegmentedButtons(current = status, onSelect = onSelectStatus)
 
+        // 수량은 가지고 있거나 살 예정인 굿즈에만 의미가 있다.
+        if (onQuantityChange != null && status != GoodsStatus.NOT_GOTTEN) {
+            Spacer(modifier = Modifier.height(12.dp))
+            QuantityStepper(quantity = quantity, onChange = onQuantityChange)
+        }
+
+        if (purchaseInfo != null) {
+            Spacer(modifier = Modifier.height(20.dp))
+            PurchaseInfoSummary(info = purchaseInfo, onEdit = onEditPurchase)
+        }
+
         if (setGoods != null) {
             Spacer(modifier = Modifier.height(20.dp))
             SetGoodsSummary(
@@ -307,6 +375,126 @@ private fun DetailBody(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("이 굿즈 삭제")
+            }
+        }
+    }
+}
+
+private const val MAX_QUANTITY = 99
+
+/** 수량 − / + 버튼. 가운데 숫자를 누르면 직접 입력한다. */
+@Composable
+private fun QuantityStepper(quantity: Int, onChange: (Int) -> Unit) {
+    var showInput by remember { mutableStateOf(false) }
+    if (showInput) {
+        QuantityInputDialog(
+            initial = quantity,
+            onDismiss = { showInput = false },
+            onConfirm = { showInput = false; if (it != quantity) onChange(it) }
+        )
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "수량",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = { onChange(quantity - 1) }, enabled = quantity > 1) {
+                Icon(Icons.Default.Remove, contentDescription = "수량 줄이기")
+            }
+            Text(
+                text = "${quantity}개",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .widthIn(min = 48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showInput = true }
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+            )
+            IconButton(onClick = { onChange(quantity + 1) }, enabled = quantity < MAX_QUANTITY) {
+                Icon(Icons.Default.Add, contentDescription = "수량 늘리기")
+            }
+        }
+    }
+}
+
+/** 수량 직접 입력. 숫자만 받고 1~[MAX_QUANTITY] 범위일 때만 확인할 수 있다. */
+@Composable
+private fun QuantityInputDialog(initial: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    var text by remember {
+        mutableStateOf(TextFieldValue("$initial", selection = TextRange(0, "$initial".length)))
+    }
+    val value = text.text.toIntOrNull()
+    val valid = value != null && value in 1..MAX_QUANTITY
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("수량 입력") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { new ->
+                    if (new.text.length <= 2 && new.text.all { it.isDigit() }) text = new
+                },
+                label = { Text("수량") },
+                suffix = { Text("개") },
+                supportingText = { Text("1~${MAX_QUANTITY}개") },
+                isError = text.text.isNotEmpty() && !valid,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (valid) onConfirm(value!!) }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(value!!) }, enabled = valid) { Text("확인") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("취소") }
+        }
+    )
+}
+
+/** 구매예정 굿즈의 구입처/구매일/수령예정일. 오른쪽 위 버튼으로 고친다. */
+@Composable
+private fun PurchaseInfoSummary(info: PurchaseInfo, onEdit: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "구매 정보",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onEdit) { Text("수정") }
+        }
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                InfoLine(label = "구입처", value = info.purchaseStore.ifEmpty { "미정" })
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                InfoLine(label = "구매일", value = info.purchaseDate.ifEmpty { "미정" })
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                InfoLine(label = "수령예정일", value = info.receiveDate.ifEmpty { "미정" })
             }
         }
     }

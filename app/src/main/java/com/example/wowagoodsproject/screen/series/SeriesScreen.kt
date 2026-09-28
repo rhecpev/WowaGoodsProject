@@ -1,9 +1,18 @@
 package com.example.wowagoodsproject.screen.series
 
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.example.wowagoodsproject.component.bulkStatusMessage
+import com.example.wowagoodsproject.component.rememberGoodsSelection
+import com.example.wowagoodsproject.component.BulkStatusBar
+import com.example.wowagoodsproject.component.swipeToChangeTab
+import com.example.wowagoodsproject.component.purchaseInfo
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.material.icons.filled.Search
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +81,7 @@ fun SeriesScreen(
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
     val seriesCharaCountMap by viewModel.seriesCharaCountMap.collectAsState()
     val seriesList by viewModel.seriesList.collectAsState()
+    val titleQuery by viewModel.titleQuery.collectAsState()
 
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
@@ -83,6 +92,9 @@ fun SeriesScreen(
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
     var setDialogComponent by remember { mutableStateOf<GoodsEntity?>(null) }
     var showGoodsFilterDialog by remember { mutableStateOf(false) }
+    // 검색어가 남아 있으면 시리즈 상세에서 돌아왔을 때도 검색창을 열어 둔다.
+    var showTitleSearch by remember { mutableStateOf(titleQuery.isNotEmpty()) }
+    val titleSearchFocus = remember { FocusRequester() }
 
     val sortedCharaList = allCharaList
         .sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
@@ -119,13 +131,19 @@ fun SeriesScreen(
         categoryFilter = selectedGoodsCategoryFilter
     )
 
+    val context = LocalContext.current
+    val selection = rememberGoodsSelection()
+
     val closeSeries: () -> Unit = {
+        selection.exit()
         viewModel.clearSelectedSeries()
         filterViewModel.setFilter(FilterType.ALL)
         filterViewModel.clearGoodsFilter()
     }
 
     BackHandler(enabled = selectedSeries != null) { closeSeries() }
+    // 나중에 등록한 BackHandler 가 먼저 받으므로, 선택 중이면 뒤로가기는 선택만 끝낸다.
+    BackHandler(enabled = selection.mode) { selection.exit() }
 
     // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 상세가 최신 값을 보여주도록 다시 조회한다.
     val displayedGoods = selectedGoods?.let { selected ->
@@ -156,6 +174,10 @@ fun SeriesScreen(
             onToggleGotten = { officialGoods?.let { viewModel.toggleGotten(it) } },
             onSetPending = { officialGoods?.let { viewModel.setPending(it) } },
             isPending = (goods as? GoodsEntity)?.status == GoodsStatus.PENDING,
+            purchaseInfo = goods.purchaseInfo,
+            onSavePendingInfo = officialGoods?.let { og -> { info -> viewModel.savePendingInfo(og, info) } },
+            quantity = goods.quantity,
+            onQuantityChange = officialGoods?.let { og -> { q -> viewModel.setQuantity(og, q) } },
             onDelete = {},
             showDelete = false,
             onSeriesClick = { seriesName ->
@@ -180,7 +202,13 @@ fun SeriesScreen(
                 setDialogComponent = null
             },
             highlightChara = selectedGoodsCharaFilter,
-            highlightCategory = selectedGoodsCategoryFilter
+            highlightCategory = selectedGoodsCategoryFilter,
+            onSavePendingInfo = { component, info -> viewModel.savePendingInfo(component, info) },
+            onBulkSavePending = { info ->
+                viewModel.bulkSetStatus(setGoods, GoodsStatus.PENDING, info)
+                selectedSetGoods = null
+                setDialogComponent = null
+            }
         )
     }
 
@@ -260,18 +288,47 @@ fun SeriesScreen(
             FilterBar(
                 filterType = filterType,
                 onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = AllSeriesGoods
+                goodsList = AllSeriesGoods,
+                selectionMode = selection.mode,
+                onToggleSelection = { selection.toggleMode() }
             )
+            if (selection.mode) {
+                val picked = selection.visible(filteredGoods) { it.goodsId }
+                BulkStatusBar(
+                    selectedItems = picked,
+                    allSelected = filteredGoods.isNotEmpty() && picked.size == filteredGoods.size,
+                    onSelectAll = { selection.selectAll(filteredGoods.map { it.goodsId }) },
+                    onClearSelection = { selection.clear() },
+                    onApply = { status, edit ->
+                        viewModel.applyStatus(picked, status, edit)
+                        selection.clear()
+                        Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
             GoodsListContent(
                 goods = filteredGoods,
                 isGridMode = isGridMode,
                 gridColumns = gridColumns,
-                onGoodsClick = { detailViewModel.selectGoods(it) }
+                onGoodsClick = {
+                    if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                },
+                selectedIds = if (selection.mode) selection.ids else null
             )
         } else {
             TopBar(
                 title = "공식",
                 actions = {
+                    TopBarAction(
+                        icon = Icons.Default.Search,
+                        contentDescription = "시리즈 제목 검색",
+                        onClick = {
+                            // 닫을 때는 검색어도 지워서 보이지 않는 조건이 남지 않게 한다.
+                            if (showTitleSearch) viewModel.setTitleQuery("")
+                            showTitleSearch = !showTitleSearch
+                        },
+                        active = showTitleSearch || titleQuery.isNotEmpty()
+                    )
                     TopBarAction(
                         icon = Icons.Default.FilterList,
                         contentDescription = "캐릭터 필터",
@@ -280,6 +337,20 @@ fun SeriesScreen(
                     )
                 }
             )
+            if (showTitleSearch) {
+                SearchField(
+                    query = titleQuery,
+                    onQueryChange = { viewModel.setTitleQuery(it) },
+                    placeholder = "시리즈 제목 검색",
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .focusRequester(titleSearchFocus)
+                )
+                // 아이콘을 눌러 막 열었을 때만 바로 입력할 수 있게 포커스를 준다.
+                LaunchedEffect(Unit) {
+                    if (titleQuery.isEmpty()) titleSearchFocus.requestFocus()
+                }
+            }
             ActiveFilterChips(
                 filters = listOfNotNull(
                     selectedCharaFilter?.let { ActiveFilter(it.charaNm) { viewModel.setCharaFilter(null) } }
@@ -288,16 +359,7 @@ fun SeriesScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(selectedTab) {
-                        detectHorizontalDragGestures { change, dragAmount ->
-                            change.consume()
-                            if (dragAmount > 100) {
-                                if (selectedTab > 0) viewModel.setSelectedTab(selectedTab - 1)
-                            } else if (dragAmount < -100) {
-                                if (selectedTab < viewModel.countries.size - 1) viewModel.setSelectedTab(selectedTab + 1)
-                            }
-                        }
-                    }
+                    .swipeToChangeTab(selectedTab, viewModel.countries.size) { viewModel.setSelectedTab(it) }
             ) {
                 SecondaryTabRow(selectedTabIndex = selectedTab) {
                     viewModel.countries.forEachIndexed { index, country ->
@@ -321,7 +383,9 @@ fun SeriesScreen(
                             .background(MaterialTheme.colorScheme.background),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "등록된 시리즈가 없습니다", color = MaterialTheme.colorScheme.onBackground)
+                        Text(
+                            text = if (titleQuery.isNotBlank()) "'${titleQuery.trim()}' 검색 결과가 없습니다" else "등록된 시리즈가 없습니다",
+                            color = MaterialTheme.colorScheme.onBackground)
                     }
                 } else {
                     val tabScrollPositions by viewModel.tabScrollPositions.collectAsState()

@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject
 
+import com.example.wowagoodsproject.db.official.modify
 import android.content.Context
 import android.util.Log
 import com.example.wowagoodsproject.component.GoodsStatus
@@ -32,8 +33,12 @@ object UpdateManager {
     val progress: StateFlow<UpdateProgress> = _progress
 
     private val _isRunning = MutableStateFlow(false)
-    /** 데이터 동기화가 돌고 있는지. 시작 화면과 수동 업데이트 팝업이 이 값을 보고 로딩바를 띄운다. */
+    /** 데이터 동기화가 돌고 있는지(오전 5시 백그라운드 업데이트 포함). */
     val isRunning: StateFlow<Boolean> = _isRunning
+
+    private val _showProgress = MutableStateFlow(false)
+    /** 화면을 막고 진행률을 보여 줄 동기화(첫 설치, 수동 업데이트)가 돌고 있는지. 오전 5시 업데이트는 조용히 돈다. */
+    val showProgress: StateFlow<Boolean> = _showProgress
 
     private val updateMutex = Mutex()
 
@@ -50,11 +55,15 @@ object UpdateManager {
 
     /**
      * 캐릭터 → 시리즈 → 굿즈 순으로 전체 동기화하고 바뀐 항목 수를 돌려준다.
-     * 앱 시작 시 자동 업데이트와 수동 업데이트(UpdateWorker)가 함께 쓰며, 동시에 두 번 돌지 않는다.
-     * 성공하면 마이페이지에 보여줄 마지막 업데이트 시각/변경 개수를 저장한다.
+     * 오전 5시 업데이트(ScheduledUpdateWorker), 수동 업데이트(UpdateWorker), 첫 설치 때 앱 시작이 함께 쓰며,
+     * 동시에 두 번 돌지 않는다. 성공하면 마이페이지에 보여줄 마지막 업데이트 시각/변경 개수를 저장한다.
+     * 새 소식이 쌓이면 소식 알림을 띄운다.
+     *
+     * @param showProgress false 면 진행률 팝업 없이 조용히 돈다(오전 5시 업데이트).
      */
-    suspend fun runFullUpdate(): Int = updateMutex.withLock {
+    suspend fun runFullUpdate(showProgress: Boolean = true): Int = updateMutex.withLock {
         _isRunning.value = true
+        _showProgress.value = showProgress
         resetProgress()
         try {
             val results = listOf(updateCharacters(), updateSeries(), updateGoods())
@@ -68,6 +77,7 @@ object UpdateManager {
             total
         } finally {
             _isRunning.value = false
+            _showProgress.value = false
         }
     }
 
@@ -317,9 +327,9 @@ object UpdateManager {
                     news.add(newsOf(NewsType.NEW_GOODS, newsTime, remote))
                 }
             } else if (local.goodsUrl != remote.goodsUrl) {
-                App.database.goodsDao().update(
-                    local.copy(goodsUrl = remote.goodsUrl)
-                )
+                // 업데이트는 새벽에 조용히 돌기도 해서 그사이 사용자가 바꾼 값이 있을 수 있다.
+                // 시작할 때 읽어 둔 값을 통째로 저장하지 않고 URL 칸만 고친다.
+                App.database.goodsDao().modify(local.goodsId) { it.copy(goodsUrl = remote.goodsUrl) }
                 update.updated.add("[굿즈 URL 변경] ${remote.goodsSeries} - ${remote.goodsChara} - ${remote.goodsCategory} - ${remote.goodsPrice}\n  ${local.goodsUrl} → ${remote.goodsUrl}")
 
                 if (local.goodsStatus != GoodsStatus.NOT_GOTTEN.name && local.goodsCategory != CATEGORY_SET) {
@@ -340,7 +350,9 @@ object UpdateManager {
                     local.goodsStatus != GoodsStatus.NOT_GOTTEN.name &&
                     local.goodsCategory != CATEGORY_SET
                 ) {
-                    news.add(recordChangedGoods(local, localMap.keys, remoteByLooseKey, newsTime))
+                    // 사라지기 직전의 최신 값(수량·구매 정보)을 기록해 둔다.
+                    val latest = App.database.goodsDao().getById(local.goodsId) ?: local
+                    news.add(recordChangedGoods(latest, localMap.keys, remoteByLooseKey, newsTime))
                 }
                 App.database.goodsDao().delete(local)
                 update.deleted.add("[굿즈 삭제] ${local.goodsSeries} - ${local.goodsChara} - ${local.goodsCategory} - ${local.goodsPrice}")
@@ -403,7 +415,12 @@ object UpdateManager {
                 newPrice = replacement?.goodsPrice ?: "",
                 newMemo = replacement?.goodsMemo ?: "",
                 newUrl = replacement?.goodsUrl ?: "",
-                changedDetail = detail
+                changedDetail = detail,
+                oldQuantity = local.goodsQuantity,
+                oldPurchaseStore = local.goodsPurchaseStore,
+                oldPurchaseDate = local.goodsPurchaseDate,
+                oldReceiveDate = local.goodsReceiveDate,
+                oldShippingDate = local.goodsShippingDate
             )
         ).toInt()
 
@@ -441,7 +458,10 @@ object UpdateManager {
     private suspend fun saveNews(news: List<NewsEntity>) {
         if (news.isEmpty()) return
         // 한 번에 너무 많이 쌓이지 않도록 상한을 둔다.
-        App.newsDatabase.newsDao().insertAll(news.take(MAX_NEWS_PER_RUN))
+        val saved = news.take(MAX_NEWS_PER_RUN)
+        App.newsDatabase.newsDao().insertAll(saved)
+        // 소식에 무언가 새로 쌓이면 알림으로도 알린다.
+        NewsNotifier.notifyNews(App.appContext, saved)
     }
 
     private const val MAX_NEWS_PER_RUN = 200

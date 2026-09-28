@@ -1,5 +1,12 @@
 package com.example.wowagoodsproject.screen.news
 
+import com.example.wowagoodsproject.navigation.TopBarAction
+import com.example.wowagoodsproject.db.character.CharaEntity
+import com.example.wowagoodsproject.component.GoodsFilterDialog
+import com.example.wowagoodsproject.component.ActiveFilterChips
+import com.example.wowagoodsproject.component.ActiveFilter
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -28,8 +35,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** 소식의 캐릭터 칸은 "A, B" 처럼 여러 명이 들어올 수 있다. */
+private fun NewsEntity.charaNames(): List<String> =
+    newsChara.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
 @Composable
 fun NewsScreen(
+    widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
     onNavigateBack: () -> Unit = {},
     onNavigateToSeries: (String) -> Unit = {},
     viewModel: NewsViewModel = viewModel()
@@ -37,7 +49,30 @@ fun NewsScreen(
     val news by viewModel.news.collectAsState()
     val restorableIds by viewModel.restorableIds.collectAsState()
     val message by viewModel.message.collectAsState()
+    val allCharaList by viewModel.allCharaList.collectAsState()
+    val charaFilter by viewModel.charaFilter.collectAsState()
+    val categoryFilter by viewModel.categoryFilter.collectAsState()
+    var showFilterDialog by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
+
+    // 필터 선택지는 지금 소식 목록에 실제로 있는 캐릭터/카테고리로만 만든다.
+    val newsCharaNames = news.flatMap { it.charaNames() }.distinct()
+    val filterCharaList = newsCharaNames.map { name ->
+        allCharaList.find { it.charaNm == name } ?: CharaEntity(charaNm = name)
+    }
+    val filterCategoryList = news.map { it.newsCategory }.filter { it.isNotBlank() }.distinct().sorted()
+
+    // 소식이 지워져 고른 값이 목록에서 사라지면 필터도 푼다.
+    LaunchedEffect(newsCharaNames, filterCategoryList) {
+        if (charaFilter != null && charaFilter !in newsCharaNames) viewModel.setCharaFilter(null)
+        if (categoryFilter != null && categoryFilter !in filterCategoryList) viewModel.setCategoryFilter(null)
+    }
+
+    val filteredNews = news.filter { item ->
+        (charaFilter == null || charaFilter in item.charaNames()) &&
+                (categoryFilter == null || item.newsCategory == categoryFilter)
+    }
     var showClearDialog by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
@@ -49,6 +84,20 @@ fun NewsScreen(
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             viewModel.consumeMessage()
         }
+    }
+
+    if (showFilterDialog) {
+        GoodsFilterDialog(
+            widthSizeClass = widthSizeClass,
+            charaList = filterCharaList,
+            categoryList = filterCategoryList,
+            selectedCharaFilter = charaFilter,
+            selectedCategoryFilter = categoryFilter,
+            onCharaSelect = { viewModel.setCharaFilter(it) },
+            onCategorySelect = { viewModel.setCategoryFilter(it) },
+            onClearFilter = { viewModel.clearFilter() },
+            onDismiss = { showFilterDialog = false }
+        )
     }
 
     if (showClearDialog) {
@@ -74,9 +123,22 @@ fun NewsScreen(
             onBack = onNavigateBack,
             actions = {
                 if (news.isNotEmpty()) {
+                    TopBarAction(
+                        icon = Icons.Default.FilterList,
+                        contentDescription = "필터",
+                        onClick = { showFilterDialog = true },
+                        active = charaFilter != null || categoryFilter != null
+                    )
                     TextButton(onClick = { showClearDialog = true }) { Text("전체 삭제") }
                 }
             }
+        )
+        ActiveFilterChips(
+            filters = listOfNotNull(
+                charaFilter?.let { ActiveFilter(it) { viewModel.setCharaFilter(null) } },
+                categoryFilter?.let { ActiveFilter(it) { viewModel.setCategoryFilter(null) } }
+            ),
+            onClearAll = { viewModel.clearFilter() }
         )
 
         if (news.isEmpty()) {
@@ -97,13 +159,23 @@ fun NewsScreen(
                     )
                 }
             }
+        } else if (filteredNews.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "조건에 맞는 소식이 없습니다",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(vertical = AppStyles.paddingSmall),
                 verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
             ) {
-                items(news, key = { it.newsId }) { item ->
+                items(filteredNews, key = { it.newsId }) { item ->
                     NewsCard(
                         news = item,
                         timeText = dateFormat.format(Date(item.newsTime)),

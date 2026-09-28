@@ -36,6 +36,13 @@ data class ChangedGoodsEntity(
     /** 무엇이 바뀌었는지. 여러 줄이면 개행으로 구분한다. */
     val changedDetail: String = "",
 
+    // 사라지기 직전에 사용자가 적어 둔 값. 상태를 되돌릴 때 함께 되돌린다.
+    val oldQuantity: Int = 1,
+    val oldPurchaseStore: String = "",
+    val oldPurchaseDate: String = "",
+    val oldReceiveDate: String = "",
+    val oldShippingDate: String = "",
+
     /** 사용자가 상태를 되돌렸는지 */
     val isRestored: Boolean = false
 ) {

@@ -1,5 +1,12 @@
 package com.example.wowagoodsproject.screen.character
 
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.example.wowagoodsproject.component.bulkStatusMessage
+import com.example.wowagoodsproject.component.rememberGoodsSelection
+import com.example.wowagoodsproject.component.BulkStatusBar
+import com.example.wowagoodsproject.component.swipeToChangeTab
+import com.example.wowagoodsproject.component.purchaseInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -132,7 +139,13 @@ fun CharacterScreen(
         else -> 4
     }
 
+    val context = LocalContext.current
+    val selection = rememberGoodsSelection()
+    // 공식/2차창작은 id 가 겹칠 수 있으니 탭을 옮기면 선택을 비운다.
+    LaunchedEffect(selectedTab) { selection.clear() }
+
     val closeChara: () -> Unit = {
+        selection.exit()
         viewModel.clearSelectedChara()
         viewModel.setSelectedTab(0)
         filterViewModel.setFilter(FilterType.ALL)
@@ -141,6 +154,8 @@ fun CharacterScreen(
     }
 
     BackHandler(enabled = selectedChara != null) { closeChara() }
+    // 나중에 등록한 BackHandler 가 먼저 받으므로, 선택 중이면 뒤로가기는 선택만 끝낸다.
+    BackHandler(enabled = selection.mode) { selection.exit() }
 
     // 카테고리 필터 팝업
     if (showCategoryFilterDialog) {
@@ -211,6 +226,16 @@ fun CharacterScreen(
                 fanGoods?.let { viewModel.toggleFanGotten(it) }
             },
             isPending = goods.status == GoodsStatus.PENDING,
+            purchaseInfo = goods.purchaseInfo,
+            quantity = goods.quantity,
+            onQuantityChange = { q ->
+                officialGoods?.let { viewModel.setOfficialQuantity(it, q) }
+                fanGoods?.let { viewModel.setFanQuantity(it, q) }
+            },
+            onSavePendingInfo = { info ->
+                officialGoods?.let { viewModel.saveOfficialPendingInfo(it, info) }
+                fanGoods?.let { viewModel.saveFanPendingInfo(it, info) }
+            },
             onSetPending = {
                 officialGoods?.let { viewModel.setOfficialPending(it) }
                 fanGoods?.let { viewModel.setFanPending(it) }
@@ -239,7 +264,13 @@ fun CharacterScreen(
                 setDialogComponent = null
             },
             highlightChara = selectedChara?.charaNm,
-            highlightCategory = selectedCategoryFilter
+            highlightCategory = selectedCategoryFilter,
+            onSavePendingInfo = { component, info -> viewModel.saveOfficialPendingInfo(component, info) },
+            onBulkSavePending = { info ->
+                viewModel.bulkSetOfficialStatus(setGoods, GoodsStatus.PENDING, info)
+                selectedSetGoods = null
+                setDialogComponent = null
+            }
         )
     }
 
@@ -375,26 +406,71 @@ fun CharacterScreen(
             FilterBar(
                 filterType = filterType,
                 onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = if (selectedTab == 0) AllFilteredOfficialGoods else AllFilteredFanGoods
+                goodsList = if (selectedTab == 0) AllFilteredOfficialGoods else AllFilteredFanGoods,
+                selectionMode = selection.mode,
+                onToggleSelection = { selection.toggleMode() }
             )
-
-            when (selectedTab) {
-                0 -> {
-                    GoodsListContent(
-                        goods = filteredOfficialGoods,
-                        isGridMode = isGridMode,
-                        gridColumns = gridColumns,
-                        onGoodsClick = { detailViewModel.selectGoods(it) }
+            if (selectedTab == 0) {
+                if (selection.mode) {
+                    val picked = selection.visible(filteredOfficialGoods) { it.goodsId }
+                    BulkStatusBar(
+                        selectedItems = picked,
+                        allSelected = filteredOfficialGoods.isNotEmpty() && picked.size == filteredOfficialGoods.size,
+                        onSelectAll = { selection.selectAll(filteredOfficialGoods.map { it.goodsId }) },
+                        onClearSelection = { selection.clear() },
+                        onApply = { status, edit ->
+                            viewModel.applyOfficialStatus(picked, status, edit)
+                            selection.clear()
+                            Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                        }
                     )
                 }
-
-                1 -> {
-                    FanGoodsListContent(
-                        goods = filteredFanGoods,
-                        isGridMode = isGridMode,
-                        gridColumns = gridColumns,
-                        onGoodsClick = { detailViewModel.selectGoods(it) }
+            } else {
+                if (selection.mode) {
+                    val picked = selection.visible(filteredFanGoods) { it.fanGoodsId }
+                    BulkStatusBar(
+                        selectedItems = picked,
+                        allSelected = filteredFanGoods.isNotEmpty() && picked.size == filteredFanGoods.size,
+                        onSelectAll = { selection.selectAll(filteredFanGoods.map { it.fanGoodsId }) },
+                        onClearSelection = { selection.clear() },
+                        onApply = { status, edit ->
+                            viewModel.applyFanStatus(picked, status, edit)
+                            selection.clear()
+                            Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                        }
                     )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .swipeToChangeTab(selectedTab, 2) { viewModel.setSelectedTab(it) }
+            ) {
+                when (selectedTab) {
+                    0 -> {
+                        GoodsListContent(
+                            goods = filteredOfficialGoods,
+                            isGridMode = isGridMode,
+                            gridColumns = gridColumns,
+                            onGoodsClick = {
+                                if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                            },
+                            selectedIds = if (selection.mode) selection.ids else null
+                        )
+                    }
+
+                    1 -> {
+                        FanGoodsListContent(
+                            goods = filteredFanGoods,
+                            isGridMode = isGridMode,
+                            gridColumns = gridColumns,
+                            onGoodsClick = {
+                                if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                            },
+                            selectedIds = if (selection.mode) selection.ids else null
+                        )
+                    }
                 }
             }
         }

@@ -1,5 +1,13 @@
 package com.example.wowagoodsproject.screen.series
 
+import com.example.wowagoodsproject.db.official.setQuantity
+import com.example.wowagoodsproject.db.official.applyStatus
+import com.example.wowagoodsproject.db.official.savePending
+import com.example.wowagoodsproject.db.official.bulkSetStatus
+import com.example.wowagoodsproject.db.official.togglePending
+import com.example.wowagoodsproject.db.official.toggleGotten
+import com.example.wowagoodsproject.component.PurchaseInfoEdit
+import com.example.wowagoodsproject.component.PurchaseInfo
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
@@ -47,6 +55,9 @@ class SeriesViewModel : ViewModel() {
     private val _filteredSeriesList = MutableStateFlow<List<SeriesEntity>>(emptyList())
     val filteredSeriesList: StateFlow<List<SeriesEntity>> = _filteredSeriesList
 
+    private val _titleQuery = MutableStateFlow("")
+    val titleQuery: StateFlow<String> = _titleQuery
+
     val countries = listOf("전체","버전", "중국", "대만", "한국", "일본", "기타")
 
     private val _tabScrollPositions = MutableStateFlow<Map<Int, Pair<Int, Int>>>(emptyMap())
@@ -81,8 +92,12 @@ class SeriesViewModel : ViewModel() {
                 .combine(App.database.goodsDao().getAllFlow()) { series, goods ->
                     Pair(series, goods)
                 }
-                .collectLatest { (series, _) ->
+                .collectLatest { (series, goods) ->
                     _seriesList.value = series
+                    // 다른 탭·데이터 입력·백그라운드 업데이트로 바뀐 값도 열려 있는 시리즈에 바로 반영한다.
+                    _selectedSeries.value?.let { selected ->
+                        _seriesGoods.value = goods.filter { it.goodsSeries == selected.seriesNm }
+                    }
                     updateFilteredList()
                     loadSeriesCharaCount()
                     loadCharaGoodsCount()
@@ -141,10 +156,13 @@ class SeriesViewModel : ViewModel() {
         val byCountry = if (country == "전체") _seriesList.value
         else _seriesList.value.filter { it.seriesCountry == country }
         val charaFilter = _selectedCharaFilter.value
-        _filteredSeriesList.value = if (charaFilter == null) byCountry
+        val byChara = if (charaFilter == null) byCountry
         else byCountry.filter { series ->
             series.seriesCharas.split(",").map { it.trim() }.contains(charaFilter.charaNm)
         }
+        val query = _titleQuery.value.trim()
+        _filteredSeriesList.value = if (query.isEmpty()) byChara
+        else byChara.filter { it.seriesNm.contains(query, ignoreCase = true) }
     }
     fun setSelectedTab(tab: Int) {
         _selectedTab.value = tab
@@ -153,6 +171,11 @@ class SeriesViewModel : ViewModel() {
 
     fun setCharaFilter(chara: CharaEntity?) {
         _selectedCharaFilter.value = chara
+        updateFilteredList()
+    }
+
+    fun setTitleQuery(query: String) {
+        _titleQuery.value = query
         updateFilteredList()
     }
 
@@ -168,77 +191,32 @@ class SeriesViewModel : ViewModel() {
         _seriesGoods.value = emptyList()
     }
 
+    // 아래 쓰기 함수들은 DB 의 최신 값을 다시 읽어 저장한다(GoodsWrites.kt).
+    // 목록·개수는 DB 변경을 지켜보는 init 의 collect 가 알아서 다시 읽는다.
     fun toggleGotten(goods: GoodsEntity) {
-        viewModelScope.launch {
-            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
-            val updated = goods.copy(goodsStatus = newStatus.name)
-            App.database.goodsDao().update(updated)
-
-            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
-                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
-                val siblings = allGoods.filter {
-                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                val setGoods = allGoods.find {
-                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
-                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
-                }
-            }
-
-            _selectedSeries.value?.let {
-                _seriesGoods.value = App.database.goodsDao().getBySeries(it.seriesNm)
-            }
-            loadSeriesCharaCount()
-        }
+        viewModelScope.launch { App.database.goodsDao().toggleGotten(goods.goodsId) }
     }
 
     fun setPending(goods: GoodsEntity) {
-        viewModelScope.launch {
-            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
-            val updated = goods.copy(goodsStatus = newStatus.name)
-            App.database.goodsDao().update(updated)
-
-            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
-                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
-                val siblings = allGoods.filter {
-                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                val setGoods = allGoods.find {
-                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
-                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
-                }
-            }
-
-            _selectedSeries.value?.let {
-                _seriesGoods.value = App.database.goodsDao().getBySeries(it.seriesNm)
-            }
-            loadSeriesCharaCount()
-        }
+        viewModelScope.launch { App.database.goodsDao().togglePending(goods.goodsId) }
     }
-    // After - 함수 추가 (setPending 아래)
-    /** 세트 구성품 + 세트 자신을 한 번에 같은 상태로 바꾼다. */
-    fun bulkSetStatus(setGoods: GoodsEntity, status: GoodsStatus) {
-        viewModelScope.launch {
-            val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
-            val components = allGoods.filter {
-                it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
-            }
-            val newStatus = status.name
-            components.forEach { comp ->
-                App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
-            }
-            App.database.goodsDao().update(setGoods.copy(goodsStatus = newStatus))
-            _selectedSeries.value?.let {
-                _seriesGoods.value = App.database.goodsDao().getBySeries(it.seriesNm)
-            }
-            loadSeriesCharaCount()
-        }
+    /** 세트 구성품 + 세트 자신을 한 번에 같은 상태로 바꾼다. [info] 가 있으면 구성품에 구매 정보도 적는다. */
+    fun bulkSetStatus(setGoods: GoodsEntity, status: GoodsStatus, info: PurchaseInfo? = null) {
+        viewModelScope.launch { App.database.goodsDao().bulkSetStatus(setGoods.goodsId, status, info) }
+    }
+
+    /** 구매예정으로 바꾸면서(또는 이미 구매예정이면 그대로) 구매 정보를 저장한다. */
+    fun savePendingInfo(goods: GoodsEntity, info: PurchaseInfo) {
+        viewModelScope.launch { App.database.goodsDao().savePending(goods.goodsId, info) }
+    }
+
+    /** 다중 선택한 굿즈를 한 번에 같은 상태로 바꾼다. [edit] 는 구매예정일 때 입력한 구매 정보. */
+    fun applyStatus(targets: List<GoodsEntity>, status: GoodsStatus, edit: PurchaseInfoEdit? = null) {
+        viewModelScope.launch { App.database.goodsDao().applyStatus(targets.map { it.goodsId }, status, edit) }
+    }
+
+    fun setQuantity(goods: GoodsEntity, quantity: Int) {
+        viewModelScope.launch { App.database.goodsDao().setQuantity(goods.goodsId, quantity) }
     }
 
     fun getCharasForSeries(series: SeriesEntity): List<CharaEntity> {

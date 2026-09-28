@@ -22,6 +22,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.WowaGoodsProject">
+        <!-- 구매예정 알림의 "이 굿즈 알림 받지 않기" 버튼 -->
+        <receiver
+            android:name=".PendingAlertMuteReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

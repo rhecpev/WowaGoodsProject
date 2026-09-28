@@ -1,5 +1,12 @@
 package com.example.wowagoodsproject.screen.fan
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import com.example.wowagoodsproject.component.bulkStatusMessage
+import com.example.wowagoodsproject.component.rememberGoodsSelection
+import com.example.wowagoodsproject.component.BulkStatusBar
+import com.example.wowagoodsproject.component.purchaseInfo
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -43,6 +50,9 @@ fun FanArtScreen(
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val filterType by filterViewModel.filterType.collectAsState()
     var showGoodsFilterDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val selection = rememberGoodsSelection()
+    BackHandler(enabled = selection.mode) { selection.exit() }
 
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
@@ -102,6 +112,10 @@ fun FanArtScreen(
             isPending = fanGoods.status == GoodsStatus.PENDING,
             onToggleGotten = { viewModel.toggleGotten(fanGoods) },
             onSetPending = { viewModel.setPending(fanGoods) },
+            purchaseInfo = fanGoods.purchaseInfo,
+            quantity = fanGoods.quantity,
+            onQuantityChange = { q -> viewModel.setQuantity(fanGoods, q) },
+            onSavePendingInfo = { info -> viewModel.savePendingInfo(fanGoods, info) },
             onDelete = {
                 viewModel.delete(fanGoods)
                 detailViewModel.dismissDialog()
@@ -157,14 +171,33 @@ fun FanArtScreen(
             FilterBar(
                 filterType = filterType,
                 onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = AllFilteredList
+                goodsList = AllFilteredList,
+                selectionMode = selection.mode,
+                onToggleSelection = { selection.toggleMode() }
             )
+            if (selection.mode) {
+                val picked = selection.visible(filteredList) { it.fanGoodsId }
+                BulkStatusBar(
+                    selectedItems = picked,
+                    allSelected = filteredList.isNotEmpty() && picked.size == filteredList.size,
+                    onSelectAll = { selection.selectAll(filteredList.map { it.fanGoodsId }) },
+                    onClearSelection = { selection.clear() },
+                    onApply = { status, edit ->
+                        viewModel.applyStatus(picked, status, edit)
+                        selection.clear()
+                        Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
 
             FanGoodsListContent(
                 goods = filteredList,
                 isGridMode = isGridMode,
                 gridColumns = gridColumns,
-                onGoodsClick = { detailViewModel.selectGoods(it) },
+                onGoodsClick = {
+                    if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                },
+                selectedIds = if (selection.mode) selection.ids else null,
                 // 목록 끝이 등록 버튼에 가려지지 않게 아래 여백을 둔다.
                 contentPadding = PaddingValues(bottom = 88.dp)
             )

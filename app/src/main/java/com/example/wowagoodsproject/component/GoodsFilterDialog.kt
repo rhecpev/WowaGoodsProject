@@ -88,26 +88,33 @@ fun GoodsFilterDialog(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
         Spacer(modifier = Modifier.height(12.dp))
-        if (dialogTab == 0) {
-            CharaChoiceGrid(
-                charas = filteredCharaList,
-                selectedName = selectedCharaFilter,
-                onSelect = { chara ->
-                    onCharaSelect(if (selectedCharaFilter == chara.charaNm) null else chara.charaNm)
-                    onDismiss()
-                },
-                modifier = Modifier.weight(1f)
-            )
-        } else {
-            CategoryChoiceList(
-                categories = filteredCategoryList,
-                selected = selectedCategoryFilter,
-                onSelect = { cat ->
-                    onCategorySelect(if (selectedCategoryFilter == cat) null else cat)
-                    onDismiss()
-                },
-                modifier = Modifier.weight(1f)
-            )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .swipeToChangeTab(dialogTab, 2) { dialogTab = it; filterSearch = "" }
+        ) {
+            if (dialogTab == 0) {
+                CharaChoiceGrid(
+                    charas = filteredCharaList,
+                    selectedName = selectedCharaFilter,
+                    onSelect = { chara ->
+                        onCharaSelect(if (selectedCharaFilter == chara.charaNm) null else chara.charaNm)
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                CategoryChoiceList(
+                    categories = filteredCategoryList,
+                    selected = selectedCategoryFilter,
+                    onSelect = { cat ->
+                        onCategorySelect(if (selectedCategoryFilter == cat) null else cat)
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }

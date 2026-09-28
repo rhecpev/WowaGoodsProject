@@ -51,7 +51,10 @@ class App : Application() {
         ).addMigrations(
             GoodsDatabase.MIGRATION_1_2,
             GoodsDatabase.MIGRATION_2_3,
-            GoodsDatabase.MIGRATION_3_4
+            GoodsDatabase.MIGRATION_3_4,
+            GoodsDatabase.MIGRATION_4_5,
+            GoodsDatabase.MIGRATION_5_6,
+            GoodsDatabase.MIGRATION_6_7
         ).build()
 
         fanDatabase = Room.databaseBuilder(
@@ -61,7 +64,10 @@ class App : Application() {
         ).addMigrations(
             FanGoodsDatabase.MIGRATION_1_2,
             FanGoodsDatabase.MIGRATION_2_3,
-            FanGoodsDatabase.MIGRATION_3_4
+            FanGoodsDatabase.MIGRATION_3_4,
+            FanGoodsDatabase.MIGRATION_4_5,
+            FanGoodsDatabase.MIGRATION_5_6,
+            FanGoodsDatabase.MIGRATION_6_7
         ).build()
 
         charaDatabase = Room.databaseBuilder(
@@ -91,7 +97,11 @@ class App : Application() {
             applicationContext,
             ChangedGoodsDatabase::class.java,
             "changed_goods_database"
+        ).addMigrations(
+            ChangedGoodsDatabase.MIGRATION_1_2
         ).build()
+
+        DailySchedule.schedule(this)
 
 
     }

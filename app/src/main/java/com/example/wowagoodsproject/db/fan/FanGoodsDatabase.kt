@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [FanGoodsEntity::class], version = 4)
+@Database(entities = [FanGoodsEntity::class], version = 7)
 abstract class FanGoodsDatabase : RoomDatabase() {
     abstract fun fanGoodsDao(): FanGoodsDao
 
@@ -28,6 +28,27 @@ abstract class FanGoodsDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsPurchaseDate TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsPurchaseStore TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** 구매예정 굿즈의 수령예정일 */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsReceiveDate TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** 보유/구매예정 수량 */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsQuantity INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        /** 구매예정 굿즈의 배송 시작일 */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsShippingDate TEXT NOT NULL DEFAULT ''")
             }
         }
     }

@@ -1,5 +1,9 @@
 package com.example.wowagoodsproject.navigation
 
+import com.example.wowagoodsproject.OpenTarget
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import com.example.wowagoodsproject.App
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -31,7 +35,9 @@ import com.example.wowagoodsproject.screen.series.SeriesScreen
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun MainScreen(
-    onThemeChange: (Int) -> Unit = {}
+    onThemeChange: (Int) -> Unit = {},
+    openTarget: OpenTarget? = null,
+    onOpenTargetHandled: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val items = listOf(
@@ -106,6 +112,43 @@ fun MainScreen(
         }
         val series = seriesViewModel.seriesList.value.find { it.seriesNm == seriesName }
         series?.let { seriesViewModel.selectSeries(it) }
+    }
+
+    fun navigateToTab(route: String) {
+        characterViewModel.clearSelectedChara()
+        myPageViewModel.setSection(null)
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    // 알림을 눌러 들어오면 해당 위치로 이동한다.
+    // 공식 굿즈는 공식 탭의 그 시리즈를 열고 상세를 띄우고, 2차창작은 2차창작 탭에서 상세를 띄운다.
+    // 신규 굿즈 알림은 소식 화면을 연다.
+    LaunchedEffect(openTarget) {
+        val target = openTarget ?: return@LaunchedEffect
+        if (target is OpenTarget.News) {
+            navController.navigate("news") { launchSingleTop = true }
+        } else if (target is OpenTarget.Goods && target.isFan) {
+            val goods = App.fanDatabase.fanGoodsDao().getById(target.id)
+            navigateToTab(BottomNavItem.FanArt.route)
+            goods?.let { fanDetailViewModel.selectGoods(it) }
+        } else if (target is OpenTarget.Goods) {
+            val goods = App.database.goodsDao().getById(target.id)
+            if (goods != null) {
+                // 앱을 막 켠 경우 시리즈 목록이 아직 비어 있을 수 있어 잠깐 기다린다.
+                withTimeoutOrNull(5_000) { seriesViewModel.seriesList.first { it.isNotEmpty() } }
+                navigateToSeries(goods.goodsSeries)
+                detailViewModel.selectGoods(goods)
+            } else {
+                navigateToTab(BottomNavItem.Series.route)
+            }
+        }
+        onOpenTargetHandled()
     }
 
     if (isLandscape) {

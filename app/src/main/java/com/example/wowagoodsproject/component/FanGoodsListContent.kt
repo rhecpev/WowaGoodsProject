@@ -17,6 +17,8 @@ fun FanGoodsListContent(
     isGridMode: Boolean,
     gridColumns: Int,
     onGoodsClick: (FanGoodsEntity) -> Unit,
+    /** null 이면 선택 모드가 아니다. */
+    selectedIds: Set<Int>? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     if (goods.isEmpty()) {
@@ -40,6 +42,8 @@ fun FanGoodsListContent(
                                 isGotten = item.isGotten,
                                 gottenStatus = item.status.asGottenStatus(),
                                 memo = item.memo,
+                                quantity = item.quantity,
+                                selected = selectedIds?.let { item.fanGoodsId in it },
                                 onClick = { onGoodsClick(item) }
                             )
                         }
@@ -63,6 +67,8 @@ fun FanGoodsListContent(
                     isGotten = item.isGotten,
                     gottenStatus = item.status.asGottenStatus(),
                     memo = item.memo,
+                    quantity = item.quantity,
+                    selected = selectedIds?.let { item.fanGoodsId in it },
                     onClick = { onGoodsClick(item) }
                 )
                 if (index < goods.lastIndex) {

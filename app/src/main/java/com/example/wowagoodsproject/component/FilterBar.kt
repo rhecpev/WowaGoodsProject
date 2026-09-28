@@ -10,12 +10,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/** 보유 상태별 필터. "전체 12 · 보유 3 ..." 처럼 한 줄짜리 칩을 가로 스크롤로 늘어놓는다. */
+/**
+ * 보유 상태별 필터. "전체 12 · 보유 3 ..." 처럼 한 줄짜리 칩을 가로 스크롤로 늘어놓는다.
+ * [onToggleSelection] 을 넘기면 맨 왼쪽에 다중 선택 버튼을 둔다.
+ */
 @Composable
 fun FilterBar(
     filterType: FilterType,
     onFilterChange: (FilterType) -> Unit,
-    goodsList: List<GoodsItem>
+    goodsList: List<GoodsItem>,
+    selectionMode: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null
 ) {
     val options = listOf(
         Triple(FilterType.ALL, "전체", goodsList.size),
@@ -29,8 +34,12 @@ fun FilterBar(
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (onToggleSelection != null) {
+            MultiSelectToggle(selectionMode = selectionMode, onToggle = onToggleSelection)
+        }
         options.forEach { (type, label, count) ->
             val selected = filterType == type
             FilterChip(

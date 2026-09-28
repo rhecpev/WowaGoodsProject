@@ -1,5 +1,10 @@
 package com.example.wowagoodsproject.screen.mypage
 
+import com.example.wowagoodsproject.PendingGoodsNotifier
+import androidx.compose.material.icons.filled.MoveToInbox
+import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,7 +14,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.*
@@ -24,29 +29,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.component.GoodsItem
+import com.example.wowagoodsproject.component.PurchaseInfo
+import com.example.wowagoodsproject.component.PurchaseInfoDialog
+import com.example.wowagoodsproject.component.PurchaseInfoEdit
 import com.example.wowagoodsproject.component.encodeGoodsImagePath
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.ui.theme.AppStyles
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
-
-/** 구매일 저장 형식. DatePicker 가 돌려주는 UTC 자정 밀리초와 이 문자열을 서로 변환해 쓴다. */
-private const val PURCHASE_DATE_PATTERN = "yyyy-MM-dd"
-
-private fun purchaseDateFormat() = SimpleDateFormat(PURCHASE_DATE_PATTERN, Locale.KOREA).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
-
-private fun formatPurchaseDate(millis: Long): String = purchaseDateFormat().format(millis)
-
-private fun parsePurchaseDate(date: String): Long? =
-    if (date.isEmpty()) null else runCatching { purchaseDateFormat().parse(date)?.time }.getOrNull()
 
 /**
  * 구매예정 굿즈 목록.
- * 줄을 눌러 여러 개를 고른 뒤 구매일/구입처를 한 번에 적어 넣는다.
+ * 줄을 눌러 여러 개를 고른 뒤 구입처/구매일/수령예정일을 한 번에 적어 넣거나 배송 시작으로 표시한다.
+ * 줄마다 있는 배송 시작/취소 버튼으로 하나씩도 바꿀 수 있다.
  */
 @Composable
 fun PendingGoodsSection(
@@ -58,8 +52,12 @@ fun PendingGoodsSection(
     onToggleFan: (Int) -> Unit,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
-    onApply: (officialIds: Set<Int>, fanIds: Set<Int>, purchaseDate: String?, purchaseStore: String?) -> Unit,
+    onApply: (officialIds: Set<Int>, fanIds: Set<Int>, edit: PurchaseInfoEdit) -> Unit,
     isFiltered: Boolean = false,
+    /** 줄마다 있는 배송 버튼. 배송 전이면 시작, 배송 중이면 취소한다. */
+    onToggleShipping: (GoodsItem) -> Unit = {},
+    /** 고른 굿즈 중 아직 배송 전인 것들을 오늘 날짜로 배송 시작한다. */
+    onStartShipping: (officialIds: Set<Int>, fanIds: Set<Int>) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var showPurchaseDialog by remember { mutableStateOf(false) }
@@ -74,22 +72,24 @@ fun PendingGoodsSection(
 
     // 고른 굿즈들의 현재 값. 하나로 같을 때만 다이얼로그에 미리 채워 준다.
     val selectedItems: List<GoodsItem> = visibleOfficial + visibleFan
-    val commonDate = selectedItems.map { it.purchaseDate }.distinct().singleOrNull() ?: ""
-    val commonStore = selectedItems.map { it.purchaseStore }.distinct().singleOrNull() ?: ""
+    val notShippedCount = selectedItems.count { it.shippingDate.isEmpty() }
+    val commonInfo = PurchaseInfo(
+        purchaseStore = selectedItems.map { it.purchaseStore }.distinct().singleOrNull() ?: "",
+        receiveDate = selectedItems.map { it.receiveDate }.distinct().singleOrNull() ?: "",
+        purchaseDate = selectedItems.map { it.purchaseDate }.distinct().singleOrNull() ?: ""
+    )
 
     if (showPurchaseDialog) {
         PurchaseInfoDialog(
+            initial = commonInfo,
             targetCount = selectedCount,
-            initialDate = commonDate,
-            initialStore = commonStore,
             onDismiss = { showPurchaseDialog = false },
-            onConfirm = { date, store ->
+            onConfirm = { edit ->
                 showPurchaseDialog = false
                 onApply(
                     visibleOfficial.map { it.goodsId }.toSet(),
                     visibleFan.map { it.fanGoodsId }.toSet(),
-                    date,
-                    store
+                    edit
                 )
             }
         )
@@ -165,7 +165,8 @@ fun PendingGoodsSection(
                     goods = goods,
                     isFanGoods = false,
                     selected = goods.goodsId in selectedOfficialIds,
-                    onToggle = { onToggleOfficial(goods.goodsId) }
+                    onToggle = { onToggleOfficial(goods.goodsId) },
+                    onToggleShipping = { onToggleShipping(goods) }
                 )
             }
             items(fanGoods, key = { "fan-${it.fanGoodsId}" }) { goods ->
@@ -173,7 +174,8 @@ fun PendingGoodsSection(
                     goods = goods,
                     isFanGoods = true,
                     selected = goods.fanGoodsId in selectedFanIds,
-                    onToggle = { onToggleFan(goods.fanGoodsId) }
+                    onToggle = { onToggleFan(goods.fanGoodsId) },
+                    onToggleShipping = { onToggleShipping(goods) }
                 )
             }
         }
@@ -183,37 +185,67 @@ fun PendingGoodsSection(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp
         ) {
-            Button(
-                onClick = { showPurchaseDialog = true },
-                enabled = selectedCount > 0,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(AppStyles.paddingLarge)
+                    .padding(AppStyles.paddingLarge),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.CalendarMonth,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    if (selectedCount > 0) "${selectedCount}개에 구매 정보 입력"
-                    else "굿즈를 골라 주세요"
-                )
+                // 이미 배송 중인 굿즈는 시작일을 그대로 두고, 배송 전인 것만 오늘로 시작한다.
+                OutlinedButton(
+                    onClick = {
+                        onStartShipping(
+                            visibleOfficial.map { it.goodsId }.toSet(),
+                            visibleFan.map { it.fanGoodsId }.toSet()
+                        )
+                    },
+                    enabled = notShippedCount > 0,
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalShipping,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (notShippedCount > 0) "${notShippedCount}개 배송 시작" else "배송 시작", maxLines = 1)
+                }
+                Button(
+                    onClick = { showPurchaseDialog = true },
+                    enabled = selectedCount > 0,
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (selectedCount > 0) "${selectedCount}개 구매 정보" else "굿즈를 골라 주세요", maxLines = 1)
+                }
             }
         }
     }
 }
 
-/** 썸네일 + 굿즈 정보 + 구매일/구입처 + 체크박스 한 줄 */
+/** 썸네일 + 굿즈 정보 + 구입처/구매일/수령예정일(+배송) + 배송 버튼 + 체크박스 한 줄 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PendingGoodsRow(
     goods: GoodsItem,
     isFanGoods: Boolean,
     selected: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onToggleShipping: () -> Unit
 ) {
     val encodedPath = encodeGoodsImagePath(goods.imgPath)
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date()) }
+    // 날짜를 "yyyy-MM-dd" 문자열로 저장하므로 문자열 비교가 곧 날짜 비교다.
+    val overdue = goods.receiveDate.isNotEmpty() && goods.receiveDate < today
+    val shipping = goods.shippingDate.isNotEmpty()
+    val shippingOverdue = PendingGoodsNotifier.isShippingOverdue(goods.shippingDate)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -245,7 +277,8 @@ private fun PendingGoodsRow(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = goods.category.ifEmpty { goods.series },
+                    text = goods.category.ifEmpty { goods.series } +
+                            if (goods.quantity > 1) " ×${goods.quantity}" else "",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -263,20 +296,65 @@ private fun PendingGoodsRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // 칩 세 개가 한 줄에 안 들어가는 좁은 화면에서는 다음 줄로 넘긴다.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    PurchaseChip(
+                        icon = Icons.Default.Storefront,
+                        text = goods.purchaseStore.ifEmpty { "구입처 미정" },
+                        filled = goods.purchaseStore.isNotEmpty()
+                    )
                     PurchaseChip(
                         icon = Icons.Default.CalendarMonth,
                         text = goods.purchaseDate.ifEmpty { "구매일 미정" },
                         filled = goods.purchaseDate.isNotEmpty()
                     )
                     PurchaseChip(
-                        icon = Icons.Default.Storefront,
-                        text = goods.purchaseStore.ifEmpty { "구입처 미정" },
-                        filled = goods.purchaseStore.isNotEmpty()
+                        icon = Icons.Default.MoveToInbox,
+                        text = when {
+                            goods.receiveDate.isEmpty() -> "수령일 미정"
+                            overdue -> "${goods.receiveDate} 지남"
+                            else -> goods.receiveDate
+                        },
+                        filled = goods.receiveDate.isNotEmpty(),
+                        warning = overdue
                     )
+                    if (shipping) {
+                        PurchaseChip(
+                            icon = Icons.Default.LocalShipping,
+                            text = if (shippingOverdue) "배송 ${goods.shippingDate}~ 일주일 지남"
+                            else "배송 중 ${goods.shippingDate}~",
+                            filled = true,
+                            warning = shippingOverdue
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                // 줄을 누르면 선택이 바뀌므로, 배송 버튼은 따로 눌리는 작은 버튼으로 둔다.
+                if (shipping) {
+                    OutlinedButton(
+                        onClick = onToggleShipping,
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text("배송 취소", style = AppStyles.textCardSmall)
+                    }
+                } else {
+                    FilledTonalButton(
+                        onClick = onToggleShipping,
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocalShipping,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("배송 시작", style = AppStyles.textCardSmall)
+                    }
                 }
             }
             Checkbox(checked = selected, onCheckedChange = null)
@@ -288,10 +366,14 @@ private fun PendingGoodsRow(
 private fun PurchaseChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     text: String,
-    filled: Boolean
+    filled: Boolean,
+    warning: Boolean = false
 ) {
-    val color =
-        if (filled) AppStyles.colorPending else MaterialTheme.colorScheme.onSurfaceVariant
+    val color = when {
+        warning -> MaterialTheme.colorScheme.error
+        filled -> AppStyles.colorPending
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         modifier = Modifier
             .background(color.copy(alpha = if (filled) 0.14f else 0.06f), RoundedCornerShape(50))
@@ -313,126 +395,4 @@ private fun PurchaseChip(
             overflow = TextOverflow.Ellipsis
         )
     }
-}
-
-/**
- * 구매일/구입처 입력 다이얼로그.
- * 손대지 않은 항목은 null 로 돌려줘서 기존 값을 그대로 둔다(일괄 적용 때 섞인 값이 덮이지 않게).
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PurchaseInfoDialog(
-    targetCount: Int,
-    initialDate: String,
-    initialStore: String,
-    onDismiss: () -> Unit,
-    onConfirm: (purchaseDate: String?, purchaseStore: String?) -> Unit
-) {
-    var date by remember { mutableStateOf(initialDate) }
-    var store by remember { mutableStateOf(initialStore) }
-    var dateTouched by remember { mutableStateOf(false) }
-    var storeTouched by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = parsePurchaseDate(date)
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let {
-                            date = formatPurchaseDate(it)
-                            dateTouched = true
-                        }
-                        showDatePicker = false
-                    }
-                ) { Text("확인") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("취소") }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("구매 정보 입력") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "고른 ${targetCount}개 굿즈에 적용됩니다",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // 달력으로만 고르는 값이라 입력창 대신 누를 수 있는 줄로 보여준다.
-                Surface(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "구매일",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = date.ifEmpty { "날짜 선택" },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (date.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        if (date.isNotEmpty()) {
-                            IconButton(onClick = { date = ""; dateTouched = true }) {
-                                Icon(Icons.Default.Clear, contentDescription = "구매일 지우기")
-                            }
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = store,
-                    onValueChange = { store = it; storeTouched = true },
-                    label = { Text("구입처") },
-                    placeholder = { Text("예: 알리익스프레스, 홍대 팝업") },
-                    leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        if (dateTouched) date else null,
-                        if (storeTouched) store.trim() else null
-                    )
-                },
-                enabled = dateTouched || storeTouched
-            ) { Text("적용") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("취소") }
-        }
-    )
 }

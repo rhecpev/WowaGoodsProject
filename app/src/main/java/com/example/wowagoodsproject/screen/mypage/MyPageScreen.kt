@@ -1,5 +1,20 @@
 package com.example.wowagoodsproject.screen.mypage
 
+import com.example.wowagoodsproject.component.WhatsNewDialog
+import com.example.wowagoodsproject.component.ReleaseNotes
+import androidx.compose.material.icons.filled.NewReleases
+import java.util.Locale
+import java.util.Date
+import java.text.SimpleDateFormat
+import kotlinx.coroutines.launch
+import android.os.Build
+import android.Manifest
+import com.example.wowagoodsproject.component.MultiSelectToggle
+import com.example.wowagoodsproject.component.bulkStatusMessage
+import com.example.wowagoodsproject.component.rememberGoodsSelection
+import com.example.wowagoodsproject.component.BulkStatusBar
+import com.example.wowagoodsproject.component.swipeToChangeTab
+import com.example.wowagoodsproject.component.purchaseInfo
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -89,6 +104,16 @@ fun MyPageScreen(
     onNavigateToSeries: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
+    var showReleaseNotes by remember { mutableStateOf(false) }
+    if (showReleaseNotes) {
+        ReleaseNotes.forCurrentVersion()?.let { sections ->
+            WhatsNewDialog(
+                version = ReleaseNotes.currentVersion,
+                sections = sections,
+                onDismiss = { showReleaseNotes = false }
+            )
+        }
+    }
     val charaList by viewModel.charaList.collectAsState()
     val officialGottenGoods by viewModel.officialGottenGoods.collectAsState()
     val allSeriesGoods by viewModel.allSeriesGoods.collectAsState()
@@ -208,6 +233,11 @@ fun MyPageScreen(
     ) { uri ->
         uri?.let { viewModel.importData(context, it) }
     }
+
+    val selection = rememberGoodsSelection()
+    // 공식/2차창작은 id 가 겹칠 수 있으니 탭을 옮기면 선택을 비운다.
+    LaunchedEffect(selectedTab) { selection.clear() }
+    LaunchedEffect(currentSection) { selection.exit() }
 
     BackHandler(enabled = currentSection != null) {
         viewModel.setSection(null)
@@ -336,6 +366,17 @@ fun MyPageScreen(
                 fanGoods?.let { viewModel.setFanPending(it) }
                 detailViewModel.dismissDialog()
             },
+            purchaseInfo = goods.purchaseInfo,
+            quantity = goods.quantity,
+            onQuantityChange = { q ->
+                officialGoods?.let { viewModel.setOfficialQuantity(it, q) }
+                fanGoods?.let { viewModel.setFanQuantity(it, q) }
+            },
+            onSavePendingInfo = { info ->
+                officialGoods?.let { viewModel.saveOfficialPendingInfo(it, info) }
+                fanGoods?.let { viewModel.saveFanPendingInfo(it, info) }
+                detailViewModel.dismissDialog()
+            },
             onDelete = {},
             showDelete = false,
             onSeriesClick = { seriesName ->
@@ -359,7 +400,13 @@ fun MyPageScreen(
                 setDialogComponent = null
             },
             highlightChara = selectedCharaFilter,
-            highlightCategory = selectedCategoryFilter
+            highlightCategory = selectedCategoryFilter,
+            onSavePendingInfo = { component, info -> viewModel.saveOfficialPendingInfo(component, info) },
+            onBulkSavePending = { info ->
+                viewModel.bulkSetOfficialStatus(setGoods, GoodsStatus.PENDING, info)
+                selectedSetGoods = null
+                setDialogComponent = null
+            }
         )
     }
 
@@ -563,6 +610,15 @@ fun MyPageScreen(
                             context.startActivity(intent)
                         }
                     )
+                    // 지금 버전의 변경점을 다시 본다.
+                    if (ReleaseNotes.forCurrentVersion() != null) {
+                        SettingsRow(
+                            icon = Icons.Default.NewReleases,
+                            title = "변경점",
+                            subtitle = "v${ReleaseNotes.currentVersion}에서 달라진 점",
+                            onClick = { showReleaseNotes = true }
+                        )
+                    }
                 }
 
                 Column {
@@ -618,6 +674,21 @@ fun MyPageScreen(
         } else when (currentSection) {
             "pending" -> {
                 PendingGoodsSection(
+                    onToggleShipping = { goods ->
+                        val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
+                        val date = if (goods.shippingDate.isEmpty()) today else ""
+                        when (goods) {
+                            is GoodsEntity -> viewModel.setShipping(setOf(goods.goodsId), emptySet(), date)
+                            is FanGoodsEntity -> viewModel.setShipping(emptySet(), setOf(goods.fanGoodsId), date)
+                        }
+                    },
+                    onStartShipping = { officialIds, fanIds ->
+                        val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
+                        viewModel.setShipping(officialIds, fanIds, today, onlyNotStarted = true)
+                        selectedPendingOfficialIds = emptySet()
+                        selectedPendingFanIds = emptySet()
+                        Toast.makeText(context, "배송 시작으로 표시했습니다", Toast.LENGTH_SHORT).show()
+                    },
                     officialGoods = filteredPendingOfficial,
                     fanGoods = filteredPendingFan,
                     isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null,
@@ -642,12 +713,11 @@ fun MyPageScreen(
                         selectedPendingOfficialIds = emptySet()
                         selectedPendingFanIds = emptySet()
                     },
-                    onApply = { officialIds, fanIds, purchaseDate, purchaseStore ->
+                    onApply = { officialIds, fanIds, edit ->
                         viewModel.applyPurchaseInfo(
                             officialIds = officialIds,
                             fanIds = fanIds,
-                            purchaseDate = purchaseDate,
-                            purchaseStore = purchaseStore
+                            edit = edit
                         )
                         selectedPendingOfficialIds = emptySet()
                         selectedPendingFanIds = emptySet()
@@ -657,7 +727,11 @@ fun MyPageScreen(
             }
 
             "goods" -> {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .swipeToChangeTab(selectedTab, 2) { viewModel.setSelectedTab(it) }
+                ) {
                     SecondaryTabRow(selectedTabIndex = selectedTab) {
                         Tab(
                             selected = selectedTab == 0,
@@ -669,13 +743,60 @@ fun MyPageScreen(
                             text = { Text("2차창작 (${filteredFanGoods.size})") })
                     }
 
+                    // 보유 목록이라 상태 필터 줄이 없으니 다중 선택 버튼만 둔다.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MultiSelectToggle(
+                            selectionMode = selection.mode,
+                            onToggle = { selection.toggleMode() }
+                        )
+                    }
+                    if (selectedTab == 0) {
+                        if (selection.mode) {
+                            val picked = selection.visible(filteredOfficialGoods) { it.goodsId }
+                            BulkStatusBar(
+                                selectedItems = picked,
+                                allSelected = filteredOfficialGoods.isNotEmpty() && picked.size == filteredOfficialGoods.size,
+                                onSelectAll = { selection.selectAll(filteredOfficialGoods.map { it.goodsId }) },
+                                onClearSelection = { selection.clear() },
+                                onApply = { status, edit ->
+                                    viewModel.applyOfficialStatus(picked, status, edit)
+                                    selection.clear()
+                                    Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    } else {
+                        if (selection.mode) {
+                            val picked = selection.visible(filteredFanGoods) { it.fanGoodsId }
+                            BulkStatusBar(
+                                selectedItems = picked,
+                                allSelected = filteredFanGoods.isNotEmpty() && picked.size == filteredFanGoods.size,
+                                onSelectAll = { selection.selectAll(filteredFanGoods.map { it.fanGoodsId }) },
+                                onClearSelection = { selection.clear() },
+                                onApply = { status, edit ->
+                                    viewModel.applyFanStatus(picked, status, edit)
+                                    selection.clear()
+                                    Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    }
+
                     when (selectedTab) {
                         0 -> {
                             GoodsListContent(
                                 goods = filteredOfficialGoods,
                                 isGridMode = isGridMode,
                                 gridColumns = gridColumns,
-                                onGoodsClick = { detailViewModel.selectGoods(it) }
+                                onGoodsClick = {
+                                    if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                                },
+                                selectedIds = if (selection.mode) selection.ids else null
                             )
                         }
 
@@ -684,7 +805,10 @@ fun MyPageScreen(
                                 goods = filteredFanGoods,
                                 isGridMode = isGridMode,
                                 gridColumns = gridColumns,
-                                onGoodsClick = { detailViewModel.selectGoods(it) }
+                                onGoodsClick = {
+                                    if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                                },
+                                selectedIds = if (selection.mode) selection.ids else null
                             )
                         }
                     }

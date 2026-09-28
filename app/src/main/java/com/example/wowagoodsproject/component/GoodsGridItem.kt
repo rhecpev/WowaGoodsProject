@@ -24,6 +24,8 @@ fun GoodsGridItem(
     isGotten: Boolean,
     gottenStatus: GottenStatus? = null,
     memo: String,
+    quantity: Int = 1,
+    selected: Boolean? = null,
     onClick: () -> Unit = {}
 ){
     val encodedPath = encodeGoodsImagePath(imgPath)
@@ -32,7 +34,10 @@ fun GoodsGridItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                if (selected == true) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surface
+            )
             .clickable { onClick() }
     ) {
         Box(
@@ -53,10 +58,19 @@ fun GoodsGridItem(
             GottenStatusBadge(
                 status = status,
                 filled = true,
+                quantity = quantity,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(6.dp)
             )
+            if (selected != null) {
+                SelectionMark(
+                    selected = selected,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                )
+            }
         }
         HorizontalDivider(
             thickness = 1.dp,

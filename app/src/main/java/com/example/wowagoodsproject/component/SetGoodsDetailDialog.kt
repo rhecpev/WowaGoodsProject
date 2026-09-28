@@ -32,6 +32,8 @@ import com.example.wowagoodsproject.db.official.GoodsEntity
  * 세트 굿즈와 구성품 목록.
  * 세로 화면: 위에 고른 구성품 요약 + 상태 세그먼트, 아래에 구성품 목록.
  * 가로 화면: 왼쪽 상세, 오른쪽 목록.
+ *
+ * [onSavePendingInfo]/[onBulkSavePending] 을 넘기면 '구매예정'을 고를 때 구매 정보 입력 다이얼로그를 먼저 띄운다.
  */
 @Composable
 fun SetGoodsDetailDialog(
@@ -43,8 +45,14 @@ fun SetGoodsDetailDialog(
     onSetPending: (GoodsEntity) -> Unit = {},
     onBulkSetStatus: (GoodsStatus) -> Unit = {},
     highlightChara: String? = null,
-    highlightCategory: String? = null
+    highlightCategory: String? = null,
+    onSavePendingInfo: ((GoodsEntity, PurchaseInfo) -> Unit)? = null,
+    onBulkSavePending: ((PurchaseInfo) -> Unit)? = null
 ){
+    // 구매 정보를 받는 중인 대상. 구성품 하나면 그 굿즈, 일괄 변경이면 null 인 채로 bulkPending 이 켜진다.
+    var pendingTarget by remember { mutableStateOf<GoodsEntity?>(null) }
+    var bulkPending by remember { mutableStateOf(false) }
+
     var selectedComponent by remember(initialComponent) { mutableStateOf(initialComponent) }
     val currentComponent = selectedComponent?.let { selected ->
         components.find { it.goodsId == selected.goodsId }
@@ -74,11 +82,52 @@ fun SetGoodsDetailDialog(
     }
 
     val onChangeStatus: (GoodsEntity, GoodsStatus) -> Unit = { comp, target ->
-        applyStatusChange(
-            current = comp.status,
-            target = target,
-            onToggleGotten = { onToggleGotten(comp) },
-            onSetPending = { onSetPending(comp) }
+        if (target == GoodsStatus.PENDING && onSavePendingInfo != null) {
+            pendingTarget = comp
+        } else {
+            applyStatusChange(
+                current = comp.status,
+                target = target,
+                onToggleGotten = { onToggleGotten(comp) },
+                onSetPending = { onSetPending(comp) }
+            )
+        }
+    }
+    val onBulkChange: (GoodsStatus) -> Unit = { target ->
+        if (target == GoodsStatus.PENDING && onBulkSavePending != null) bulkPending = true
+        else onBulkSetStatus(target)
+    }
+
+    pendingTarget?.let { comp ->
+        if (onSavePendingInfo != null) {
+            PurchaseInfoDialog(
+                initial = comp.purchaseInfo,
+                title = "구매예정으로 표시",
+                confirmText = "구매예정으로",
+                onDismiss = { pendingTarget = null },
+                onConfirm = { edit ->
+                    pendingTarget = null
+                    onSavePendingInfo(comp, edit.applyTo(comp.purchaseInfo))
+                }
+            )
+        }
+    }
+    if (bulkPending && onBulkSavePending != null) {
+        // 구성품들의 값이 하나로 같을 때만 미리 채워 준다.
+        val common = PurchaseInfo(
+            purchaseStore = components.map { it.purchaseStore }.distinct().singleOrNull() ?: "",
+            receiveDate = components.map { it.receiveDate }.distinct().singleOrNull() ?: "",
+            purchaseDate = components.map { it.purchaseDate }.distinct().singleOrNull() ?: ""
+        )
+        PurchaseInfoDialog(
+            initial = common,
+            title = "구성품 ${components.size}개 구매예정",
+            confirmText = "구매예정으로",
+            onDismiss = { bulkPending = false },
+            onConfirm = { edit ->
+                bulkPending = false
+                onBulkSavePending(edit.applyTo(common))
+            }
         )
     }
 
@@ -190,7 +239,7 @@ fun SetGoodsDetailDialog(
                 // 구성품 상태가 이미 하나로 맞춰져 있으면 그 칸을 선택된 상태로 보여준다(섞여 있으면 선택 없음).
                 StatusSegmentedButtons(
                     current = components.map { it.status }.distinct().singleOrNull(),
-                    onSelect = onBulkSetStatus
+                    onSelect = onBulkChange
                 )
             }
         }

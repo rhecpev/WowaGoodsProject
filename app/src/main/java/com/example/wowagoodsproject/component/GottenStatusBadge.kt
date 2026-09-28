@@ -14,12 +14,14 @@ import com.example.wowagoodsproject.ui.theme.AppStyles
 /**
  * 보유 상태를 알약 모양 배지로 보여준다.
  * filled = true 는 이미지 위에 겹칠 때 쓴다 (진한 배경 + 흰 글자).
+ * quantity 가 2 이상이면 보유/구매예정 뒤에 "×2" 처럼 수량을 붙인다.
  */
 @Composable
 fun GottenStatusBadge(
     status: GottenStatus,
     modifier: Modifier = Modifier,
-    filled: Boolean = false
+    filled: Boolean = false,
+    quantity: Int = 1
 ) {
     val (text, color) = when (status) {
         GottenStatus.GOTTEN -> "보유" to AppStyles.colorGotten
@@ -27,8 +29,9 @@ fun GottenStatusBadge(
         GottenStatus.PARTIAL -> "일부보유" to AppStyles.colorPartialGotten
         GottenStatus.PENDING -> "구매예정" to AppStyles.colorPending
     }
+    val showQuantity = quantity > 1 && (status == GottenStatus.GOTTEN || status == GottenStatus.PENDING)
     Text(
-        text = text,
+        text = if (showQuantity) "$text ×$quantity" else text,
         style = AppStyles.textCardSmall.copy(fontWeight = FontWeight.Bold),
         color = if (filled) Color.White else color,
         maxLines = 1,

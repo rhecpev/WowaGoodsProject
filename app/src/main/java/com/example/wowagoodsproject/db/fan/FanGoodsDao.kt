@@ -22,6 +22,13 @@ interface FanGoodsDao {
     @Update
     suspend fun update(fanGoods: FanGoodsEntity)
 
+    /** 2차창작 굿즈가 바뀔 때마다(다른 화면·데이터 입력 포함) 새 목록을 보낸다. */
+    @Query("SELECT * FROM tb_fan_goods ORDER BY fanGoodsReleaseDate DESC")
+    fun getAllFlow(): Flow<List<FanGoodsEntity>>
+
+    @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsId = :id")
+    suspend fun getById(id: Int): FanGoodsEntity?
+
     @Delete
     suspend fun delete(fanGoods: FanGoodsEntity)
 

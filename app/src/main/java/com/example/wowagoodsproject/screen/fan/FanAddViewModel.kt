@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.screen.fan
 
+import com.example.wowagoodsproject.component.GoodsStatus
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -119,6 +120,8 @@ class FanAddViewModel : ViewModel() {
                     fanGoodsCategory = _category.value,
                     fanGoodsImgPath = imgPath,
                     fanGoodsIsGotten = _isGotten.value,
+                    // 앱은 보유 여부를 상태 칸으로 판단하므로 상태도 같이 적어야 '보유' 로 보인다.
+                    fanGoodsStatus = if (_isGotten.value) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
                     fanGoodsMemo = _memo.value
                 )
             )

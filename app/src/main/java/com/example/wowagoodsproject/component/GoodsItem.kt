@@ -17,7 +17,26 @@ interface GoodsItem {
 
     /** 구매예정 굿즈를 살 곳. 안 정했으면 빈 문자열. */
     val purchaseStore: String
+
+    /** 구매예정 굿즈를 받을 예정일. "yyyy-MM-dd", 안 정했으면 빈 문자열. */
+    val receiveDate: String
+
+    /** 보유/구매예정 수량. 기본 1개. */
+    val quantity: Int
+
+    /** 구매예정 굿즈의 배송 시작일. "yyyy-MM-dd", 배송 전이면 빈 문자열. */
+    val shippingDate: String
 }
+
+/** 구매예정 굿즈에 적어 두는 구매 정보 묶음. 빈 문자열은 '미정'이다. */
+data class PurchaseInfo(
+    val purchaseStore: String = "",
+    val purchaseDate: String = "",
+    val receiveDate: String = ""
+)
+
+val GoodsItem.purchaseInfo
+    get() = PurchaseInfo(purchaseStore = purchaseStore, purchaseDate = purchaseDate, receiveDate = receiveDate)
 
 const val CATEGORY_SET = "세트"
 const val CATEGORY_COMPONENT = "구성품"

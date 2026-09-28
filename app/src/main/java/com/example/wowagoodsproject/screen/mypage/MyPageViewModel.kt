@@ -1,5 +1,23 @@
 package com.example.wowagoodsproject.screen.mypage
 
+import kotlinx.coroutines.flow.combine
+import com.example.wowagoodsproject.db.fan.setShipping
+import com.example.wowagoodsproject.db.fan.applyPurchaseInfo
+import com.example.wowagoodsproject.db.fan.setQuantity
+import com.example.wowagoodsproject.db.fan.applyStatus
+import com.example.wowagoodsproject.db.fan.savePending
+import com.example.wowagoodsproject.db.fan.togglePending
+import com.example.wowagoodsproject.db.fan.toggleGotten
+import com.example.wowagoodsproject.db.official.setShipping
+import com.example.wowagoodsproject.db.official.applyPurchaseInfo
+import com.example.wowagoodsproject.db.official.setQuantity
+import com.example.wowagoodsproject.db.official.applyStatus
+import com.example.wowagoodsproject.db.official.savePending
+import com.example.wowagoodsproject.db.official.bulkSetStatus
+import com.example.wowagoodsproject.db.official.togglePending
+import com.example.wowagoodsproject.db.official.toggleGotten
+import com.example.wowagoodsproject.component.PurchaseInfoEdit
+import com.example.wowagoodsproject.component.PurchaseInfo
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
@@ -44,7 +62,10 @@ data class OfficialGoodsBackup(
     val goodsMemo: String? = null,
     val goodsPrice: String? = null,
     val goodsPurchaseDate: String? = null,
-    val goodsPurchaseStore: String? = null
+    val goodsPurchaseStore: String? = null,
+    val goodsReceiveDate: String? = null,
+    val goodsQuantity: Int? = null,
+    val goodsShippingDate: String? = null
 )
 
 /** 백업 파일에 담기는 2차창작 굿즈. nullable 인 이유는 [OfficialGoodsBackup] 과 같다. */
@@ -59,7 +80,10 @@ data class FanGoodsBackup(
     val fanGoodsStatus: String? = null,
     val fanGoodsMemo: String? = null,
     val fanGoodsPurchaseDate: String? = null,
-    val fanGoodsPurchaseStore: String? = null
+    val fanGoodsPurchaseStore: String? = null,
+    val fanGoodsReceiveDate: String? = null,
+    val fanGoodsQuantity: Int? = null,
+    val fanGoodsShippingDate: String? = null
 ) {
     /** @param imgPath 백업 안 이미지를 앱 폴더에 풀어 놓은 뒤의 경로 */
     fun toEntity(imgPath: String) = FanGoodsEntity(
@@ -76,7 +100,10 @@ data class FanGoodsBackup(
             ?: if (fanGoodsIsGotten == true) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
         fanGoodsMemo = fanGoodsMemo.orEmpty(),
         fanGoodsPurchaseDate = fanGoodsPurchaseDate.orEmpty(),
-        fanGoodsPurchaseStore = fanGoodsPurchaseStore.orEmpty()
+        fanGoodsPurchaseStore = fanGoodsPurchaseStore.orEmpty(),
+        fanGoodsReceiveDate = fanGoodsReceiveDate.orEmpty(),
+        fanGoodsQuantity = fanGoodsQuantity ?: 1,
+        fanGoodsShippingDate = fanGoodsShippingDate.orEmpty()
     )
 }
 
@@ -133,9 +160,18 @@ class MyPageViewModel : ViewModel() {
 
     init {
         loadCharaList()
-        loadGottenGoods()
+        observeGoods()
         checkLatestVersion()
         observeUnreadNews()
+    }
+
+    /** 다른 탭·데이터 입력·백그라운드 업데이트로 굿즈가 바뀌면 보유/구매예정 목록을 바로 다시 만든다. */
+    private fun observeGoods() {
+        viewModelScope.launch {
+            App.database.goodsDao().getAllFlow()
+                .combine(App.fanDatabase.fanGoodsDao().getAllFlow()) { goods, fan -> goods to fan }
+                .collectLatest { (goods, fan) -> applyGoods(goods, fan) }
+        }
     }
 
     private fun observeUnreadNews() {
@@ -169,145 +205,100 @@ class MyPageViewModel : ViewModel() {
 
     fun loadGottenGoods() {
         viewModelScope.launch {
-            val allGoods = App.database.goodsDao().getAll()
-
-            // 세트 굿즈는 카운트/목록에서 제외하고 낱개 굿즈만 집계한다.
-            // 구매예정은 '구매예정 굿즈' 페이지에서 따로 보므로 여기서는 보유만 센다.
-            val gottenGoods = allGoods.filter {
-                it.goodsCategory != CATEGORY_SET && it.goodsStatus == GoodsStatus.GOTTEN.name
-            }
-
-            _officialGottenGoods.value = gottenGoods
-            val seriesList = gottenGoods.map { it.goodsSeries }.distinct()
-            _allSeriesGoods.value = seriesList.flatMap {
-                App.database.goodsDao().getBySeries(it)
-            }
-            val allFanGoods = App.fanDatabase.fanGoodsDao().getAll()
-            _fanGottenGoods.value = allFanGoods.filter { it.isGotten }
-
-            // 구매예정 목록도 같은 조회 결과에서 뽑아 둔다(세트 굿즈는 제외).
-            _pendingOfficialGoods.value = allGoods.filter {
-                it.goodsCategory != CATEGORY_SET && it.status == GoodsStatus.PENDING
-            }
-            _pendingFanGoods.value = allFanGoods.filter { it.status == GoodsStatus.PENDING }
+            applyGoods(App.database.goodsDao().getAll(), App.fanDatabase.fanGoodsDao().getAll())
         }
     }
 
+    private fun applyGoods(allGoods: List<GoodsEntity>, allFanGoods: List<FanGoodsEntity>) {
+        // 세트 굿즈는 카운트/목록에서 제외하고 낱개 굿즈만 집계한다.
+        // 구매예정은 '구매예정 굿즈' 페이지에서 따로 보므로 여기서는 보유만 센다.
+        val gottenGoods = allGoods.filter {
+            it.goodsCategory != CATEGORY_SET && it.goodsStatus == GoodsStatus.GOTTEN.name
+        }
+        _officialGottenGoods.value = gottenGoods
+        val seriesSet = gottenGoods.map { it.goodsSeries }.toSet()
+        _allSeriesGoods.value = allGoods.filter { it.goodsSeries in seriesSet }
+        _fanGottenGoods.value = allFanGoods.filter { it.isGotten }
+
+        // 구매예정 목록도 같은 조회 결과에서 뽑아 둔다(세트 굿즈는 제외).
+        _pendingOfficialGoods.value = allGoods.filter {
+            it.goodsCategory != CATEGORY_SET && it.status == GoodsStatus.PENDING
+        }
+        _pendingFanGoods.value = allFanGoods.filter { it.status == GoodsStatus.PENDING }
+    }
+
     /**
-     * 고른 구매예정 굿즈에 구매일/구입처를 한 번에 적어 넣는다.
-     * null 을 넘긴 항목은 건드리지 않고, 빈 문자열은 지우라는 뜻이다.
+     * 고른 구매예정 굿즈에 구입처/구매일/수령예정일을 한 번에 적어 넣는다.
+     * null 인 항목은 건드리지 않고, 빈 문자열은 지우라는 뜻이다.
      */
     fun applyPurchaseInfo(
         officialIds: Set<Int>,
         fanIds: Set<Int>,
-        purchaseDate: String?,
-        purchaseStore: String?
+        edit: PurchaseInfoEdit
     ) {
-        if (purchaseDate == null && purchaseStore == null) return
+        if (edit.isEmpty) return
         viewModelScope.launch {
-            _pendingOfficialGoods.value
-                .filter { it.goodsId in officialIds }
-                .forEach { goods ->
-                    App.database.goodsDao().update(
-                        goods.copy(
-                            goodsPurchaseDate = purchaseDate ?: goods.goodsPurchaseDate,
-                            goodsPurchaseStore = purchaseStore ?: goods.goodsPurchaseStore
-                        )
-                    )
-                }
-            _pendingFanGoods.value
-                .filter { it.fanGoodsId in fanIds }
-                .forEach { goods ->
-                    App.fanDatabase.fanGoodsDao().update(
-                        goods.copy(
-                            fanGoodsPurchaseDate = purchaseDate ?: goods.fanGoodsPurchaseDate,
-                            fanGoodsPurchaseStore = purchaseStore ?: goods.fanGoodsPurchaseStore
-                        )
-                    )
-                }
-            loadGottenGoods()
+            officialIds.forEach { App.database.goodsDao().applyPurchaseInfo(it, edit) }
+            fanIds.forEach { App.fanDatabase.fanGoodsDao().applyPurchaseInfo(it, edit) }
         }
     }
 
-    fun toggleOfficialGotten(goods: GoodsEntity) {
+    /**
+     * 고른 구매예정 굿즈의 배송 시작일을 적는다. 빈 문자열이면 배송 시작을 취소한다.
+     * [onlyNotStarted] 가 true 면 이미 배송이 시작된 굿즈는 날짜를 그대로 둔다.
+     */
+    fun setShipping(officialIds: Set<Int>, fanIds: Set<Int>, date: String, onlyNotStarted: Boolean = false) {
         viewModelScope.launch {
-            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
-            val updated = goods.copy(goodsStatus = newStatus.name)
-            App.database.goodsDao().update(updated)
-
-            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
-                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
-                val siblings = allGoods.filter {
-                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                val setGoods = allGoods.find {
-                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
-                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
-                }
-            }
-
-            loadGottenGoods()
+            officialIds.forEach { App.database.goodsDao().setShipping(it, date, onlyNotStarted) }
+            fanIds.forEach { App.fanDatabase.fanGoodsDao().setShipping(it, date, onlyNotStarted) }
         }
+    }
+
+    // 아래 쓰기 함수들은 DB 의 최신 값을 다시 읽어 저장한다(GoodsWrites.kt / FanGoodsWrites.kt).
+    // 목록은 DB 변경을 지켜보는 observeGoods 가 알아서 다시 만든다.
+    fun toggleOfficialGotten(goods: GoodsEntity) {
+        viewModelScope.launch { App.database.goodsDao().toggleGotten(goods.goodsId) }
     }
 
     fun setOfficialPending(goods: GoodsEntity) {
-        viewModelScope.launch {
-            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
-            val updated = goods.copy(goodsStatus = newStatus.name)
-            App.database.goodsDao().update(updated)
-
-            if (updated.goodsCategory != CATEGORY_SET && updated.goodsMemo.isNotEmpty()) {
-                val allGoods = App.database.goodsDao().getBySeries(updated.goodsSeries)
-                val siblings = allGoods.filter {
-                    it.goodsCategory != CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                val setGoods = allGoods.find {
-                    it.goodsCategory == CATEGORY_SET && it.goodsMemo == updated.goodsMemo
-                }
-                setGoods?.let { set ->
-                    val newIsGotten = siblings.all { it.goodsStatus == GoodsStatus.GOTTEN.name }
-                    App.database.goodsDao().update(set.copy(goodsStatus = if (newIsGotten) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name))
-                }
-            }
-
-            loadGottenGoods()
-        }
+        viewModelScope.launch { App.database.goodsDao().togglePending(goods.goodsId) }
     }
-    // After - 추가
-    /** 세트 구성품 + 세트 자신을 한 번에 같은 상태로 바꾼다. */
-    fun bulkSetOfficialStatus(setGoods: GoodsEntity, status: GoodsStatus) {
-        viewModelScope.launch {
-            val allGoods = App.database.goodsDao().getBySeries(setGoods.goodsSeries)
-            val components = allGoods.filter {
-                it.goodsCategory != CATEGORY_SET && it.goodsMemo == setGoods.goodsMemo
-            }
-            val newStatus = status.name
-            components.forEach { comp ->
-                App.database.goodsDao().update(comp.copy(goodsStatus = newStatus))
-            }
-            App.database.goodsDao().update(setGoods.copy(goodsStatus = newStatus))
-            loadGottenGoods()
-        }
+    /** 세트 구성품 + 세트 자신을 한 번에 같은 상태로 바꾼다. [info] 가 있으면 구성품에 구매 정보도 적는다. */
+    fun bulkSetOfficialStatus(setGoods: GoodsEntity, status: GoodsStatus, info: PurchaseInfo? = null) {
+        viewModelScope.launch { App.database.goodsDao().bulkSetStatus(setGoods.goodsId, status, info) }
     }
+    /** 구매예정으로 바꾸면서(또는 이미 구매예정이면 그대로) 구매 정보를 저장한다. */
+    fun saveOfficialPendingInfo(goods: GoodsEntity, info: PurchaseInfo) {
+        viewModelScope.launch { App.database.goodsDao().savePending(goods.goodsId, info) }
+    }
+
+    fun saveFanPendingInfo(goods: FanGoodsEntity, info: PurchaseInfo) {
+        viewModelScope.launch { App.fanDatabase.fanGoodsDao().savePending(goods.fanGoodsId, info) }
+    }
+
+    /** 다중 선택한 굿즈를 한 번에 같은 상태로 바꾼다. [edit] 는 구매예정일 때 입력한 구매 정보. */
+    fun applyOfficialStatus(targets: List<GoodsEntity>, status: GoodsStatus, edit: PurchaseInfoEdit? = null) {
+        viewModelScope.launch { App.database.goodsDao().applyStatus(targets.map { it.goodsId }, status, edit) }
+    }
+
+    fun applyFanStatus(targets: List<FanGoodsEntity>, status: GoodsStatus, edit: PurchaseInfoEdit? = null) {
+        viewModelScope.launch { App.fanDatabase.fanGoodsDao().applyStatus(targets.map { it.fanGoodsId }, status, edit) }
+    }
+
+    fun setOfficialQuantity(goods: GoodsEntity, quantity: Int) {
+        viewModelScope.launch { App.database.goodsDao().setQuantity(goods.goodsId, quantity) }
+    }
+
+    fun setFanQuantity(goods: FanGoodsEntity, quantity: Int) {
+        viewModelScope.launch { App.fanDatabase.fanGoodsDao().setQuantity(goods.fanGoodsId, quantity) }
+    }
+
     fun toggleFanGotten(goods: FanGoodsEntity) {
-        viewModelScope.launch {
-            val newStatus = if (goods.status == GoodsStatus.GOTTEN) GoodsStatus.NOT_GOTTEN else GoodsStatus.GOTTEN
-            val updated = goods.copy(fanGoodsStatus = newStatus.name)
-            App.fanDatabase.fanGoodsDao().update(updated)
-            loadGottenGoods()
-        }
+        viewModelScope.launch { App.fanDatabase.fanGoodsDao().toggleGotten(goods.fanGoodsId) }
     }
 
     fun setFanPending(goods: FanGoodsEntity) {
-        viewModelScope.launch {
-            val newStatus = if (goods.status == GoodsStatus.PENDING) GoodsStatus.NOT_GOTTEN else GoodsStatus.PENDING
-            val updated = goods.copy(fanGoodsStatus = newStatus.name)
-            App.fanDatabase.fanGoodsDao().update(updated)
-            loadGottenGoods()
-        }
+        viewModelScope.launch { App.fanDatabase.fanGoodsDao().togglePending(goods.fanGoodsId) }
     }
 
 
@@ -332,53 +323,64 @@ class MyPageViewModel : ViewModel() {
     }
 
 
+    /**
+     * 백업 zip 을 [zipFile] 에 만든다. 추출과 테스트가 함께 쓴다.
+     * 새 칸을 추가하면 여기(추출)와 importData(입력), 백업 클래스 세 곳을 함께 고쳐야 한다.
+     */
+    internal suspend fun writeBackupZip(zipFile: File) = withContext(Dispatchers.IO) {
+        val gson = Gson()
+        val fanGoods = App.fanDatabase.fanGoodsDao().getAll()
+        val fanGoodsJson = gson.toJson(fanGoods)
+        val officialGoods = App.database.goodsDao().getAll()
+        val officialBackup = officialGoods.map {
+            OfficialGoodsBackup(
+                goodsSeries = it.goodsSeries,
+                goodsChara = it.goodsChara,
+                goodsCategory = it.goodsCategory,
+                goodsStatus = it.goodsStatus,
+                goodsMemo = it.goodsMemo,
+                goodsPrice = it.goodsPrice,
+                goodsPurchaseDate = it.goodsPurchaseDate,
+                goodsPurchaseStore = it.goodsPurchaseStore,
+                goodsReceiveDate = it.goodsReceiveDate,
+                goodsQuantity = it.goodsQuantity,
+                goodsShippingDate = it.goodsShippingDate
+            )
+        }
+        val officialJson = gson.toJson(officialBackup)
+        val charas = App.charaDatabase.charaDao().getAll()
+        val favoriteCharas = charas.filter { it.charaIsFavorite }.map { it.charaNm }
+        val charaJson = gson.toJson(favoriteCharas)
+
+        ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
+            zip.putNextEntry(ZipEntry("fan_goods.json"))
+            zip.write(fanGoodsJson.toByteArray())
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("official_gotten.json"))
+            zip.write(officialJson.toByteArray())
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("favorite_charas.json"))
+            zip.write(charaJson.toByteArray())
+            zip.closeEntry()
+            fanGoods.forEach { goods ->
+                if (goods.fanGoodsImgPath.isNotEmpty()) {
+                    val imgFile = File(goods.fanGoodsImgPath)
+                    if (imgFile.exists()) {
+                        zip.putNextEntry(ZipEntry("images/${imgFile.name}"))
+                        FileInputStream(imgFile).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+        }
+    }
+
     fun exportData(context: Context) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val gson = Gson()
-                    val fanGoods = App.fanDatabase.fanGoodsDao().getAll()
-                    val fanGoodsJson = gson.toJson(fanGoods)
-                    val officialGoods = App.database.goodsDao().getAll()
-                    val officialBackup = officialGoods.map {
-                        OfficialGoodsBackup(
-                            goodsSeries = it.goodsSeries,
-                            goodsChara = it.goodsChara,
-                            goodsCategory = it.goodsCategory,
-                            goodsStatus = it.goodsStatus,
-                            goodsMemo = it.goodsMemo,
-                            goodsPrice = it.goodsPrice,
-                            goodsPurchaseDate = it.goodsPurchaseDate,
-                            goodsPurchaseStore = it.goodsPurchaseStore
-                        )
-                    }
-                    val officialJson = gson.toJson(officialBackup)
-                    val charas = App.charaDatabase.charaDao().getAll()
-                    val favoriteCharas = charas.filter { it.charaIsFavorite }.map { it.charaNm }
-                    val charaJson = gson.toJson(favoriteCharas)
-
                     val zipFile = File(context.filesDir, "wowa_backup.zip")
-                    ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
-                        zip.putNextEntry(ZipEntry("fan_goods.json"))
-                        zip.write(fanGoodsJson.toByteArray())
-                        zip.closeEntry()
-                        zip.putNextEntry(ZipEntry("official_gotten.json"))
-                        zip.write(officialJson.toByteArray())
-                        zip.closeEntry()
-                        zip.putNextEntry(ZipEntry("favorite_charas.json"))
-                        zip.write(charaJson.toByteArray())
-                        zip.closeEntry()
-                        fanGoods.forEach { goods ->
-                            if (goods.fanGoodsImgPath.isNotEmpty()) {
-                                val imgFile = File(goods.fanGoodsImgPath)
-                                if (imgFile.exists()) {
-                                    zip.putNextEntry(ZipEntry("images/${imgFile.name}"))
-                                    FileInputStream(imgFile).use { it.copyTo(zip) }
-                                    zip.closeEntry()
-                                }
-                            }
-                        }
-                    }
+                    writeBackupZip(zipFile)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         val contentValues = android.content.ContentValues().apply {
                             put(
@@ -508,7 +510,10 @@ class MyPageViewModel : ViewModel() {
                                     goods.copy(
                                         goodsStatus = backup.goodsStatus ?: GoodsStatus.NOT_GOTTEN.name,
                                         goodsPurchaseDate = backup.goodsPurchaseDate.orEmpty(),
-                                        goodsPurchaseStore = backup.goodsPurchaseStore.orEmpty()
+                                        goodsPurchaseStore = backup.goodsPurchaseStore.orEmpty(),
+                                        goodsReceiveDate = backup.goodsReceiveDate.orEmpty(),
+                                        goodsQuantity = backup.goodsQuantity ?: 1,
+                                        goodsShippingDate = backup.goodsShippingDate.orEmpty()
                                     )
                                 )
                             }

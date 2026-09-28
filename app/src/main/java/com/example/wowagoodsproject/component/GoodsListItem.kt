@@ -26,6 +26,8 @@ fun GoodsListItem(
     isGotten: Boolean,
     gottenStatus: GottenStatus? = null,
     memo: String,
+    quantity: Int = 1,
+    selected: Boolean? = null,
     onClick: () -> Unit = {}
 ){
     val encodedPath = encodeGoodsImagePath(imgPath)
@@ -34,12 +36,19 @@ fun GoodsListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                if (selected == true) MaterialTheme.colorScheme.secondaryContainer
+                else MaterialTheme.colorScheme.surface
+            )
             .clickable { onClick() }
             .padding(AppStyles.paddingMedium)
             .height(AppStyles.cardImageHeightList),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selected != null) {
+            SelectionMark(selected = selected)
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         Box(
             modifier = Modifier
                 .width(AppStyles.cardImageWidth)
@@ -94,7 +103,7 @@ fun GoodsListItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                GottenStatusBadge(status = status)
+                GottenStatusBadge(status = status, quantity = quantity)
             }
         }
     }
