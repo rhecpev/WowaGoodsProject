@@ -105,27 +105,41 @@ class FanAddViewModel : ViewModel() {
         }
     }
 
-    fun insert(context: Context, onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            val imgPath = _imageUri.value?.let {
-                copyImageToInternalStorage(context, it)
-            } ?: ""
+    private val _isSaving = MutableStateFlow(false)
+    /** 저장 중에는 등록 버튼을 막아 두 번 눌러도 한 번만 저장되게 한다. */
+    val isSaving: StateFlow<Boolean> = _isSaving
 
-            App.fanDatabase.fanGoodsDao().insert(
-                FanGoodsEntity(
-                    fanGoodsReleaseDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
-                    fanGoodsSeries = _series.value,
-                    fanGoodsPrice = _price.value,
-                    fanGoodsChara = _selectedCharas.value.joinToString(","),
-                    fanGoodsCategory = _category.value,
-                    fanGoodsImgPath = imgPath,
-                    fanGoodsIsGotten = _isGotten.value,
-                    // 앱은 보유 여부를 상태 칸으로 판단하므로 상태도 같이 적어야 '보유' 로 보인다.
-                    fanGoodsStatus = if (_isGotten.value) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
-                    fanGoodsMemo = _memo.value
-                )
-            )
+    fun insert(context: Context, onSuccess: () -> Unit) {
+        if (_isSaving.value) return
+        _isSaving.value = true
+        viewModelScope.launch {
+            try {
+                saveGoods(context)
+            } finally {
+                _isSaving.value = false
+            }
             onSuccess()
         }
+    }
+
+    private suspend fun saveGoods(context: Context) {
+        val imgPath = _imageUri.value?.let {
+            copyImageToInternalStorage(context, it)
+        } ?: ""
+
+        App.fanDatabase.fanGoodsDao().insert(
+            FanGoodsEntity(
+                fanGoodsReleaseDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+                fanGoodsSeries = _series.value,
+                fanGoodsPrice = _price.value,
+                fanGoodsChara = _selectedCharas.value.joinToString(","),
+                fanGoodsCategory = _category.value,
+                fanGoodsImgPath = imgPath,
+                fanGoodsIsGotten = _isGotten.value,
+                // 앱은 보유 여부를 상태 칸으로 판단하므로 상태도 같이 적어야 '보유' 로 보인다.
+                fanGoodsStatus = if (_isGotten.value) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
+                fanGoodsMemo = _memo.value
+            )
+        )
     }
 }

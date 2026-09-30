@@ -26,6 +26,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.component.CATEGORY_SET
+import com.example.wowagoodsproject.component.PendingInfoFilter
+import com.example.wowagoodsproject.component.toggle
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
@@ -139,6 +141,18 @@ class MyPageViewModel : ViewModel() {
     private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
     val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter
 
+    /** 구매예정 목록에서만 쓰는 구매 정보 필터 */
+    private val _pendingInfoFilters = MutableStateFlow<Set<PendingInfoFilter>>(emptySet())
+    val pendingInfoFilters: StateFlow<Set<PendingInfoFilter>> = _pendingInfoFilters
+
+    fun togglePendingInfoFilter(filter: PendingInfoFilter) {
+        _pendingInfoFilters.value = _pendingInfoFilters.value.toggle(filter)
+    }
+
+    fun clearPendingInfoFilters() {
+        _pendingInfoFilters.value = emptySet()
+    }
+
     private val _showFilterDialog = MutableStateFlow(false)
     val showFilterDialog: StateFlow<Boolean> = _showFilterDialog
 
@@ -216,7 +230,10 @@ class MyPageViewModel : ViewModel() {
             it.goodsCategory != CATEGORY_SET && it.goodsStatus == GoodsStatus.GOTTEN.name
         }
         _officialGottenGoods.value = gottenGoods
-        val seriesSet = gottenGoods.map { it.goodsSeries }.toSet()
+        // 구매예정 굿즈도 상세/세트 팝업에서 최신 값을 찾을 수 있게 그 시리즈를 함께 담는다.
+        val seriesSet = allGoods
+            .filter { it.goodsStatus == GoodsStatus.GOTTEN.name || it.goodsStatus == GoodsStatus.PENDING.name }
+            .map { it.goodsSeries }.toSet()
         _allSeriesGoods.value = allGoods.filter { it.goodsSeries in seriesSet }
         _fanGottenGoods.value = allFanGoods.filter { it.isGotten }
 

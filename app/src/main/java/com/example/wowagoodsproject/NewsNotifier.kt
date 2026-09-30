@@ -53,16 +53,28 @@ object NewsNotifier {
                 )
                 .setContentText(listOf(item.newsSeries, item.newsCategory).filter { it.isNotBlank() }.joinToString(" · "))
         } else {
-            val lines = news.map { item ->
-                val tag = if (item.type == NewsType.NEW_GOODS) "[신규]" else "[변경]"
-                "$tag " + listOf(item.newsChara, item.newsCategory).filter { it.isNotBlank() }.joinToString(" · ")
+            // 한 캐릭터 굿즈가 줄을 다 차지해 다른 캐릭터가 가려지지 않도록 종류·캐릭터별로 한 줄씩 묶는다.
+            val groups = news.groupBy { it.type to it.newsChara }.entries
+                .sortedBy { if (it.key.first == NewsType.NEW_GOODS) 0 else 1 }
+            val lines = groups.map { (key, items) ->
+                val tag = if (key.first == NewsType.NEW_GOODS) "[신규]" else "[변경]"
+                val categories = items.map { it.newsCategory }.filter { it.isNotBlank() }.distinct()
+                val count = if (items.size > 1) " ${items.size}개" else ""
+                "$tag ${key.second}$count" +
+                        if (categories.isNotEmpty()) " · " + categories.joinToString(", ") else ""
             }
             val style = NotificationCompat.InboxStyle()
             lines.take(MAX_LINES).forEach { style.addLine(it) }
-            if (lines.size > MAX_LINES) style.setSummaryText("외 ${lines.size - MAX_LINES}개")
+            if (lines.size > MAX_LINES) style.setSummaryText("외 ${lines.size - MAX_LINES}명")
+            val charas = news.map { it.newsChara }.filter { it.isNotBlank() }.distinct()
+            val charaText = when {
+                charas.isEmpty() -> ""
+                charas.size <= 2 -> charas.joinToString(", ") + " "
+                else -> "${charas.take(2).joinToString(", ")} 외 ${charas.size - 2}명 "
+            }
             val title = when {
-                changedCount == 0 -> "선호 캐릭터 신규 굿즈 ${newCount}개가 추가되었습니다."
-                newCount == 0 -> "굿즈 변경 사항 ${changedCount}개가 있습니다."
+                changedCount == 0 -> "${charaText}신규 굿즈 ${newCount}개가 추가되었습니다."
+                newCount == 0 -> "${charaText}굿즈 변경 사항 ${changedCount}개가 있습니다."
                 else -> "새 소식 ${news.size}개 (신규 ${newCount} · 변경 ${changedCount})"
             }
             builder

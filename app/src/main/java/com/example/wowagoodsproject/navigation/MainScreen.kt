@@ -151,7 +151,11 @@ fun MainScreen(
         onOpenTargetHandled()
     }
 
-    if (isLandscape) {
+    if (isLandscape) CompositionLocalProvider(
+        // 세로 모드의 Scaffold 는 기본 글자/아이콘 색을 onBackground 로 깔아 준다.
+        // 가로 모드는 Row 만 써서 이 값이 빠지므로, 색을 따로 안 준 글자가 세로와 달라지지 않게 같은 값을 준다.
+        LocalContentColor provides MaterialTheme.colorScheme.onBackground
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()

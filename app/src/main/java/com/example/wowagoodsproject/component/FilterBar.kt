@@ -41,24 +41,80 @@ fun FilterBar(
             MultiSelectToggle(selectionMode = selectionMode, onToggle = onToggleSelection)
         }
         options.forEach { (type, label, count) ->
-            val selected = filterType == type
-            FilterChip(
-                selected = selected,
-                onClick = { onFilterChange(type) },
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(label, maxLines = 1)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "$count",
-                            maxLines = 1,
-                            fontWeight = FontWeight.Bold,
-                            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                            else MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+            CountFilterChip(
+                label = label,
+                count = count,
+                selected = filterType == type,
+                onClick = { onFilterChange(type) }
             )
         }
     }
+}
+
+/**
+ * 구매예정 목록의 구매 정보 필터. [FilterBar] 와 같은 한 줄짜리 칩이지만 여러 개를 함께 켤 수 있고,
+ * 켠 조건을 모두 만족하는 굿즈만 남는다. "전체" 를 누르면 모두 끈다.
+ * 숫자는 다른 구매 정보 필터를 걸기 전 [goodsList] 에서 센 값이다.
+ */
+@Composable
+fun PendingInfoFilterBar(
+    selected: Set<PendingInfoFilter>,
+    onToggle: (PendingInfoFilter) -> Unit,
+    onClear: () -> Unit,
+    goodsList: List<GoodsItem>,
+    selectionMode: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (onToggleSelection != null) {
+            MultiSelectToggle(selectionMode = selectionMode, onToggle = onToggleSelection)
+        }
+        CountFilterChip(
+            label = "전체",
+            count = goodsList.size,
+            selected = selected.isEmpty(),
+            onClick = onClear
+        )
+        PendingInfoFilter.entries.forEach { filter ->
+            CountFilterChip(
+                label = filter.label,
+                count = goodsList.count(filter.matches),
+                selected = filter in selected,
+                onClick = { onToggle(filter) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CountFilterChip(
+    label: String,
+    count: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(label, maxLines = 1)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "$count",
+                    maxLines = 1,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                    else MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    )
 }

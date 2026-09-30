@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,6 +68,10 @@ fun GoodsDetailDialog(
     onSeriesClick: (String) -> Unit = {},
     purchaseInfo: PurchaseInfo = PurchaseInfo(),
     onSavePendingInfo: ((PurchaseInfo) -> Unit)? = null,
+    /** 구매예정 굿즈의 배송 시작일. 빈 문자열이면 배송 전. */
+    shippingDate: String = "",
+    /** 넘기면 구매 정보 아래에 배송 시작/취소 버튼을 둔다. */
+    onToggleShipping: (() -> Unit)? = null,
     quantity: Int = 1,
     onQuantityChange: ((Int) -> Unit)? = null
 ){
@@ -181,6 +186,8 @@ fun GoodsDetailDialog(
                         onSelectStatus = onSelectStatus,
                         purchaseInfo = shownPurchaseInfo,
                         onEditPurchase = { showPurchaseDialog = true },
+                        shippingDate = shippingDate,
+                        onToggleShipping = onToggleShipping,
                         quantity = shownQuantity,
                         onQuantityChange = onChangeQuantity,
                         setGoods = setGoods,
@@ -213,6 +220,8 @@ fun GoodsDetailDialog(
                     onSelectStatus = onSelectStatus,
                     purchaseInfo = shownPurchaseInfo,
                     onEditPurchase = { showPurchaseDialog = true },
+                    shippingDate = shippingDate,
+                    onToggleShipping = onToggleShipping,
                     quantity = shownQuantity,
                     onQuantityChange = onChangeQuantity,
                     setGoods = setGoods,
@@ -270,6 +279,8 @@ private fun DetailBody(
     onSelectStatus: (GoodsStatus) -> Unit,
     purchaseInfo: PurchaseInfo?,
     onEditPurchase: () -> Unit,
+    shippingDate: String,
+    onToggleShipping: (() -> Unit)?,
     quantity: Int,
     onQuantityChange: ((Int) -> Unit)?,
     setGoods: GoodsItem?,
@@ -314,6 +325,17 @@ private fun DetailBody(
             overflow = TextOverflow.Ellipsis
         )
 
+        // 구매예정 굿즈는 구매 정보(배송 포함)를 가장 먼저 보고 고치게 굿즈 정보보다 위에 둔다.
+        if (purchaseInfo != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            PurchaseInfoSummary(
+                info = purchaseInfo,
+                onEdit = onEditPurchase,
+                shippingDate = shippingDate,
+                onToggleShipping = onToggleShipping
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -344,11 +366,6 @@ private fun DetailBody(
         if (onQuantityChange != null && status != GoodsStatus.NOT_GOTTEN) {
             Spacer(modifier = Modifier.height(12.dp))
             QuantityStepper(quantity = quantity, onChange = onQuantityChange)
-        }
-
-        if (purchaseInfo != null) {
-            Spacer(modifier = Modifier.height(20.dp))
-            PurchaseInfoSummary(info = purchaseInfo, onEdit = onEditPurchase)
         }
 
         if (setGoods != null) {
@@ -471,9 +488,17 @@ private fun QuantityInputDialog(initial: Int, onDismiss: () -> Unit, onConfirm: 
     )
 }
 
-/** 구매예정 굿즈의 구입처/구매일/수령예정일. 오른쪽 위 버튼으로 고친다. */
+/**
+ * 구매예정 굿즈의 구입처/구매일/수령예정일. 오른쪽 위 버튼으로 고친다.
+ * [onToggleShipping] 이 있으면 배송 상태 줄과 배송 시작/취소 버튼을 함께 보여 준다.
+ */
 @Composable
-private fun PurchaseInfoSummary(info: PurchaseInfo, onEdit: () -> Unit) {
+private fun PurchaseInfoSummary(
+    info: PurchaseInfo,
+    onEdit: () -> Unit,
+    shippingDate: String = "",
+    onToggleShipping: (() -> Unit)? = null
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -495,6 +520,31 @@ private fun PurchaseInfoSummary(info: PurchaseInfo, onEdit: () -> Unit) {
                 InfoLine(label = "구매일", value = info.purchaseDate.ifEmpty { "미정" })
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 InfoLine(label = "수령예정일", value = info.receiveDate.ifEmpty { "미정" })
+                if (onToggleShipping != null) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    InfoLine(
+                        label = "배송",
+                        value = if (shippingDate.isEmpty()) "배송 전" else "배송 중 (${shippingDate}~)"
+                    )
+                }
+            }
+        }
+        if (onToggleShipping != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            if (shippingDate.isEmpty()) {
+                FilledTonalButton(onClick = onToggleShipping, modifier = Modifier.fillMaxWidth()) {
+                    Icon(
+                        imageVector = Icons.Default.LocalShipping,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("오늘 배송 시작")
+                }
+            } else {
+                OutlinedButton(onClick = onToggleShipping, modifier = Modifier.fillMaxWidth()) {
+                    Text("배송 취소")
+                }
             }
         }
     }

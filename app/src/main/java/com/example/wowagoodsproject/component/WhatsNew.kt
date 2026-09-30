@@ -21,6 +21,36 @@ data class ReleaseSection(val title: String, val items: List<String>)
 object ReleaseNotes {
 
     private val notes: Map<String, List<ReleaseSection>> = mapOf(
+        "2.3" to listOf(
+            ReleaseSection(
+                "🛒 구매예정 굿즈",
+                listOf(
+                    "구입처 미정 · 구매일 미정 · 수령일 미정 · 배송 중 · 배송 전 필터 (여러 개 함께 선택)",
+                    "굿즈를 누르면 상세 창에서 구매 정보 입력과 배송 시작/취소",
+                    "다중 선택을 다른 탭과 같은 방식으로 변경"
+                )
+            ),
+            ReleaseSection(
+                "📦 굿즈 상세",
+                listOf("구매예정 굿즈는 구매 정보와 배송 상태를 맨 위에 표시")
+            ),
+            ReleaseSection(
+                "🎨 2차창작 굿즈 등록",
+                listOf(
+                    "등록 화면 디자인 개편",
+                    "카테고리·캐릭터를 검색해서 고르기",
+                    "등록 버튼을 화면 아래에 고정"
+                )
+            ),
+            ReleaseSection(
+                "🔔 알림",
+                listOf("신규 굿즈 알림을 캐릭터별로 묶어서 어떤 캐릭터인지 바로 보이게")
+            ),
+            ReleaseSection(
+                "🛠 수정",
+                listOf("가로 모드에서 일부 글자색이 세로 모드와 다르던 문제")
+            )
+        ),
         "2.2" to listOf(
             ReleaseSection(
                 "🔍 검색·필터",

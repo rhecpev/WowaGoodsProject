@@ -24,11 +24,13 @@ fun statusColor(status: GoodsStatus): Color = when (status) {
 fun StatusSegmentedButtons(
     current: GoodsStatus?,
     onSelect: (GoodsStatus) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** false 면 미보유 / 보유 두 칸만 보여 준다(구매 정보를 받지 않는 곳). */
+    showPending: Boolean = true
 ) {
-    val options = listOf(
+    val options = listOfNotNull(
         GoodsStatus.NOT_GOTTEN to "미보유",
-        GoodsStatus.PENDING to "구매예정",
+        if (showPending) GoodsStatus.PENDING to "구매예정" else null,
         GoodsStatus.GOTTEN to "보유"
     )
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {

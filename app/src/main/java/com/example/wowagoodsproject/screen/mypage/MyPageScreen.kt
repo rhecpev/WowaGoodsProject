@@ -81,6 +81,8 @@ import com.example.wowagoodsproject.component.ProgressDialog
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
+import com.example.wowagoodsproject.component.filterPendingInfo
+import com.example.wowagoodsproject.component.PendingInfoFilterBar
 import com.example.wowagoodsproject.component.findSetGoods
 import com.example.wowagoodsproject.component.getSetComponents
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
@@ -131,6 +133,7 @@ fun MyPageScreen(
     val unreadNewsCount by viewModel.unreadNewsCount.collectAsState()
     val pendingOfficialGoods by viewModel.pendingOfficialGoods.collectAsState()
     val pendingFanGoods by viewModel.pendingFanGoods.collectAsState()
+    val pendingInfoFilters by viewModel.pendingInfoFilters.collectAsState()
     val isUpdating by UpdateManager.isRunning.collectAsState()
 
     var selectedThemeMode by remember { mutableIntStateOf(App.getThemeMode()) }
@@ -243,6 +246,7 @@ fun MyPageScreen(
         viewModel.setSection(null)
         viewModel.setCharaFilter(null)
         viewModel.setCategoryFilter(null)
+        viewModel.clearPendingInfoFilters()
         selectedPendingOfficialIds = emptySet()
         selectedPendingFanIds = emptySet()
     }
@@ -307,27 +311,36 @@ fun MyPageScreen(
             .sorted()
     }
 
-    val filteredPendingOfficial = remember(pendingOfficialGoods, selectedCharaFilter, selectedCategoryFilter) {
+    // 캐릭터/카테고리만 건 목록. 구매 정보 필터 칩의 숫자는 여기서 센다.
+    val charaFilteredPendingOfficial = remember(pendingOfficialGoods, selectedCharaFilter, selectedCategoryFilter) {
         filterGoodsList(
             list = pendingOfficialGoods,
             charaFilter = selectedCharaFilter,
             categoryFilter = selectedCategoryFilter
         )
     }
-    val filteredPendingFan = remember(pendingFanGoods, selectedCharaFilter, selectedCategoryFilter) {
+    val charaFilteredPendingFan = remember(pendingFanGoods, selectedCharaFilter, selectedCategoryFilter) {
         filterFanGoodsList(
             list = pendingFanGoods,
             charaFilter = selectedCharaFilter,
             categoryFilter = selectedCategoryFilter
         )
     }
+    val filteredPendingOfficial = remember(charaFilteredPendingOfficial, pendingInfoFilters) {
+        charaFilteredPendingOfficial.filterPendingInfo(pendingInfoFilters)
+    }
+    val filteredPendingFan = remember(charaFilteredPendingFan, pendingInfoFilters) {
+        charaFilteredPendingFan.filterPendingInfo(pendingInfoFilters)
+    }
 
     // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 다이얼로그가 최신 값을 보여주도록 다시 조회한다.
-    val displayedGoods = remember(selectedGoods, allSeriesGoods, fanGottenGoods) {
+    // 구매예정 목록에서 연 굿즈도 배송/구매 정보를 바꾸면 바로 보이도록 구매예정 목록에서도 찾는다.
+    val displayedGoods = remember(selectedGoods, allSeriesGoods, fanGottenGoods, pendingFanGoods) {
         selectedGoods?.let { selected ->
             when (selected) {
                 is GoodsEntity -> allSeriesGoods.find { it.goodsId == selected.goodsId } ?: selected
-                is FanGoodsEntity -> fanGottenGoods.find { it.fanGoodsId == selected.fanGoodsId } ?: selected
+                is FanGoodsEntity -> (fanGottenGoods + pendingFanGoods)
+                    .find { it.fanGoodsId == selected.fanGoodsId } ?: selected
                 else -> selected
             }
         }
@@ -367,6 +380,13 @@ fun MyPageScreen(
                 detailViewModel.dismissDialog()
             },
             purchaseInfo = goods.purchaseInfo,
+            shippingDate = goods.shippingDate,
+            onToggleShipping = {
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
+                val date = if (goods.shippingDate.isEmpty()) today else ""
+                officialGoods?.let { viewModel.setShipping(setOf(it.goodsId), emptySet(), date) }
+                fanGoods?.let { viewModel.setShipping(emptySet(), setOf(it.fanGoodsId), date) }
+            },
             quantity = goods.quantity,
             onQuantityChange = { q ->
                 officialGoods?.let { viewModel.setOfficialQuantity(it, q) }
@@ -438,6 +458,7 @@ fun MyPageScreen(
             viewModel.setSection(null)
             viewModel.setCharaFilter(null)
             viewModel.setCategoryFilter(null)
+            viewModel.clearPendingInfoFilters()
             selectedPendingOfficialIds = emptySet()
             selectedPendingFanIds = emptySet()
         }
@@ -672,8 +693,25 @@ fun MyPageScreen(
                 }
             }
         } else when (currentSection) {
-            "pending" -> {
+            "pending" -> Column(modifier = Modifier.fillMaxSize()) {
+                if (charaFilteredPendingOfficial.isNotEmpty() || charaFilteredPendingFan.isNotEmpty()) {
+                    PendingInfoFilterBar(
+                        selected = pendingInfoFilters,
+                        onToggle = { viewModel.togglePendingInfoFilter(it) },
+                        onClear = { viewModel.clearPendingInfoFilters() },
+                        goodsList = charaFilteredPendingOfficial + charaFilteredPendingFan,
+                        selectionMode = selection.mode,
+                        onToggleSelection = {
+                            selection.toggleMode()
+                            selectedPendingOfficialIds = emptySet()
+                            selectedPendingFanIds = emptySet()
+                        }
+                    )
+                }
                 PendingGoodsSection(
+                    modifier = Modifier.weight(1f),
+                    selectionMode = selection.mode,
+                    onOpenGoods = { detailViewModel.selectGoods(it) },
                     onToggleShipping = { goods ->
                         val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
                         val date = if (goods.shippingDate.isEmpty()) today else ""
@@ -691,7 +729,8 @@ fun MyPageScreen(
                     },
                     officialGoods = filteredPendingOfficial,
                     fanGoods = filteredPendingFan,
-                    isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null,
+                    isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null ||
+                            pendingInfoFilters.isNotEmpty(),
                     selectedOfficialIds = selectedPendingOfficialIds,
                     selectedFanIds = selectedPendingFanIds,
                     onToggleOfficial = { id ->

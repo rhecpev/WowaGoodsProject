@@ -10,7 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,6 +31,7 @@ import com.example.wowagoodsproject.component.GoodsItem
 import com.example.wowagoodsproject.component.PurchaseInfo
 import com.example.wowagoodsproject.component.PurchaseInfoDialog
 import com.example.wowagoodsproject.component.PurchaseInfoEdit
+import com.example.wowagoodsproject.component.SelectionMark
 import com.example.wowagoodsproject.component.encodeGoodsImagePath
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
@@ -39,13 +39,16 @@ import com.example.wowagoodsproject.ui.theme.AppStyles
 
 /**
  * 구매예정 굿즈 목록.
- * 줄을 눌러 여러 개를 고른 뒤 구입처/구매일/수령예정일을 한 번에 적어 넣거나 배송 시작으로 표시한다.
+ * 줄을 누르면 굿즈 상세 팝업이 열려 그 굿즈의 구매 정보와 배송을 바로 고칠 수 있다.
+ * 다중 선택 중([selectionMode])에는 줄을 눌러 여러 개를 고른 뒤
+ * 구입처/구매일/수령예정일을 한 번에 적어 넣거나 배송 시작으로 표시한다.
  * 줄마다 있는 배송 시작/취소 버튼으로 하나씩도 바꿀 수 있다.
  */
 @Composable
 fun PendingGoodsSection(
     officialGoods: List<GoodsEntity>,
     fanGoods: List<FanGoodsEntity>,
+    selectionMode: Boolean,
     selectedOfficialIds: Set<Int>,
     selectedFanIds: Set<Int>,
     onToggleOfficial: (Int) -> Unit,
@@ -58,6 +61,8 @@ fun PendingGoodsSection(
     onToggleShipping: (GoodsItem) -> Unit = {},
     /** 고른 굿즈 중 아직 배송 전인 것들을 오늘 날짜로 배송 시작한다. */
     onStartShipping: (officialIds: Set<Int>, fanIds: Set<Int>) -> Unit = { _, _ -> },
+    /** 줄을 눌렀을 때. 굿즈 상세 팝업을 연다. */
+    onOpenGoods: (GoodsItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showPurchaseDialog by remember { mutableStateOf(false) }
@@ -126,26 +131,63 @@ fun PendingGoodsSection(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = AppStyles.paddingLarge, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = when {
-                    selectedCount > 0 -> "${selectedCount}개 선택됨"
-                    isFiltered -> "조건에 맞는 ${totalCount}개"
-                    else -> "총 ${totalCount}개"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = if (selectedCount > 0) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = if (allSelected) onClearSelection else onSelectAll) {
-                Text(if (allSelected) "선택 해제" else "전체 선택")
+        // 다른 탭의 다중 선택 줄(BulkStatusBar)과 같은 모양. 상태 대신 배송/구매 정보를 한 번에 바꾼다.
+        if (selectionMode) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (selectedCount > 0) "${selectedCount}개 선택됨" else "굿즈를 눌러 선택하세요",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selectedCount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = if (allSelected) onClearSelection else onSelectAll) {
+                            Text(if (allSelected) "선택 해제" else "전체 선택")
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // 이미 배송 중인 굿즈는 시작일을 그대로 두고, 배송 전인 것만 오늘로 시작한다.
+                        OutlinedButton(
+                            onClick = {
+                                onStartShipping(
+                                    visibleOfficial.map { it.goodsId }.toSet(),
+                                    visibleFan.map { it.fanGoodsId }.toSet()
+                                )
+                            },
+                            enabled = notShippedCount > 0,
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalShipping,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("배송 시작", maxLines = 1)
+                        }
+                        OutlinedButton(
+                            onClick = { showPurchaseDialog = true },
+                            enabled = selectedCount > 0,
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("구매 정보", maxLines = 1)
+                        }
+                    }
+                }
             }
         }
 
@@ -156,6 +198,7 @@ fun PendingGoodsSection(
             contentPadding = PaddingValues(
                 start = AppStyles.paddingLarge,
                 end = AppStyles.paddingLarge,
+                top = 4.dp,
                 bottom = AppStyles.paddingMedium
             ),
             verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -164,8 +207,8 @@ fun PendingGoodsSection(
                 PendingGoodsRow(
                     goods = goods,
                     isFanGoods = false,
-                    selected = goods.goodsId in selectedOfficialIds,
-                    onToggle = { onToggleOfficial(goods.goodsId) },
+                    selected = if (selectionMode) goods.goodsId in selectedOfficialIds else null,
+                    onClick = { if (selectionMode) onToggleOfficial(goods.goodsId) else onOpenGoods(goods) },
                     onToggleShipping = { onToggleShipping(goods) }
                 )
             }
@@ -173,71 +216,26 @@ fun PendingGoodsSection(
                 PendingGoodsRow(
                     goods = goods,
                     isFanGoods = true,
-                    selected = goods.fanGoodsId in selectedFanIds,
-                    onToggle = { onToggleFan(goods.fanGoodsId) },
+                    selected = if (selectionMode) goods.fanGoodsId in selectedFanIds else null,
+                    onClick = { if (selectionMode) onToggleFan(goods.fanGoodsId) else onOpenGoods(goods) },
                     onToggleShipping = { onToggleShipping(goods) }
                 )
-            }
-        }
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 3.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(AppStyles.paddingLarge),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // 이미 배송 중인 굿즈는 시작일을 그대로 두고, 배송 전인 것만 오늘로 시작한다.
-                OutlinedButton(
-                    onClick = {
-                        onStartShipping(
-                            visibleOfficial.map { it.goodsId }.toSet(),
-                            visibleFan.map { it.fanGoodsId }.toSet()
-                        )
-                    },
-                    enabled = notShippedCount > 0,
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocalShipping,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (notShippedCount > 0) "${notShippedCount}개 배송 시작" else "배송 시작", maxLines = 1)
-                }
-                Button(
-                    onClick = { showPurchaseDialog = true },
-                    enabled = selectedCount > 0,
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (selectedCount > 0) "${selectedCount}개 구매 정보" else "굿즈를 골라 주세요", maxLines = 1)
-                }
             }
         }
     }
 }
 
-/** 썸네일 + 굿즈 정보 + 구입처/구매일/수령예정일(+배송) + 배송 버튼 + 체크박스 한 줄 */
+/**
+ * 썸네일 + 굿즈 정보 + 구입처/구매일/수령예정일(+배송) + 배송 버튼 한 줄.
+ * [selected] 가 null 이 아니면(다중 선택 중) 오른쪽에 선택 표시를 둔다.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PendingGoodsRow(
     goods: GoodsItem,
     isFanGoods: Boolean,
-    selected: Boolean,
-    onToggle: () -> Unit,
+    selected: Boolean?,
+    onClick: () -> Unit,
     onToggleShipping: () -> Unit
 ) {
     val encodedPath = encodeGoodsImagePath(goods.imgPath)
@@ -249,10 +247,11 @@ private fun PendingGoodsRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            // 체크박스만이 아니라 줄 전체를 눌러도 선택되게 한다.
-            .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onToggle() }),
+            // 평소에는 상세 팝업을 열고, 다중 선택 중에는 선택을 바꾼다.
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+        color = if (selected == true) MaterialTheme.colorScheme.secondaryContainer
         else MaterialTheme.colorScheme.surfaceContainer
     ) {
         Row(
@@ -357,7 +356,9 @@ private fun PendingGoodsRow(
                     }
                 }
             }
-            Checkbox(checked = selected, onCheckedChange = null)
+            if (selected != null) {
+                SelectionMark(selected = selected)
+            }
         }
     }
 }

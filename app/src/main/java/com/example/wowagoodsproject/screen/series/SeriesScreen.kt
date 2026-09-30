@@ -520,11 +520,13 @@ fun SeriesScreen(
                                                                                     text = charaTop.charaNm,
                                                                                     maxLines = 1,
                                                                                     overflow = TextOverflow.Ellipsis,
-                                                                                    style = AppStyles.textCardSubtitle
+                                                                                    style = AppStyles.textCardSubtitle,
+                                                                                    color = if (charaTop.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                                                                 )
                                                                                 Text(
                                                                                     text = "(${count.first}/${count.second})",
-                                                                                    style = AppStyles.textCardSmall
+                                                                                    style = AppStyles.textCardSmall,
+                                                                                    color = if (charaTop.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                                                                                 )
                                                                             }
                                                                         }
@@ -564,11 +566,13 @@ fun SeriesScreen(
                                                                                         text = charaBottom.charaNm,
                                                                                         maxLines = 1,
                                                                                         overflow = TextOverflow.Ellipsis,
-                                                                                        style = AppStyles.textCardSubtitle
+                                                                                        style = AppStyles.textCardSubtitle,
+                                                                                        color = if (charaBottom.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                                                                     )
                                                                                     Text(
                                                                                         text = "(${count.first}/${count.second})",
-                                                                                        style = AppStyles.textCardSmall
+                                                                                        style = AppStyles.textCardSmall,
+                                                                                        color = if (charaBottom.charaIsFavorite) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
                                                                                     )
                                                                                 }
                                                                             }

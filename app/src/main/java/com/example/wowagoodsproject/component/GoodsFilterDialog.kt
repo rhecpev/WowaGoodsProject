@@ -176,13 +176,17 @@ fun FilterDialogFrame(
     }
 }
 
-/** 원형 아바타 + 이름으로 캐릭터를 고르는 그리드. 선택된 캐릭터는 테두리와 체크로 표시한다. */
+/**
+ * 원형 아바타 + 이름으로 캐릭터를 고르는 그리드. 선택된 캐릭터는 테두리와 체크로 표시한다.
+ * 여러 명을 고르는 곳에서는 [selectedNames] 로 선택 목록을 넘긴다.
+ */
 @Composable
 fun CharaChoiceGrid(
     charas: List<CharaEntity>,
     selectedName: String?,
     onSelect: (CharaEntity) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectedNames: Set<String> = emptySet()
 ) {
     if (charas.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -200,7 +204,7 @@ fun CharaChoiceGrid(
         items(charas, key = { it.charaNm }) { chara ->
             CharaChoiceItem(
                 chara = chara,
-                selected = chara.charaNm == selectedName,
+                selected = chara.charaNm == selectedName || chara.charaNm in selectedNames,
                 onClick = { onSelect(chara) }
             )
         }
