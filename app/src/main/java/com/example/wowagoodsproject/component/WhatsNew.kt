@@ -21,6 +21,66 @@ data class ReleaseSection(val title: String, val items: List<String>)
 object ReleaseNotes {
 
     private val notes: Map<String, List<ReleaseSection>> = mapOf(
+        "2.4" to listOf(
+            ReleaseSection(
+                "🔎 굿즈 검색 탭",
+                listOf(
+                    "캐릭터·카테고리를 골라 공식과 2차창작 굿즈를 한 번에 찾기",
+                    "보유 상태 필터와 다중 선택으로 찾은 굿즈를 바로 정리"
+                )
+            ),
+            ReleaseSection(
+                "🖼 그리드 보기",
+                listOf(
+                    "한 줄에 놓는 개수를 1~10개로 조절",
+                    "보기 방식과 개수를 화면마다 따로 기억 (앱을 다시 켜도 유지)",
+                    "구매예정 굿즈에도 그리드 보기 추가"
+                )
+            ),
+            ReleaseSection(
+                "📱 가로 화면",
+                listOf(
+                    "탭·필터를 왼쪽 세로 줄로 옮겨 목록을 넓게",
+                    "마이페이지를 두 칸으로 배치",
+                    "구매 정보 입력 창과 달력이 가로 화면에서 잘리던 문제 수정",
+                    "화면을 돌려도 보던 화면을 그대로 유지",
+                    "캐릭터 굿즈 화면에서도 하단 메뉴 표시"
+                )
+            ),
+            ReleaseSection(
+                "✅ 다중 선택",
+                listOf(
+                    "선택 안내와 변경 버튼을 필터 자리에 표시해 목록을 더 넓게",
+                    "다중 선택 중에는 탭과 필터가 바뀌지 않게 잠금"
+                )
+            ),
+            ReleaseSection(
+                "📦 굿즈 상세",
+                listOf(
+                    "이미지는 그대로 두고 정보만 스크롤",
+                    "스크롤하다가 창이 닫히던 문제 수정"
+                )
+            ),
+            ReleaseSection(
+                "🛒 구매예정 굿즈",
+                listOf(
+                    "목록에 시리즈명을 크게, 그 아래 캐릭터 - 카테고리 - 메모 표시",
+                    "구매 정보 필터를 하나씩 고르는 방식으로 변경"
+                )
+            ),
+            ReleaseSection(
+                "🔔 알림",
+                listOf(
+                    "신규 굿즈 알림을 캐릭터별로 따로, 캐릭터 얼굴과 함께 표시",
+                    "상태 표시줄 알림 아이콘 변경",
+                    "자동 업데이트를 오전 5시 정각에 맞추고, 실패하면 매시 정각에 다시 시도"
+                )
+            ),
+            ReleaseSection(
+                "🛠 수정",
+                listOf("달력이 기기 언어와 상관없이 한국어로 나오게")
+            )
+        ),
         "2.3" to listOf(
             ReleaseSection(
                 "🛒 구매예정 굿즈",

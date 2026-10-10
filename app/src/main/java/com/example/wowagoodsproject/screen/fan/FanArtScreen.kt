@@ -3,9 +3,15 @@ package com.example.wowagoodsproject.screen.fan
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import com.example.wowagoodsproject.component.BulkStatusButtons
+import com.example.wowagoodsproject.component.BulkSelectionSlot
+import com.example.wowagoodsproject.component.BulkSelection
+import com.example.wowagoodsproject.component.SidePanelLayout
+import com.example.wowagoodsproject.component.BulkStatusArea
+import com.example.wowagoodsproject.component.GridColumnsBar
+import com.example.wowagoodsproject.component.rememberGridColumns
 import com.example.wowagoodsproject.component.bulkStatusMessage
 import com.example.wowagoodsproject.component.rememberGoodsSelection
-import com.example.wowagoodsproject.component.BulkStatusBar
 import com.example.wowagoodsproject.component.purchaseInfo
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -58,22 +64,19 @@ fun FanArtScreen(
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
 
     val filteredList = filterFanGoodsList(
-        list = filterViewModel.applyFilter(goodsList).second,
+        list = filterViewModel.applyFilter(goodsList, filterType).second,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
 
     val AllFilteredList = filterFanGoodsList(
-        list = filterViewModel.applyFilter(goodsList).first,
+        list = filterViewModel.applyFilter(goodsList, filterType).first,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
 
-    val gridColumns = when (widthSizeClass) {
-        WindowWidthSizeClass.Compact -> 2
-        WindowWidthSizeClass.Medium -> 3
-        else -> 4
-    }
+    val gridColumns = rememberGridColumns(listModeViewModel, widthSizeClass)
+    val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
     val allCharaList by viewModel.allCharaList.collectAsState()
 
     val goodsCharaList = goodsList
@@ -168,39 +171,53 @@ fun FanArtScreen(
                 onClearAll = { filterViewModel.clearGoodsFilter() }
             )
 
-            FilterBar(
-                filterType = filterType,
-                onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = AllFilteredList,
-                selectionMode = selection.mode,
-                onToggleSelection = { selection.toggleMode() }
+            // 다중 선택으로 고른 굿즈와 일괄 변경 동작
+            val picked = selection.visible(filteredList) { it.fanGoodsId }
+            val bulk = BulkSelection(
+                selectedItems = picked,
+                allSelected = filteredList.isNotEmpty() && picked.size == filteredList.size,
+                onSelectAll = { selection.selectAll(filteredList.map { it.fanGoodsId }) },
+                onClearSelection = { selection.clear() },
+                onApply = { status, edit ->
+                    viewModel.applyStatus(picked, status, edit)
+                    selection.clear()
+                    Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                }
             )
-            if (selection.mode) {
-                val picked = selection.visible(filteredList) { it.fanGoodsId }
-                BulkStatusBar(
-                    selectedItems = picked,
-                    allSelected = filteredList.isNotEmpty() && picked.size == filteredList.size,
-                    onSelectAll = { selection.selectAll(filteredList.map { it.fanGoodsId }) },
-                    onClearSelection = { selection.clear() },
-                    onApply = { status, edit ->
-                        viewModel.applyStatus(picked, status, edit)
-                        selection.clear()
-                        Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
-                    }
-                )
-            }
+            // 가로 화면에서는 탭·필터를 왼쪽 세로 줄로 옮겨 목록이 쓸 높이를 넓힌다.
+            SidePanelLayout(
+                sidePanel = isLandscape,
+                panel = {
+                    FilterBar(
+                        filterType = filterType,
+                        onFilterChange = { filterViewModel.setFilter(it) },
+                        goodsList = AllFilteredList,
+                        selectionMode = selection.mode,
+                        onToggleSelection = { selection.toggleMode() },
+                        vertical = isLandscape,
+                        // 다중 선택 중에는 잠긴 필터 칩 대신 그 자리에 선택 조작을 보여준다.
+                        selectionContent = { BulkSelectionSlot(bulk, vertical = isLandscape) }
+                    )
+                }
+            ) {
+                GridColumnsBar(listModeViewModel, widthSizeClass)
+                BulkStatusArea {
+                    // 안내 줄은 필터 칩 자리에 있다. 가로 화면에서는 버튼도 왼쪽 줄 안에 있어 여기에 둘 것이 없다.
+                    if (selection.mode && !isLandscape) BulkStatusButtons(bulk)
 
-            FanGoodsListContent(
-                goods = filteredList,
-                isGridMode = isGridMode,
-                gridColumns = gridColumns,
-                onGoodsClick = {
-                    if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
-                },
-                selectedIds = if (selection.mode) selection.ids else null,
-                // 목록 끝이 등록 버튼에 가려지지 않게 아래 여백을 둔다.
-                contentPadding = PaddingValues(bottom = 88.dp)
-            )
+                    FanGoodsListContent(
+                        goods = filteredList,
+                        isGridMode = isGridMode,
+                        gridColumns = gridColumns,
+                        onGoodsClick = {
+                            if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                        },
+                        selectedIds = if (selection.mode) selection.ids else null,
+                        // 목록 끝이 등록 버튼에 가려지지 않게 아래 여백을 둔다.
+                        contentPadding = PaddingValues(bottom = 88.dp)
+                    )
+                }
+            }
         }
 
         ExtendedFloatingActionButton(

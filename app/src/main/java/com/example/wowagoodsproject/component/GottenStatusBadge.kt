@@ -23,12 +23,13 @@ fun GottenStatusBadge(
     filled: Boolean = false,
     quantity: Int = 1
 ) {
-    val (text, color) = when (status) {
-        GottenStatus.GOTTEN -> "보유" to AppStyles.colorGotten
-        GottenStatus.NOT_GOTTEN -> "미보유" to AppStyles.colorNotGotten
-        GottenStatus.PARTIAL -> "일부보유" to AppStyles.colorPartialGotten
-        GottenStatus.PENDING -> "구매예정" to AppStyles.colorPending
+    val text = when (status) {
+        GottenStatus.GOTTEN -> "보유"
+        GottenStatus.NOT_GOTTEN -> "미보유"
+        GottenStatus.PARTIAL -> "일부보유"
+        GottenStatus.PENDING -> "구매예정"
     }
+    val color = status.color()
     val showQuantity = quantity > 1 && (status == GottenStatus.GOTTEN || status == GottenStatus.PENDING)
     Text(
         text = if (showQuantity) "$text ×$quantity" else text,
@@ -42,6 +43,13 @@ fun GottenStatusBadge(
             )
             .padding(horizontal = 8.dp, vertical = 2.dp)
     )
+}
+
+fun GottenStatus.color(): Color = when (this) {
+    GottenStatus.GOTTEN -> AppStyles.colorGotten
+    GottenStatus.NOT_GOTTEN -> AppStyles.colorNotGotten
+    GottenStatus.PARTIAL -> AppStyles.colorPartialGotten
+    GottenStatus.PENDING -> AppStyles.colorPending
 }
 
 fun GoodsStatus.asGottenStatus(): GottenStatus = when (this) {

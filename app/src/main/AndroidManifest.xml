@@ -11,6 +11,12 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 매일 오전 5시 정각 알람(DailySchedule). 재부팅하면 알람이 지워지므로 부팅 때 다시 건다. -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".App"
@@ -27,9 +33,23 @@
             android:name=".PendingAlertMuteReceiver"
             android:exported="false" />
 
+        <!-- 오전 5시 알람을 받고, 알람이 지워지거나 어긋나는 상황에서 다시 건다 -->
+        <receiver
+            android:name=".DailyAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 화면을 돌려도 액티비티를 새로 만들지 않고, 보던 화면을 그대로 둔 채 배치만 바꾼다(configChanges). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:label="@string/app_name"
             android:theme="@style/Theme.WowaGoodsProject"
             android:windowSoftInputMode="adjustResize">

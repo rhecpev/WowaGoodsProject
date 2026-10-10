@@ -2,9 +2,16 @@ package com.example.wowagoodsproject.screen.series
 
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import com.example.wowagoodsproject.component.BulkStatusButtons
+import com.example.wowagoodsproject.component.BulkSelectionSlot
+import com.example.wowagoodsproject.component.BulkSelection
+import com.example.wowagoodsproject.component.SidePanelLayout
+import com.example.wowagoodsproject.component.BulkStatusArea
+import com.example.wowagoodsproject.component.SubTabLayout
+import com.example.wowagoodsproject.component.GridColumnsBar
+import com.example.wowagoodsproject.component.rememberGridColumns
 import com.example.wowagoodsproject.component.bulkStatusMessage
 import com.example.wowagoodsproject.component.rememberGoodsSelection
-import com.example.wowagoodsproject.component.BulkStatusBar
 import com.example.wowagoodsproject.component.swipeToChangeTab
 import com.example.wowagoodsproject.component.purchaseInfo
 import androidx.compose.ui.focus.focusRequester
@@ -100,11 +107,7 @@ fun SeriesScreen(
         .sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
         .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
 
-    val gridColumns = when (widthSizeClass) {
-        WindowWidthSizeClass.Compact -> 2
-        WindowWidthSizeClass.Medium -> 3
-        else -> 4
-    }
+    val gridColumns = rememberGridColumns(listModeViewModel, widthSizeClass)
 
     val goodsCharaList = seriesGoods
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
@@ -121,12 +124,12 @@ fun SeriesScreen(
         .sorted()
 
     val filteredGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(seriesGoods).second,
+        list = filterViewModel.applyFilter(seriesGoods, filterType).second,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
     val AllSeriesGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(seriesGoods).first,
+        list = filterViewModel.applyFilter(seriesGoods, filterType).first,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter
     )
@@ -140,6 +143,9 @@ fun SeriesScreen(
         filterViewModel.setFilter(FilterType.ALL)
         filterViewModel.clearGoodsFilter()
     }
+
+    // 하단 메뉴를 다시 눌러 시리즈 목록으로 돌아온 경우에도 다중 선택을 끝낸다.
+    LaunchedEffect(selectedSeries == null) { if (selectedSeries == null) selection.exit() }
 
     BackHandler(enabled = selectedSeries != null) { closeSeries() }
     // 나중에 등록한 BackHandler 가 먼저 받으므로, 선택 중이면 뒤로가기는 선택만 끝낸다.
@@ -285,36 +291,49 @@ fun SeriesScreen(
                 ),
                 onClearAll = { filterViewModel.clearGoodsFilter() }
             )
-            FilterBar(
-                filterType = filterType,
-                onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = AllSeriesGoods,
-                selectionMode = selection.mode,
-                onToggleSelection = { selection.toggleMode() }
+            // 다중 선택으로 고른 굿즈와 일괄 변경 동작
+            val picked = selection.visible(filteredGoods) { it.goodsId }
+            val bulk = BulkSelection(
+                selectedItems = picked,
+                allSelected = filteredGoods.isNotEmpty() && picked.size == filteredGoods.size,
+                onSelectAll = { selection.selectAll(filteredGoods.map { it.goodsId }) },
+                onClearSelection = { selection.clear() },
+                onApply = { status, edit ->
+                    viewModel.applyStatus(picked, status, edit)
+                    selection.clear()
+                    Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                }
             )
-            if (selection.mode) {
-                val picked = selection.visible(filteredGoods) { it.goodsId }
-                BulkStatusBar(
-                    selectedItems = picked,
-                    allSelected = filteredGoods.isNotEmpty() && picked.size == filteredGoods.size,
-                    onSelectAll = { selection.selectAll(filteredGoods.map { it.goodsId }) },
-                    onClearSelection = { selection.clear() },
-                    onApply = { status, edit ->
-                        viewModel.applyStatus(picked, status, edit)
-                        selection.clear()
-                        Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
-                    }
+            val statusFilter: @Composable () -> Unit = {
+                FilterBar(
+                    filterType = filterType,
+                    onFilterChange = { filterViewModel.setFilter(it) },
+                    goodsList = AllSeriesGoods,
+                    selectionMode = selection.mode,
+                    onToggleSelection = { selection.toggleMode() },
+                    vertical = isLandscape,
+                    // 다중 선택 중에는 잠긴 필터 칩 대신 그 자리에 선택 조작을 보여준다.
+                    selectionContent = { BulkSelectionSlot(bulk, vertical = isLandscape) }
                 )
             }
-            GoodsListContent(
-                goods = filteredGoods,
-                isGridMode = isGridMode,
-                gridColumns = gridColumns,
-                onGoodsClick = {
-                    if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
-                },
-                selectedIds = if (selection.mode) selection.ids else null
-            )
+            val goodsArea: @Composable () -> Unit = {
+                GridColumnsBar(listModeViewModel, widthSizeClass)
+                BulkStatusArea {
+                    // 안내 줄은 필터 칩 자리에 있다. 가로 화면에서는 버튼도 왼쪽 줄 안에 있어 여기에 둘 것이 없다.
+                    if (selection.mode && !isLandscape) BulkStatusButtons(bulk)
+                    GoodsListContent(
+                        goods = filteredGoods,
+                        isGridMode = isGridMode,
+                        gridColumns = gridColumns,
+                        onGoodsClick = {
+                            if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                        },
+                        selectedIds = if (selection.mode) selection.ids else null
+                    )
+                }
+            }
+            // 가로 화면에서는 상태 필터를 왼쪽에 세로로 세워 목록이 쓸 높이를 넓힌다.
+            SidePanelLayout(sidePanel = isLandscape, panel = statusFilter, content = goodsArea)
         } else {
             TopBar(
                 title = "공식",
@@ -356,26 +375,17 @@ fun SeriesScreen(
                     selectedCharaFilter?.let { ActiveFilter(it.charaNm) { viewModel.setCharaFilter(null) } }
                 )
             )
-            Column(
+            // 가로 화면에서는 나라 탭을 왼쪽에 세로로 쌓아 목록이 쓸 높이를 넓힌다.
+            SubTabLayout(
+                tabs = viewModel.countries,
+                selectedIndex = selectedTab,
+                onSelect = { viewModel.setSelectedTab(it) },
+                vertical = isLandscape,
                 modifier = Modifier
                     .fillMaxSize()
-                    .swipeToChangeTab(selectedTab, viewModel.countries.size) { viewModel.setSelectedTab(it) }
+                    .swipeToChangeTab(selectedTab, viewModel.countries.size) { viewModel.setSelectedTab(it) },
+                tabTextStyle = MaterialTheme.typography.labelSmall
             ) {
-                SecondaryTabRow(selectedTabIndex = selectedTab) {
-                    viewModel.countries.forEachIndexed { index, country ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { viewModel.setSelectedTab(index) },
-                            text = {
-                                Text(
-                                    country,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1
-                                )
-                            }
-                        )
-                    }
-                }
                 if (filteredList.isEmpty()) {
                     Box(
                         modifier = Modifier

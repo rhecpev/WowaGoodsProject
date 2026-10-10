@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -17,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
+import com.example.wowagoodsproject.component.FilterType
 import com.example.wowagoodsproject.component.FilterViewModel
 import com.example.wowagoodsproject.component.GoodsDetailViewModel
 import com.example.wowagoodsproject.component.ListModeViewModel
@@ -30,6 +32,8 @@ import com.example.wowagoodsproject.screen.fan.FanAddScreen
 import com.example.wowagoodsproject.screen.mypage.MyPageScreen
 import com.example.wowagoodsproject.screen.mypage.PatchNotesScreen
 import com.example.wowagoodsproject.screen.news.NewsScreen
+import com.example.wowagoodsproject.screen.search.SearchScreen
+import com.example.wowagoodsproject.screen.search.SearchViewModel
 import com.example.wowagoodsproject.screen.series.SeriesScreen
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -44,6 +48,7 @@ fun MainScreen(
         BottomNavItem.Series,
         BottomNavItem.Character,
         BottomNavItem.FanArt,
+        BottomNavItem.Search,
         BottomNavItem.MyPage
     )
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -62,13 +67,12 @@ fun MainScreen(
     val myPageViewModel: MyPageViewModel = viewModel()
     val filterViewModel: FilterViewModel = viewModel(key = "seriesFilter")
     val detailViewModel: GoodsDetailViewModel = viewModel(key = "seriesDetail")
-    val listModeViewModel: ListModeViewModel = viewModel(key = "seriesListMode")
+    val listModeViewModel: ListModeViewModel = viewModel(key = "seriesListMode") { ListModeViewModel("series") }
     val seriesSelectedSeries by seriesViewModel.selectedSeries.collectAsState()
-    val characterSelectedChara by characterViewModel.selectedChara.collectAsState()
     val myPageCurrentSection by myPageViewModel.currentSection.collectAsState()
     val unreadNewsCount by myPageViewModel.unreadNewsCount.collectAsState()
-    val isInSubScreen = characterSelectedChara != null ||
-            myPageCurrentSection != null ||
+    // 하단(가로 화면은 왼쪽) 메뉴를 숨기는 화면들. 캐릭터의 굿즈 화면에서는 공식 시리즈 화면처럼 메뉴를 남겨 둔다.
+    val isInSubScreen = myPageCurrentSection != null ||
             currentRoute == "fan_add" ||
             currentRoute == "patch_notes" ||
             currentRoute == "news"
@@ -77,22 +81,33 @@ fun MainScreen(
     val navUnselected = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
     val navIndicator = MaterialTheme.colorScheme.surfaceVariant
     val characterFilterViewModel: FilterViewModel = viewModel(key = "characterFilter")
-    val characterListModeViewModel: ListModeViewModel = viewModel(key = "characterListMode")
+    val characterListModeViewModel: ListModeViewModel = viewModel(key = "characterListMode") { ListModeViewModel("character") }
     val characterDetailViewModel: GoodsDetailViewModel = viewModel(key = "characterDetail")
     val fanFilterViewModel: FilterViewModel = viewModel(key = "fanFilter")
-    val fanListModeViewModel: ListModeViewModel = viewModel(key = "fanListMode")
+    val fanListModeViewModel: ListModeViewModel = viewModel(key = "fanListMode") { ListModeViewModel("fan") }
     val fanDetailViewModel: GoodsDetailViewModel = viewModel(key = "fanDetail")
+    val searchViewModel: SearchViewModel = viewModel()
+    val searchDetailViewModel: GoodsDetailViewModel = viewModel(key = "searchDetail")
+    val myPageListModeViewModel: ListModeViewModel = viewModel(key = "myPageListMode") { ListModeViewModel("mypage") }
+    val pendingListModeViewModel: ListModeViewModel = viewModel(key = "pendingListMode") { ListModeViewModel("pending") }
+    val searchListModeViewModel: ListModeViewModel = viewModel(key = "searchListMode") { ListModeViewModel("search") }
     fun resetTab(route: String) {
         when (route) {
+            // 굿즈 화면에서 걸어 둔 필터가 다음에 여는 시리즈·캐릭터에 남지 않게 함께 푼다.
             BottomNavItem.Series.route -> {
                 seriesViewModel.clearSelectedSeries()
                 seriesViewModel.setCharaFilter(null)
+                filterViewModel.setFilter(FilterType.ALL)
+                filterViewModel.clearGoodsFilter()
             }
             BottomNavItem.Character.route -> {
                 characterViewModel.clearSelectedChara()
                 characterViewModel.setSelectedTab(0)
+                characterFilterViewModel.setFilter(FilterType.ALL)
+                characterFilterViewModel.clearGoodsFilter()
             }
             BottomNavItem.FanArt.route -> {}
+            BottomNavItem.Search.route -> searchViewModel.clearFilters()
             BottomNavItem.MyPage.route -> {
                 myPageViewModel.setSection(null)
                 myPageViewModel.setCharaFilter(null)
@@ -149,6 +164,83 @@ fun MainScreen(
             }
         }
         onOpenTargetHandled()
+    }
+
+    // 화면들은 한 번만 만들어 두고 세로(하단 메뉴)·가로(왼쪽 메뉴) 배치 사이를 옮겨 다닌다.
+    // 그래서 화면을 돌려도 보던 화면의 스크롤 위치, 열어 둔 창, 다중 선택 같은 상태가 그대로 남는다.
+    val currentOnThemeChange by rememberUpdatedState(onThemeChange)
+    val navHost = remember(navController) {
+        movableContentOf { modifier: Modifier, widthSizeClass: WindowWidthSizeClass ->
+            NavHost(
+                navController = navController,
+                startDestination = BottomNavItem.Series.route,
+                modifier = modifier
+            ) {
+                composable(BottomNavItem.Series.route) {
+                    SeriesScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = seriesViewModel,
+                        filterViewModel = filterViewModel,
+                        detailViewModel = detailViewModel,
+                        listModeViewModel = listModeViewModel
+                    )
+                }
+                composable(BottomNavItem.Character.route) {
+                    CharacterScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = characterViewModel,
+                        filterViewModel = characterFilterViewModel,
+                        listModeViewModel = characterListModeViewModel,
+                        detailViewModel = characterDetailViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
+                }
+                composable(BottomNavItem.FanArt.route) {
+                    FanArtScreen(
+                        onNavigateToAdd = { navController.navigate("fan_add") },
+                        widthSizeClass = widthSizeClass,
+                        viewModel = fanArtViewModel,
+                        filterViewModel = fanFilterViewModel,
+                        listModeViewModel = fanListModeViewModel,
+                        detailViewModel = fanDetailViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
+                }
+                composable(BottomNavItem.Search.route) {
+                    SearchScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = searchViewModel,
+                        detailViewModel = searchDetailViewModel,
+                        listModeViewModel = searchListModeViewModel,
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
+                }
+                composable(BottomNavItem.MyPage.route) {
+                    MyPageScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = myPageViewModel,
+                        listModeViewModel = myPageListModeViewModel,
+                        pendingListModeViewModel = pendingListModeViewModel,
+                        onThemeChange = { currentOnThemeChange(it) },
+                        onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToNews = { navController.navigate("news") },
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
+                }
+                composable("fan_add") {
+                    FanAddScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable("patch_notes") {
+                    PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
+                }
+                composable("news") {
+                    NewsScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToSeries = { navigateToSeries(it) }
+                    )
+                }
+            }
+        }
     }
 
     if (isLandscape) CompositionLocalProvider(
@@ -215,60 +307,7 @@ fun MainScreen(
                     }
                 }
             }
-            NavHost(navController = navController, startDestination = BottomNavItem.Series.route) {
-                composable(BottomNavItem.Series.route) {
-                    SeriesScreen(
-                        widthSizeClass = widthSizeClass,
-                        viewModel = seriesViewModel,
-                        filterViewModel = filterViewModel,
-                        detailViewModel = detailViewModel,
-                        listModeViewModel = listModeViewModel
-                    )
-                }
-                composable(BottomNavItem.Character.route) {
-                    CharacterScreen(
-                        widthSizeClass = widthSizeClass,
-                        viewModel = characterViewModel,
-                        filterViewModel = characterFilterViewModel,
-                        listModeViewModel = characterListModeViewModel,
-                        detailViewModel = characterDetailViewModel,
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-                composable(BottomNavItem.FanArt.route) {
-                    FanArtScreen(
-                        onNavigateToAdd = { navController.navigate("fan_add") },
-                        widthSizeClass = widthSizeClass,
-                        viewModel = fanArtViewModel,
-                        filterViewModel = fanFilterViewModel,
-                        listModeViewModel = fanListModeViewModel,
-                        detailViewModel = fanDetailViewModel,
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-                composable(BottomNavItem.MyPage.route) {
-                    MyPageScreen(
-                        widthSizeClass = widthSizeClass,
-                        viewModel = myPageViewModel,
-                        onThemeChange = onThemeChange,
-                        onNavigateToPatchNotes = { navController.navigate("patch_notes") },
-                        onNavigateToNews = { navController.navigate("news") },
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-                composable("fan_add") {
-                    FanAddScreen(onNavigateBack = { navController.popBackStack() })
-                }
-                composable("patch_notes") {
-                    PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
-                }
-                composable("news") {
-                    NewsScreen(
-                        onNavigateBack = { navController.popBackStack() },
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-            }
+            navHost(Modifier, widthSizeClass)
         }
     } else {
         Scaffold(
@@ -325,64 +364,7 @@ fun MainScreen(
                 }
             }
         ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = BottomNavItem.Series.route,
-                modifier = Modifier.padding(innerPadding)
-            ) {
-                composable(BottomNavItem.Series.route) {
-                    SeriesScreen(
-                        widthSizeClass = widthSizeClass,
-                        viewModel = seriesViewModel,
-                        filterViewModel = filterViewModel,
-                        detailViewModel = detailViewModel,
-                        listModeViewModel = listModeViewModel
-                    )
-                }
-                composable(BottomNavItem.Character.route) {
-                    CharacterScreen(
-                        widthSizeClass = widthSizeClass,
-                        viewModel = characterViewModel,
-                        filterViewModel = characterFilterViewModel,
-                        listModeViewModel = characterListModeViewModel,
-                        detailViewModel = characterDetailViewModel,
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-                composable(BottomNavItem.FanArt.route) {
-                    FanArtScreen(
-                        onNavigateToAdd = { navController.navigate("fan_add") },
-                        widthSizeClass = widthSizeClass,
-                        viewModel = fanArtViewModel,
-                        filterViewModel = fanFilterViewModel,
-                        listModeViewModel = fanListModeViewModel,
-                        detailViewModel = fanDetailViewModel,
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-                composable(BottomNavItem.MyPage.route) {
-                    MyPageScreen(
-                        widthSizeClass = widthSizeClass,
-                        viewModel = myPageViewModel,
-                        onThemeChange = onThemeChange,
-                        onNavigateToPatchNotes = { navController.navigate("patch_notes") },
-                        onNavigateToNews = { navController.navigate("news") },
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-                composable("fan_add") {
-                    FanAddScreen(onNavigateBack = { navController.popBackStack() })
-                }
-                composable("patch_notes") {
-                    PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
-                }
-                composable("news") {
-                    NewsScreen(
-                        onNavigateBack = { navController.popBackStack() },
-                        onNavigateToSeries = { navigateToSeries(it) }
-                    )
-                }
-            }
+            navHost(Modifier.padding(innerPadding), widthSizeClass)
         }
     }
 }

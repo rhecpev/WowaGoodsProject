@@ -26,7 +26,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -159,10 +164,11 @@ fun GoodsDetailDialog(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
+        val keepSheet = remember { KeepSheetWhileScrollingConnection() }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                // 이미지는 제자리에 두고 정보 쪽만 스크롤한다(가로 화면은 오른쪽, 세로 화면은 아래쪽).
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
@@ -174,7 +180,8 @@ fun GoodsDetailDialog(
                         onClick = { showFullImage = true },
                         modifier = Modifier
                             .weight(1f)
-                            .height(280.dp)
+                            // 화면이 낮으면 시트 높이에 맞춰 줄어든다.
+                            .heightIn(max = 280.dp)
                     )
                     DetailBody(
                         series = series,
@@ -197,7 +204,10 @@ fun GoodsDetailDialog(
                         showDelete = showDelete,
                         onDeleteClick = { showDeleteConfirm = true },
                         onSeriesClick = onSeriesClick,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .nestedScroll(keepSheet)
+                            .verticalScroll(rememberScrollState())
                     )
                 }
             } else {
@@ -230,10 +240,35 @@ fun GoodsDetailDialog(
                     onSetClick = onSetClick,
                     showDelete = showDelete,
                     onDeleteClick = { showDeleteConfirm = true },
-                    onSeriesClick = onSeriesClick
+                    onSeriesClick = onSeriesClick,
+                    // 정보가 화면에 다 들어가면 그 높이만큼만 차지하고, 넘칠 때만 남은 높이 안에서 스크롤한다.
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .nestedScroll(keepSheet)
+                        .verticalScroll(rememberScrollState())
                 )
             }
         }
+    }
+}
+
+/**
+ * 내용을 스크롤하던 손짓이 맨 위에 닿았을 때 남은 움직임이 바텀시트로 넘어가 시트가 닫히는 것을 막는다.
+ * 내용이 조금이라도 스크롤된 손짓은 맨 위에서 멈추고, 처음부터 맨 위에서 아래로 끄는 손짓만 시트를 내린다.
+ */
+private class KeepSheetWhileScrollingConnection : NestedScrollConnection {
+    /** 이번 손짓(끌기 + 이어지는 플링)에서 내용이 스크롤됐는지 */
+    private var contentScrolled = false
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (consumed.y != 0f) contentScrolled = true
+        return if (contentScrolled) available else Offset.Zero
+    }
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        val scrolled = contentScrolled
+        contentScrolled = false
+        return if (scrolled) available else Velocity.Zero
     }
 }
 

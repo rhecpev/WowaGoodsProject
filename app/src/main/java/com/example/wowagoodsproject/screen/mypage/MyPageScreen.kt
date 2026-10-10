@@ -1,5 +1,13 @@
 package com.example.wowagoodsproject.screen.mypage
 
+import com.example.wowagoodsproject.component.BulkStatusButtons
+import com.example.wowagoodsproject.component.BulkSelectionSlot
+import com.example.wowagoodsproject.component.BulkSelection
+import com.example.wowagoodsproject.component.SubTabStrip
+import com.example.wowagoodsproject.component.SidePanelLayout
+import com.example.wowagoodsproject.component.BulkStatusArea
+import com.example.wowagoodsproject.component.GridColumnsBar
+import com.example.wowagoodsproject.component.rememberGridColumns
 import com.example.wowagoodsproject.component.WhatsNewDialog
 import com.example.wowagoodsproject.component.ReleaseNotes
 import androidx.compose.material.icons.filled.NewReleases
@@ -12,7 +20,6 @@ import android.Manifest
 import com.example.wowagoodsproject.component.MultiSelectToggle
 import com.example.wowagoodsproject.component.bulkStatusMessage
 import com.example.wowagoodsproject.component.rememberGoodsSelection
-import com.example.wowagoodsproject.component.BulkStatusBar
 import com.example.wowagoodsproject.component.swipeToChangeTab
 import com.example.wowagoodsproject.component.purchaseInfo
 import android.content.SharedPreferences
@@ -99,6 +106,8 @@ fun MyPageScreen(
     widthSizeClass: WindowWidthSizeClass,
     viewModel: MyPageViewModel = viewModel(),
     listModeViewModel: ListModeViewModel = viewModel(),
+    /** 구매예정 굿즈 화면의 보기 방식. 보유 굿즈([listModeViewModel])와 따로 기억한다. */
+    pendingListModeViewModel: ListModeViewModel = viewModel(key = "pendingListModeDefault"),
     detailViewModel: GoodsDetailViewModel = viewModel(),
     onThemeChange: (Int) -> Unit = {},
     onNavigateToPatchNotes: () -> Unit = {},
@@ -122,6 +131,7 @@ fun MyPageScreen(
     val fanGottenGoods by viewModel.fanGottenGoods.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
+    val isPendingGridMode by pendingListModeViewModel.isGridMode.collectAsState()
     val currentSection by viewModel.currentSection.collectAsState()
     val selectedCharaFilter by viewModel.selectedCharaFilter.collectAsState()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
@@ -133,7 +143,7 @@ fun MyPageScreen(
     val unreadNewsCount by viewModel.unreadNewsCount.collectAsState()
     val pendingOfficialGoods by viewModel.pendingOfficialGoods.collectAsState()
     val pendingFanGoods by viewModel.pendingFanGoods.collectAsState()
-    val pendingInfoFilters by viewModel.pendingInfoFilters.collectAsState()
+    val pendingInfoFilter by viewModel.pendingInfoFilter.collectAsState()
     val isUpdating by UpdateManager.isRunning.collectAsState()
 
     var selectedThemeMode by remember { mutableIntStateOf(App.getThemeMode()) }
@@ -246,16 +256,14 @@ fun MyPageScreen(
         viewModel.setSection(null)
         viewModel.setCharaFilter(null)
         viewModel.setCategoryFilter(null)
-        viewModel.clearPendingInfoFilters()
+        viewModel.setPendingInfoFilter(null)
         selectedPendingOfficialIds = emptySet()
         selectedPendingFanIds = emptySet()
     }
 
-    val gridColumns = when (widthSizeClass) {
-        WindowWidthSizeClass.Compact -> 2
-        WindowWidthSizeClass.Medium -> 3
-        else -> 4
-    }
+    val gridColumns = rememberGridColumns(listModeViewModel, widthSizeClass)
+    val pendingGridColumns = rememberGridColumns(pendingListModeViewModel, widthSizeClass)
+    val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
 
     // 아래 목록들은 굿즈 수만큼 도는 계산이라 화면이 다시 그려질 때마다 하면 안 된다.
     // (테마 변경처럼 화면 전체가 recomposition 될 때 특히 비싸다)
@@ -326,11 +334,11 @@ fun MyPageScreen(
             categoryFilter = selectedCategoryFilter
         )
     }
-    val filteredPendingOfficial = remember(charaFilteredPendingOfficial, pendingInfoFilters) {
-        charaFilteredPendingOfficial.filterPendingInfo(pendingInfoFilters)
+    val filteredPendingOfficial = remember(charaFilteredPendingOfficial, pendingInfoFilter) {
+        charaFilteredPendingOfficial.filterPendingInfo(pendingInfoFilter)
     }
-    val filteredPendingFan = remember(charaFilteredPendingFan, pendingInfoFilters) {
-        charaFilteredPendingFan.filterPendingInfo(pendingInfoFilters)
+    val filteredPendingFan = remember(charaFilteredPendingFan, pendingInfoFilter) {
+        charaFilteredPendingFan.filterPendingInfo(pendingInfoFilter)
     }
 
     // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 다이얼로그가 최신 값을 보여주도록 다시 조회한다.
@@ -458,7 +466,7 @@ fun MyPageScreen(
             viewModel.setSection(null)
             viewModel.setCharaFilter(null)
             viewModel.setCategoryFilter(null)
-            viewModel.clearPendingInfoFilters()
+            viewModel.setPendingInfoFilter(null)
             selectedPendingOfficialIds = emptySet()
             selectedPendingFanIds = emptySet()
         }
@@ -470,7 +478,7 @@ fun MyPageScreen(
             },
             onBack = if (currentSection != null) closeSection else null,
             actions = {
-                // 필터는 보유/구매예정 양쪽에서 쓰고, 보기 방식 전환은 보유 굿즈에만 있다.
+                // 필터와 보기 방식 전환은 보유/구매예정 양쪽에 있고, 보기 방식은 화면마다 따로 기억한다.
                 if (currentSection == "goods" || currentSection == "pending") {
                     TopBarAction(
                         icon = Icons.Default.FilterList,
@@ -484,6 +492,12 @@ fun MyPageScreen(
                         icon = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                         contentDescription = "보기 방식 전환",
                         onClick = { listModeViewModel.toggleGridMode() }
+                    )
+                } else if (currentSection == "pending") {
+                    TopBarAction(
+                        icon = if (isPendingGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                        contentDescription = "보기 방식 전환",
+                        onClick = { pendingListModeViewModel.toggleGridMode() }
                     )
                 } else if (currentSection == null) {
                     IconButton(onClick = onNavigateToNews) {
@@ -518,130 +532,126 @@ fun MyPageScreen(
         }
 
         if (currentSection == null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(AppStyles.paddingLarge),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
+            // 줄 하나하나를 따로 만들어 두고, 세로 화면은 묶음 카드로, 가로 화면은 두 칸짜리 표처럼 배치한다.
+            val summaryCard: @Composable () -> Unit = {
                 CollectionSummaryCard(
                     officialCount = officialGottenGoods.size,
                     fanCount = fanGottenGoods.size,
                     onClick = { viewModel.setSection("goods"); viewModel.loadGottenGoods() }
                 )
-
-                SettingsGroup(title = "굿즈") {
-                    val pendingTotal = pendingOfficialGoods.size + pendingFanGoods.size
-                    SettingsRow(
-                        icon = Icons.Default.ShoppingCart,
-                        title = "구매예정 굿즈",
-                        subtitle = if (pendingTotal > 0) "구매일·구입처를 정리해 두세요"
-                        else "구매예정으로 표시한 굿즈가 없습니다",
-                        trailing = if (pendingTotal > 0) {
-                            { StatusPill(text = "${pendingTotal}개", color = AppStyles.colorPending) }
-                        } else null,
-                        onClick = {
-                            viewModel.setSection("pending")
-                            viewModel.loadGottenGoods()
-                        }
-                    )
-                }
-
-                SettingsGroup(title = "유저 데이터") {
-                    SettingsRow(
-                        icon = Icons.Default.FileDownload,
-                        title = "데이터 추출",
-                        subtitle = "보유 현황·2차창작·선호 캐릭터를 백업 파일로 저장",
-                        showChevron = false,
-                        onClick = { viewModel.exportData(context) }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.FileUpload,
-                        title = "데이터 입력",
-                        subtitle = "백업 파일(zip)에서 불러오기",
-                        showChevron = false,
-                        onClick = { fileLauncher.launch(arrayOf("application/zip")) }
-                    )
-                }
-
-                SettingsGroup(title = "업데이트") {
-                    SettingsRow(
-                        icon = Icons.Default.Refresh,
-                        title = "수동 업데이트",
-                        subtitle = if (isLimitBypassed) {
-                            "횟수 제한 해제 중 (${formatRemainTime(bypassRemainMillis)})"
-                        } else {
-                            "오늘 ${(MANUAL_UPDATE_LIMIT - manualUsedToday).coerceAtLeast(0)}/${MANUAL_UPDATE_LIMIT}회 남음"
-                        },
-                        subtitleColor = if (isLimitBypassed) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        showChevron = false,
-                        onClick = onManualUpdate
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        icon = Icons.Default.History,
-                        title = "업데이트 이력",
-                        onClick = onNavigateToPatchNotes
-                    )
-                    SettingsDivider()
-                    // 이 줄을 연속으로 누르면 횟수 제한이 풀리므로 눌림 효과를 보여주지 않는다.
-                    SettingsRow(
-                        icon = Icons.Default.Schedule,
-                        title = "마지막 업데이트",
-                        subtitle = lastUpdateTime ?: "업데이트 이력 없음",
-                        showIndication = false,
-                        onClick = onBypassTap,
-                        trailing = if (lastUpdateTime != null) {
-                            {
-                                StatusPill(
-                                    text = if (lastUpdateTotal > 0) "${lastUpdateTotal}개 변경" else "최신 상태",
-                                    color = if (lastUpdateTotal > 0) MaterialTheme.colorScheme.primary
-                                    else AppStyles.colorGotten
-                                )
-                            }
-                        } else null,
-                        showChevron = false
-                    )
-                }
-
-                SettingsGroup(title = "앱 정보") {
-                    val latest = latestVersion
-                    val hasNewVersion = latest != null && latest != BuildConfig.VERSION_NAME
-                    SettingsRow(
-                        icon = Icons.Default.Info,
-                        title = "현재 버전 v${BuildConfig.VERSION_NAME}",
-                        subtitle = when {
-                            latest == null -> "최신 버전 확인 중..."
-                            hasNewVersion -> "새 버전 v$latest 이 나왔습니다"
-                            else -> "최신 버전입니다"
-                        },
-                        subtitleColor = if (hasNewVersion) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        trailing = if (hasNewVersion) {
-                            { StatusPill(text = "업데이트", color = MaterialTheme.colorScheme.error) }
-                        } else null,
-                        onClick = {
-                            val intent = android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
-                            )
-                            context.startActivity(intent)
-                        }
-                    )
-                    // 지금 버전의 변경점을 다시 본다.
-                    if (ReleaseNotes.forCurrentVersion() != null) {
-                        SettingsRow(
-                            icon = Icons.Default.NewReleases,
-                            title = "변경점",
-                            subtitle = "v${ReleaseNotes.currentVersion}에서 달라진 점",
-                            onClick = { showReleaseNotes = true }
-                        )
+            }
+            val pendingRow: @Composable () -> Unit = {
+                val pendingTotal = pendingOfficialGoods.size + pendingFanGoods.size
+                SettingsRow(
+                    icon = Icons.Default.ShoppingCart,
+                    title = "구매예정 굿즈",
+                    subtitle = if (pendingTotal > 0) "구매일·구입처를 정리해 두세요"
+                    else "구매예정으로 표시한 굿즈가 없습니다",
+                    trailing = if (pendingTotal > 0) {
+                        { StatusPill(text = "${pendingTotal}개", color = AppStyles.colorPending) }
+                    } else null,
+                    onClick = {
+                        viewModel.setSection("pending")
+                        viewModel.loadGottenGoods()
                     }
-                }
-
+                )
+            }
+            val exportRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.FileDownload,
+                    title = "데이터 추출",
+                    subtitle = "보유 현황·2차창작·선호 캐릭터를 백업 파일로 저장",
+                    showChevron = false,
+                    onClick = { viewModel.exportData(context) }
+                )
+            }
+            val importRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.FileUpload,
+                    title = "데이터 입력",
+                    subtitle = "백업 파일(zip)에서 불러오기",
+                    showChevron = false,
+                    onClick = { fileLauncher.launch(arrayOf("application/zip")) }
+                )
+            }
+            val manualUpdateRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.Refresh,
+                    title = "수동 업데이트",
+                    subtitle = if (isLimitBypassed) {
+                        "횟수 제한 해제 중 (${formatRemainTime(bypassRemainMillis)})"
+                    } else {
+                        "오늘 ${(MANUAL_UPDATE_LIMIT - manualUsedToday).coerceAtLeast(0)}/${MANUAL_UPDATE_LIMIT}회 남음"
+                    },
+                    subtitleColor = if (isLimitBypassed) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    showChevron = false,
+                    onClick = onManualUpdate
+                )
+            }
+            val historyRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.History,
+                    title = "업데이트 이력",
+                    onClick = onNavigateToPatchNotes
+                )
+            }
+            val lastUpdateRow: @Composable () -> Unit = {
+                // 이 줄을 연속으로 누르면 횟수 제한이 풀리므로 눌림 효과를 보여주지 않는다.
+                SettingsRow(
+                    icon = Icons.Default.Schedule,
+                    title = "마지막 업데이트",
+                    subtitle = lastUpdateTime ?: "업데이트 이력 없음",
+                    showIndication = false,
+                    onClick = onBypassTap,
+                    trailing = if (lastUpdateTime != null) {
+                        {
+                            StatusPill(
+                                text = if (lastUpdateTotal > 0) "${lastUpdateTotal}개 변경" else "최신 상태",
+                                color = if (lastUpdateTotal > 0) MaterialTheme.colorScheme.primary
+                                else AppStyles.colorGotten
+                            )
+                        }
+                    } else null,
+                    showChevron = false
+                )
+            }
+            val versionRow: @Composable () -> Unit = {
+                val latest = latestVersion
+                val hasNewVersion = latest != null && latest != BuildConfig.VERSION_NAME
+                SettingsRow(
+                    icon = Icons.Default.Info,
+                    title = "현재 버전 v${BuildConfig.VERSION_NAME}",
+                    subtitle = when {
+                        latest == null -> "최신 버전 확인 중..."
+                        hasNewVersion -> "새 버전 v$latest 이 나왔습니다"
+                        else -> "최신 버전입니다"
+                    },
+                    subtitleColor = if (hasNewVersion) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    trailing = if (hasNewVersion) {
+                        { StatusPill(text = "업데이트", color = MaterialTheme.colorScheme.error) }
+                    } else null,
+                    onClick = {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
+                        )
+                        context.startActivity(intent)
+                    }
+                )
+            }
+            // 지금 버전의 변경점을 다시 본다. 변경점이 없는 버전에서는 줄을 두지 않는다.
+            val hasReleaseNotes = ReleaseNotes.forCurrentVersion() != null
+            val releaseNotesRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.NewReleases,
+                    title = "변경점",
+                    subtitle = "v${ReleaseNotes.currentVersion}에서 달라진 점",
+                    onClick = { showReleaseNotes = true }
+                )
+            }
+            val themeBlock: @Composable () -> Unit = {
                 Column {
                     // 제목 줄에 지금 쓰는 테마 이름을 적어 두고, 아래는 색 동그라미만 둔다.
                     Row(
@@ -692,57 +702,77 @@ fun MyPageScreen(
                     }
                 }
             }
-        } else when (currentSection) {
-            "pending" -> Column(modifier = Modifier.fillMaxSize()) {
-                if (charaFilteredPendingOfficial.isNotEmpty() || charaFilteredPendingFan.isNotEmpty()) {
-                    PendingInfoFilterBar(
-                        selected = pendingInfoFilters,
-                        onToggle = { viewModel.togglePendingInfoFilter(it) },
-                        onClear = { viewModel.clearPendingInfoFilters() },
-                        goodsList = charaFilteredPendingOfficial + charaFilteredPendingFan,
-                        selectionMode = selection.mode,
-                        onToggleSelection = {
-                            selection.toggleMode()
-                            selectedPendingOfficialIds = emptySet()
-                            selectedPendingFanIds = emptySet()
-                        }
+
+            if (isLandscape) {
+                // 가로 화면: 두 칸씩 나란히. 짝이 없는 줄(업데이트 이력, 화면 테마)은 폭을 다 쓴다.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(AppStyles.paddingLarge),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SettingsPairRow(
+                        left = summaryCard,
+                        right = { SettingsCard(fillHeight = true, content = pendingRow) }
                     )
+                    SettingsPairRow(
+                        left = { SettingsCard(fillHeight = true, content = exportRow) },
+                        right = { SettingsCard(fillHeight = true, content = importRow) }
+                    )
+                    SettingsCard(content = historyRow)
+                    SettingsPairRow(
+                        left = { SettingsCard(fillHeight = true, content = manualUpdateRow) },
+                        right = { SettingsCard(fillHeight = true, content = lastUpdateRow) }
+                    )
+                    if (hasReleaseNotes) {
+                        SettingsPairRow(
+                            left = { SettingsCard(fillHeight = true, content = versionRow) },
+                            right = { SettingsCard(fillHeight = true, content = releaseNotesRow) }
+                        )
+                    } else {
+                        SettingsCard(content = versionRow)
+                    }
+                    themeBlock()
                 }
-                PendingGoodsSection(
-                    modifier = Modifier.weight(1f),
-                    selectionMode = selection.mode,
-                    onOpenGoods = { detailViewModel.selectGoods(it) },
-                    onToggleShipping = { goods ->
-                        val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
-                        val date = if (goods.shippingDate.isEmpty()) today else ""
-                        when (goods) {
-                            is GoodsEntity -> viewModel.setShipping(setOf(goods.goodsId), emptySet(), date)
-                            is FanGoodsEntity -> viewModel.setShipping(emptySet(), setOf(goods.fanGoodsId), date)
-                        }
-                    },
-                    onStartShipping = { officialIds, fanIds ->
-                        val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
-                        viewModel.setShipping(officialIds, fanIds, today, onlyNotStarted = true)
-                        selectedPendingOfficialIds = emptySet()
-                        selectedPendingFanIds = emptySet()
-                        Toast.makeText(context, "배송 시작으로 표시했습니다", Toast.LENGTH_SHORT).show()
-                    },
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(AppStyles.paddingLarge),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    summaryCard()
+                    SettingsGroup(title = "굿즈") { pendingRow() }
+                    SettingsGroup(title = "유저 데이터") {
+                        exportRow()
+                        SettingsDivider()
+                        importRow()
+                    }
+                    SettingsGroup(title = "업데이트") {
+                        manualUpdateRow()
+                        SettingsDivider()
+                        historyRow()
+                        SettingsDivider()
+                        lastUpdateRow()
+                    }
+                    SettingsGroup(title = "앱 정보") {
+                        versionRow()
+                        if (hasReleaseNotes) releaseNotesRow()
+                    }
+                    themeBlock()
+                }
+            }
+        } else when (currentSection) {
+            "pending" -> {
+                val hasPending = charaFilteredPendingOfficial.isNotEmpty() || charaFilteredPendingFan.isNotEmpty()
+                // 다중 선택으로 고른 굿즈와 일괄 변경 동작(배송 시작, 구매 정보 적용)
+                val pendingBulk = rememberPendingBulk(
                     officialGoods = filteredPendingOfficial,
                     fanGoods = filteredPendingFan,
-                    isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null ||
-                            pendingInfoFilters.isNotEmpty(),
                     selectedOfficialIds = selectedPendingOfficialIds,
                     selectedFanIds = selectedPendingFanIds,
-                    onToggleOfficial = { id ->
-                        selectedPendingOfficialIds =
-                            if (id in selectedPendingOfficialIds) selectedPendingOfficialIds - id
-                            else selectedPendingOfficialIds + id
-                    },
-                    onToggleFan = { id ->
-                        selectedPendingFanIds =
-                            if (id in selectedPendingFanIds) selectedPendingFanIds - id
-                            else selectedPendingFanIds + id
-                    },
                     onSelectAll = {
                         // 필터가 걸려 있으면 보이는 것만 고른다.
                         selectedPendingOfficialIds = filteredPendingOfficial.map { it.goodsId }.toSet()
@@ -761,94 +791,192 @@ fun MyPageScreen(
                         selectedPendingOfficialIds = emptySet()
                         selectedPendingFanIds = emptySet()
                         Toast.makeText(context, "구매 정보를 적용했습니다", Toast.LENGTH_SHORT).show()
+                    },
+                    onStartShipping = { officialIds, fanIds ->
+                        val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
+                        viewModel.setShipping(officialIds, fanIds, today, onlyNotStarted = true)
+                        selectedPendingOfficialIds = emptySet()
+                        selectedPendingFanIds = emptySet()
+                        Toast.makeText(context, "배송 시작으로 표시했습니다", Toast.LENGTH_SHORT).show()
                     }
                 )
+                // 가로 화면에서는 구매 정보 필터를 왼쪽 세로 줄로 옮겨 목록이 쓸 높이를 넓힌다.
+                SidePanelLayout(
+                    sidePanel = isLandscape && hasPending,
+                    panel = {
+                        if (hasPending) {
+                            PendingInfoFilterBar(
+                                selected = pendingInfoFilter,
+                                onSelect = { viewModel.setPendingInfoFilter(it) },
+                                goodsList = charaFilteredPendingOfficial + charaFilteredPendingFan,
+                                selectionMode = selection.mode,
+                                onToggleSelection = {
+                                    selection.toggleMode()
+                                    selectedPendingOfficialIds = emptySet()
+                                    selectedPendingFanIds = emptySet()
+                                },
+                                vertical = isLandscape,
+                                // 다중 선택 중에는 잠긴 필터 칩 대신 그 자리에 선택 조작을 보여준다.
+                                selectionContent = { PendingBulkSlot(pendingBulk, vertical = isLandscape) }
+                            )
+                        }
+                    }
+                ) {
+                    GridColumnsBar(pendingListModeViewModel, widthSizeClass)
+                    PendingGoodsSection(
+                        modifier = Modifier.fillMaxSize(),
+                        isGridMode = isPendingGridMode,
+                        gridColumns = pendingGridColumns,
+                        selectionMode = selection.mode,
+                        bulk = pendingBulk,
+                        // 가로 화면에서는 버튼도 왼쪽 필터 줄 안에 있다.
+                        showBulkButtons = !isLandscape,
+                        onOpenGoods = { detailViewModel.selectGoods(it) },
+                        onToggleShipping = { goods ->
+                            val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
+                            val date = if (goods.shippingDate.isEmpty()) today else ""
+                            when (goods) {
+                                is GoodsEntity -> viewModel.setShipping(setOf(goods.goodsId), emptySet(), date)
+                                is FanGoodsEntity -> viewModel.setShipping(emptySet(), setOf(goods.fanGoodsId), date)
+                            }
+                        },
+                        officialGoods = filteredPendingOfficial,
+                        fanGoods = filteredPendingFan,
+                        isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null ||
+                                pendingInfoFilter != null,
+                        selectedOfficialIds = selectedPendingOfficialIds,
+                        selectedFanIds = selectedPendingFanIds,
+                        onToggleOfficial = { id ->
+                            selectedPendingOfficialIds =
+                                if (id in selectedPendingOfficialIds) selectedPendingOfficialIds - id
+                                else selectedPendingOfficialIds + id
+                        },
+                        onToggleFan = { id ->
+                            selectedPendingFanIds =
+                                if (id in selectedPendingFanIds) selectedPendingFanIds - id
+                                else selectedPendingFanIds + id
+                        }
+                    )
+                }
             }
 
             "goods" -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .swipeToChangeTab(selectedTab, 2) { viewModel.setSelectedTab(it) }
+                        // 다중 선택 중에는 탭을 못 바꾸게 막는다.
+                        .swipeToChangeTab(selectedTab, 2) { if (!selection.mode) viewModel.setSelectedTab(it) }
                 ) {
-                    SecondaryTabRow(selectedTabIndex = selectedTab) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { viewModel.setSelectedTab(0) },
-                            text = { Text("공식 (${filteredOfficialGoods.size})") })
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { viewModel.setSelectedTab(1) },
-                            text = { Text("2차창작 (${filteredFanGoods.size})") })
-                    }
-
-                    // 보유 목록이라 상태 필터 줄이 없으니 다중 선택 버튼만 둔다.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        MultiSelectToggle(
-                            selectionMode = selection.mode,
-                            onToggle = { selection.toggleMode() }
+                    // 다중 선택으로 고른 굿즈와 일괄 변경 동작. 보고 있는 탭(공식/2차창작)의 것만 다룬다.
+                    val pickedOfficial = selection.visible(filteredOfficialGoods) { it.goodsId }
+                    val pickedFan = selection.visible(filteredFanGoods) { it.fanGoodsId }
+                    val bulk = if (selectedTab == 0) {
+                        BulkSelection(
+                            selectedItems = pickedOfficial,
+                            allSelected = filteredOfficialGoods.isNotEmpty() && pickedOfficial.size == filteredOfficialGoods.size,
+                            onSelectAll = { selection.selectAll(filteredOfficialGoods.map { it.goodsId }) },
+                            onClearSelection = { selection.clear() },
+                            onApply = { status, edit ->
+                                viewModel.applyOfficialStatus(pickedOfficial, status, edit)
+                                selection.clear()
+                                Toast.makeText(context, bulkStatusMessage(pickedOfficial.size, status), Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    } else {
+                        BulkSelection(
+                            selectedItems = pickedFan,
+                            allSelected = filteredFanGoods.isNotEmpty() && pickedFan.size == filteredFanGoods.size,
+                            onSelectAll = { selection.selectAll(filteredFanGoods.map { it.fanGoodsId }) },
+                            onClearSelection = { selection.clear() },
+                            onApply = { status, edit ->
+                                viewModel.applyFanStatus(pickedFan, status, edit)
+                                selection.clear()
+                                Toast.makeText(context, bulkStatusMessage(pickedFan.size, status), Toast.LENGTH_SHORT).show()
+                            }
                         )
                     }
-                    if (selectedTab == 0) {
-                        if (selection.mode) {
-                            val picked = selection.visible(filteredOfficialGoods) { it.goodsId }
-                            BulkStatusBar(
-                                selectedItems = picked,
-                                allSelected = filteredOfficialGoods.isNotEmpty() && picked.size == filteredOfficialGoods.size,
-                                onSelectAll = { selection.selectAll(filteredOfficialGoods.map { it.goodsId }) },
-                                onClearSelection = { selection.clear() },
-                                onApply = { status, edit ->
-                                    viewModel.applyOfficialStatus(picked, status, edit)
-                                    selection.clear()
-                                    Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                    // 가로 화면에서는 탭·필터를 왼쪽 세로 줄로 옮겨 목록이 쓸 높이를 넓힌다(필터 줄이 맨 왼쪽, 탭 줄이 그 오른쪽).
+                    SidePanelLayout(
+                        sidePanel = isLandscape,
+                        tabs = {
+                            // 다중 선택 중에는 탭을 못 바꾸게 막는다.
+                            SubTabStrip(
+                                tabs = listOf("공식 (${filteredOfficialGoods.size})", "2차창작 (${filteredFanGoods.size})"),
+                                selectedIndex = selectedTab,
+                                onSelect = { viewModel.setSelectedTab(it) },
+                                vertical = isLandscape,
+                                enabled = !selection.mode
+                            )
+                        },
+                        panel = {
+                            // 보유 목록이라 상태 필터 줄이 없으니 다중 선택 버튼만 두고,
+                            // 다중 선택 중에는 그 옆(가로 화면은 아래)에 선택 조작을 보여준다.
+                            if (isLandscape) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    MultiSelectToggle(
+                                        selectionMode = selection.mode,
+                                        onToggle = { selection.toggleMode() }
+                                    )
+                                    if (selection.mode) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        BulkSelectionSlot(bulk, vertical = true)
+                                    }
                                 }
-                            )
-                        }
-                    } else {
-                        if (selection.mode) {
-                            val picked = selection.visible(filteredFanGoods) { it.fanGoodsId }
-                            BulkStatusBar(
-                                selectedItems = picked,
-                                allSelected = filteredFanGoods.isNotEmpty() && picked.size == filteredFanGoods.size,
-                                onSelectAll = { selection.selectAll(filteredFanGoods.map { it.fanGoodsId }) },
-                                onClearSelection = { selection.clear() },
-                                onApply = { status, edit ->
-                                    viewModel.applyFanStatus(picked, status, edit)
-                                    selection.clear()
-                                    Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
+                            } else {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    MultiSelectToggle(
+                                        selectionMode = selection.mode,
+                                        onToggle = { selection.toggleMode() }
+                                    )
+                                    if (selection.mode) {
+                                        Box(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                                            BulkSelectionSlot(bulk, vertical = false)
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
-                    }
+                    ) {
+                        GridColumnsBar(listModeViewModel, widthSizeClass)
+                        BulkStatusArea {
+                            // 안내 줄은 필터 칩 자리에 있다. 가로 화면에서는 버튼도 왼쪽 줄 안에 있어 여기에 둘 것이 없다.
+                            if (selection.mode && !isLandscape) BulkStatusButtons(bulk)
 
-                    when (selectedTab) {
-                        0 -> {
-                            GoodsListContent(
-                                goods = filteredOfficialGoods,
-                                isGridMode = isGridMode,
-                                gridColumns = gridColumns,
-                                onGoodsClick = {
-                                    if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
-                                },
-                                selectedIds = if (selection.mode) selection.ids else null
-                            )
-                        }
+                            when (selectedTab) {
+                                0 -> {
+                                    GoodsListContent(
+                                        goods = filteredOfficialGoods,
+                                        isGridMode = isGridMode,
+                                        gridColumns = gridColumns,
+                                        onGoodsClick = {
+                                            if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                                        },
+                                        selectedIds = if (selection.mode) selection.ids else null
+                                    )
+                                }
 
-                        1 -> {
-                            FanGoodsListContent(
-                                goods = filteredFanGoods,
-                                isGridMode = isGridMode,
-                                gridColumns = gridColumns,
-                                onGoodsClick = {
-                                    if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
-                                },
-                                selectedIds = if (selection.mode) selection.ids else null
-                            )
+                                1 -> {
+                                    FanGoodsListContent(
+                                        goods = filteredFanGoods,
+                                        isGridMode = isGridMode,
+                                        gridColumns = gridColumns,
+                                        onGoodsClick = {
+                                            if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                                        },
+                                        selectedIds = if (selection.mode) selection.ids else null
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -958,6 +1086,47 @@ private fun SettingsGroup(
         ) {
             Column(content = content)
         }
+    }
+}
+
+/**
+ * 제목 없이 설정 한 줄만 담는 둥근 카드. 가로 화면에서 줄들을 두 칸으로 나눠 놓을 때 쓴다.
+ * [fillHeight] 면 옆 칸과 높이를 맞추고, 내용은 세로 가운데에 둔다.
+ */
+@Composable
+private fun SettingsCard(
+    fillHeight: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (fillHeight) Modifier.fillMaxHeight() else Modifier),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = if (fillHeight) Modifier.fillMaxHeight() else Modifier,
+            verticalArrangement = Arrangement.Center
+        ) { content() }
+    }
+}
+
+/** 두 칸을 같은 폭, 같은 높이로 나란히 놓는다. */
+@Composable
+private fun SettingsPairRow(
+    left: @Composable () -> Unit,
+    right: @Composable () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) { left() }
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) { right() }
     }
 }
 

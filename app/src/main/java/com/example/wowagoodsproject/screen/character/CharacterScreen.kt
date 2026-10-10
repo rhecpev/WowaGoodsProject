@@ -2,9 +2,16 @@ package com.example.wowagoodsproject.screen.character
 
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import com.example.wowagoodsproject.component.BulkStatusButtons
+import com.example.wowagoodsproject.component.BulkSelectionSlot
+import com.example.wowagoodsproject.component.BulkSelection
+import com.example.wowagoodsproject.component.SubTabStrip
+import com.example.wowagoodsproject.component.SidePanelLayout
+import com.example.wowagoodsproject.component.BulkStatusArea
+import com.example.wowagoodsproject.component.GridColumnsBar
+import com.example.wowagoodsproject.component.rememberGridColumns
 import com.example.wowagoodsproject.component.bulkStatusMessage
 import com.example.wowagoodsproject.component.rememberGoodsSelection
-import com.example.wowagoodsproject.component.BulkStatusBar
 import com.example.wowagoodsproject.component.swipeToChangeTab
 import com.example.wowagoodsproject.component.purchaseInfo
 import androidx.activity.compose.BackHandler
@@ -105,7 +112,7 @@ fun CharacterScreen(
     val favoriteTotal = charaList.count { it.charaIsFavorite }
 
     val categoryList =
-        (filterViewModel.applyFilter(officialGoods).second + filterViewModel.applyFilter(fanGoods).second)
+        (filterViewModel.applyFilter(officialGoods, filterType).second + filterViewModel.applyFilter(fanGoods, filterType).second)
             .map { it.category }
             .distinct()
             .filter { it.isNotEmpty() && it != CATEGORY_SET }
@@ -115,29 +122,26 @@ fun CharacterScreen(
         it.contains(categorySearch, ignoreCase = true)
     }
     val filteredOfficialGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(officialGoods).second,
+        list = filterViewModel.applyFilter(officialGoods, filterType).second,
         categoryFilter = selectedCategoryFilter
     )
 
     val AllFilteredOfficialGoods = filterGoodsList(
-        list = filterViewModel.applyFilter(officialGoods).first,
+        list = filterViewModel.applyFilter(officialGoods, filterType).first,
         categoryFilter = selectedCategoryFilter
     )
 
     val filteredFanGoods = filterFanGoodsList(
-        list = filterViewModel.applyFilter(fanGoods).second,
+        list = filterViewModel.applyFilter(fanGoods, filterType).second,
         categoryFilter = selectedCategoryFilter
     )
 
     val AllFilteredFanGoods = filterFanGoodsList(
-        list = filterViewModel.applyFilter(fanGoods).first,
+        list = filterViewModel.applyFilter(fanGoods, filterType).first,
         categoryFilter = selectedCategoryFilter
     )
-    val gridColumns = when (widthSizeClass) {
-        WindowWidthSizeClass.Compact -> 2
-        WindowWidthSizeClass.Medium -> 3
-        else -> 4
-    }
+    val gridColumns = rememberGridColumns(listModeViewModel, widthSizeClass)
+    val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
 
     val context = LocalContext.current
     val selection = rememberGoodsSelection()
@@ -151,6 +155,14 @@ fun CharacterScreen(
         filterViewModel.setFilter(FilterType.ALL)
         filterViewModel.clearGoodsFilter()
         categorySearch = ""
+    }
+
+    // 하단 메뉴를 다시 눌러 캐릭터 목록으로 돌아온 경우에도 다중 선택을 끝낸다.
+    LaunchedEffect(selectedChara == null) {
+        if (selectedChara == null) {
+            selection.exit()
+            categorySearch = ""
+        }
     }
 
     BackHandler(enabled = selectedChara != null) { closeChara() }
@@ -279,85 +291,105 @@ fun CharacterScreen(
         if (chara == null) {
             TopBar(title = "캐릭터별")
 
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                SearchField(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = "캐릭터 이름 검색"
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !showFavoriteOnly,
-                        onClick = { if (showFavoriteOnly) viewModel.toggleFavoriteOnly() },
-                        label = { Text("전체 ${charaList.size}") }
-                    )
-                    FilterChip(
-                        selected = showFavoriteOnly,
-                        onClick = { if (!showFavoriteOnly) viewModel.toggleFavoriteOnly() },
-                        label = { Text("선호 $favoriteTotal") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = if (showFavoriteOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = null,
-                                tint = AppStyles.colorFavorite,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        }
-                    )
-                }
-            }
-
-            if (filteredCharaList.isEmpty()) {
-                when {
-                    searchQuery.isNotEmpty() -> EmptyState(
-                        icon = Icons.Default.SearchOff,
-                        title = "'$searchQuery' 검색 결과가 없습니다"
-                    )
-                    showFavoriteOnly -> EmptyState(
-                        icon = Icons.Default.FavoriteBorder,
-                        title = "선호 캐릭터가 없습니다",
-                        message = "캐릭터 카드의 하트를 눌러 선호 캐릭터로 등록하세요"
-                    )
-                    else -> EmptyState(icon = Icons.Default.SearchOff, title = "캐릭터가 없습니다")
-                }
-            } else {
-                // 선호/그 외가 섞여 있을 때만 구역 제목을 단다.
-                val showSections = favoriteCharas.isNotEmpty() && otherCharas.isNotEmpty()
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 96.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (showSections) sectionHeader("선호 캐릭터", favoriteCharas.size)
-                    items(favoriteCharas, key = { it.charaNm }) { item ->
-                        val count = charaGoodsCountMap[item.charaNm] ?: Pair(0, 0)
-                        CharaCard(
-                            chara = item,
-                            gotten = count.first,
-                            total = count.second,
-                            onClick = { viewModel.selectChara(item) },
-                            onToggleFavorite = { viewModel.toggleFavorite(item) }
+            // 가로 화면에서는 이름 검색과 전체/선호 버튼을 왼쪽 세로 줄로 옮겨 목록이 쓸 높이를 넓힌다.
+            SidePanelLayout(
+                sidePanel = isLandscape,
+                panelWidth = CHARA_SEARCH_PANEL_WIDTH,
+                panel = {
+                    val allChip: @Composable (Modifier) -> Unit = { modifier ->
+                        FilterChip(
+                            selected = !showFavoriteOnly,
+                            onClick = { if (showFavoriteOnly) viewModel.toggleFavoriteOnly() },
+                            label = { Text("전체 ${charaList.size}") },
+                            modifier = modifier
                         )
                     }
-                    if (showSections) sectionHeader("다른 캐릭터", otherCharas.size)
-                    items(otherCharas, key = { it.charaNm }) { item ->
-                        val count = charaGoodsCountMap[item.charaNm] ?: Pair(0, 0)
-                        CharaCard(
-                            chara = item,
-                            gotten = count.first,
-                            total = count.second,
-                            onClick = { viewModel.selectChara(item) },
-                            onToggleFavorite = { viewModel.toggleFavorite(item) }
+                    val favoriteChip: @Composable (Modifier) -> Unit = { modifier ->
+                        FilterChip(
+                            selected = showFavoriteOnly,
+                            onClick = { if (!showFavoriteOnly) viewModel.toggleFavoriteOnly() },
+                            label = { Text("선호 $favoriteTotal") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (showFavoriteOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = AppStyles.colorFavorite,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            },
+                            modifier = modifier
                         )
+                    }
+                    Column(
+                        modifier = Modifier.padding(horizontal = if (isLandscape) 8.dp else 16.dp, vertical = 8.dp)
+                    ) {
+                        SearchField(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = if (isLandscape) "이름 검색" else "캐릭터 이름 검색"
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (isLandscape) {
+                            allChip(Modifier.fillMaxWidth())
+                            favoriteChip(Modifier.fillMaxWidth())
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                allChip(Modifier)
+                                favoriteChip(Modifier)
+                            }
+                        }
+                    }
+                }
+            ) {
+                if (filteredCharaList.isEmpty()) {
+                    when {
+                        searchQuery.isNotEmpty() -> EmptyState(
+                            icon = Icons.Default.SearchOff,
+                            title = "'$searchQuery' 검색 결과가 없습니다"
+                        )
+                        showFavoriteOnly -> EmptyState(
+                            icon = Icons.Default.FavoriteBorder,
+                            title = "선호 캐릭터가 없습니다",
+                            message = "캐릭터 카드의 하트를 눌러 선호 캐릭터로 등록하세요"
+                        )
+                        else -> EmptyState(icon = Icons.Default.SearchOff, title = "캐릭터가 없습니다")
+                    }
+                } else {
+                    // 선호/그 외가 섞여 있을 때만 구역 제목을 단다.
+                    val showSections = favoriteCharas.isNotEmpty() && otherCharas.isNotEmpty()
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 96.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (showSections) sectionHeader("선호 캐릭터", favoriteCharas.size)
+                        items(favoriteCharas, key = { it.charaNm }) { item ->
+                            val count = charaGoodsCountMap[item.charaNm] ?: Pair(0, 0)
+                            CharaCard(
+                                chara = item,
+                                gotten = count.first,
+                                total = count.second,
+                                onClick = { viewModel.selectChara(item) },
+                                onToggleFavorite = { viewModel.toggleFavorite(item) }
+                            )
+                        }
+                        if (showSections) sectionHeader("다른 캐릭터", otherCharas.size)
+                        items(otherCharas, key = { it.charaNm }) { item ->
+                            val count = charaGoodsCountMap[item.charaNm] ?: Pair(0, 0)
+                            CharaCard(
+                                chara = item,
+                                gotten = count.first,
+                                total = count.second,
+                                onClick = { viewModel.selectChara(item) },
+                                onToggleFavorite = { viewModel.toggleFavorite(item) }
+                            )
+                        }
                     }
                 }
             }
         } else {
-            // 선택 당시 값이 아니라 DB 최신 값으로 하트 상태를 보여준다.
-            val liveChara = charaList.find { it.charaNm == chara.charaNm } ?: chara
             val count = charaGoodsCountMap[chara.charaNm] ?: Pair(0, 0)
 
             TopBar(
@@ -365,13 +397,6 @@ fun CharacterScreen(
                 subtitle = "공식 굿즈 ${count.first} / ${count.second} 보유",
                 onBack = closeChara,
                 actions = {
-                    IconButton(onClick = { viewModel.toggleFavorite(liveChara) }) {
-                        Icon(
-                            imageVector = if (liveChara.charaIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (liveChara.charaIsFavorite) "선호 해제" else "선호 캐릭터로 등록",
-                            tint = if (liveChara.charaIsFavorite) AppStyles.colorFavorite else LocalContentColor.current
-                        )
-                    }
                     TopBarAction(
                         icon = Icons.Default.FilterList,
                         contentDescription = "카테고리 필터",
@@ -392,90 +417,105 @@ fun CharacterScreen(
                 )
             )
 
-            SecondaryTabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { viewModel.setSelectedTab(0) },
-                    text = { Text("공식 (${AllFilteredOfficialGoods.size})") })
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { viewModel.setSelectedTab(1) },
-                    text = { Text("2차창작 (${AllFilteredFanGoods.size})") })
-            }
-
-            FilterBar(
-                filterType = filterType,
-                onFilterChange = { filterViewModel.setFilter(it) },
-                goodsList = if (selectedTab == 0) AllFilteredOfficialGoods else AllFilteredFanGoods,
-                selectionMode = selection.mode,
-                onToggleSelection = { selection.toggleMode() }
-            )
-            if (selectedTab == 0) {
-                if (selection.mode) {
-                    val picked = selection.visible(filteredOfficialGoods) { it.goodsId }
-                    BulkStatusBar(
-                        selectedItems = picked,
-                        allSelected = filteredOfficialGoods.isNotEmpty() && picked.size == filteredOfficialGoods.size,
-                        onSelectAll = { selection.selectAll(filteredOfficialGoods.map { it.goodsId }) },
-                        onClearSelection = { selection.clear() },
-                        onApply = { status, edit ->
-                            viewModel.applyOfficialStatus(picked, status, edit)
-                            selection.clear()
-                            Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                }
-            } else {
-                if (selection.mode) {
-                    val picked = selection.visible(filteredFanGoods) { it.fanGoodsId }
-                    BulkStatusBar(
-                        selectedItems = picked,
-                        allSelected = filteredFanGoods.isNotEmpty() && picked.size == filteredFanGoods.size,
-                        onSelectAll = { selection.selectAll(filteredFanGoods.map { it.fanGoodsId }) },
-                        onClearSelection = { selection.clear() },
-                        onApply = { status, edit ->
-                            viewModel.applyFanStatus(picked, status, edit)
-                            selection.clear()
-                            Toast.makeText(context, bulkStatusMessage(picked.size, status), Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .swipeToChangeTab(selectedTab, 2) { viewModel.setSelectedTab(it) }
-            ) {
-                when (selectedTab) {
-                    0 -> {
-                        GoodsListContent(
-                            goods = filteredOfficialGoods,
-                            isGridMode = isGridMode,
-                            gridColumns = gridColumns,
-                            onGoodsClick = {
-                                if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
-                            },
-                            selectedIds = if (selection.mode) selection.ids else null
-                        )
+            // 다중 선택으로 고른 굿즈와 일괄 변경 동작. 보고 있는 탭(공식/2차창작)의 것만 다룬다.
+            val pickedOfficial = selection.visible(filteredOfficialGoods) { it.goodsId }
+            val pickedFan = selection.visible(filteredFanGoods) { it.fanGoodsId }
+            val bulk = if (selectedTab == 0) {
+                BulkSelection(
+                    selectedItems = pickedOfficial,
+                    allSelected = filteredOfficialGoods.isNotEmpty() && pickedOfficial.size == filteredOfficialGoods.size,
+                    onSelectAll = { selection.selectAll(filteredOfficialGoods.map { it.goodsId }) },
+                    onClearSelection = { selection.clear() },
+                    onApply = { status, edit ->
+                        viewModel.applyOfficialStatus(pickedOfficial, status, edit)
+                        selection.clear()
+                        Toast.makeText(context, bulkStatusMessage(pickedOfficial.size, status), Toast.LENGTH_SHORT).show()
                     }
+                )
+            } else {
+                BulkSelection(
+                    selectedItems = pickedFan,
+                    allSelected = filteredFanGoods.isNotEmpty() && pickedFan.size == filteredFanGoods.size,
+                    onSelectAll = { selection.selectAll(filteredFanGoods.map { it.fanGoodsId }) },
+                    onClearSelection = { selection.clear() },
+                    onApply = { status, edit ->
+                        viewModel.applyFanStatus(pickedFan, status, edit)
+                        selection.clear()
+                        Toast.makeText(context, bulkStatusMessage(pickedFan.size, status), Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+            // 가로 화면에서는 탭·필터를 왼쪽 세로 줄로 옮겨 목록이 쓸 높이를 넓힌다(필터 줄이 맨 왼쪽, 탭 줄이 그 오른쪽).
+            SidePanelLayout(
+                sidePanel = isLandscape,
+                tabs = {
+                    // 다중 선택 중에는 탭을 못 바꾸게 막는다.
+                    SubTabStrip(
+                        tabs = listOf("공식 (${AllFilteredOfficialGoods.size})", "2차창작 (${AllFilteredFanGoods.size})"),
+                        selectedIndex = selectedTab,
+                        onSelect = { viewModel.setSelectedTab(it) },
+                        vertical = isLandscape,
+                        enabled = !selection.mode
+                    )
+                },
+                panel = {
+                    FilterBar(
+                        filterType = filterType,
+                        onFilterChange = { filterViewModel.setFilter(it) },
+                        goodsList = if (selectedTab == 0) AllFilteredOfficialGoods else AllFilteredFanGoods,
+                        selectionMode = selection.mode,
+                        onToggleSelection = { selection.toggleMode() },
+                        vertical = isLandscape,
+                        // 다중 선택 중에는 잠긴 필터 칩 대신 그 자리에 선택 조작을 보여준다.
+                        selectionContent = { BulkSelectionSlot(bulk, vertical = isLandscape) }
+                    )
+                }
+            ) {
+                GridColumnsBar(listModeViewModel, widthSizeClass)
+                BulkStatusArea {
+                    // 안내 줄은 필터 칩 자리에 있다. 가로 화면에서는 버튼도 왼쪽 줄 안에 있어 여기에 둘 것이 없다.
+                    if (selection.mode && !isLandscape) BulkStatusButtons(bulk)
 
-                    1 -> {
-                        FanGoodsListContent(
-                            goods = filteredFanGoods,
-                            isGridMode = isGridMode,
-                            gridColumns = gridColumns,
-                            onGoodsClick = {
-                                if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
-                            },
-                            selectedIds = if (selection.mode) selection.ids else null
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 다중 선택 중에는 탭을 못 바꾸게 막는다.
+                            .swipeToChangeTab(selectedTab, 2) { if (!selection.mode) viewModel.setSelectedTab(it) }
+                    ) {
+                        when (selectedTab) {
+                            0 -> {
+                                GoodsListContent(
+                                    goods = filteredOfficialGoods,
+                                    isGridMode = isGridMode,
+                                    gridColumns = gridColumns,
+                                    onGoodsClick = {
+                                        if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                                    },
+                                    selectedIds = if (selection.mode) selection.ids else null
+                                )
+                            }
+
+                            1 -> {
+                                FanGoodsListContent(
+                                    goods = filteredFanGoods,
+                                    isGridMode = isGridMode,
+                                    gridColumns = gridColumns,
+                                    onGoodsClick = {
+                                        if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                                    },
+                                    selectedIds = if (selection.mode) selection.ids else null
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/** 가로 화면에서 이름 검색창과 전체/선호 버튼을 세우는 줄의 폭 */
+private val CHARA_SEARCH_PANEL_WIDTH = 176.dp
 
 private fun LazyGridScope.sectionHeader(title: String, count: Int) {
     item(key = "__header_$title", span = { GridItemSpan(maxLineSpan) }) {

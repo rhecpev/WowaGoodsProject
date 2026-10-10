@@ -50,7 +50,6 @@ object AppStyles {
 
     // 사이즈
     val cardImageHeightList: Dp = 100.dp
-    val cardImageHeightGrid: Dp = 150.dp
     val cardImageWidth: Dp = 100.dp
     val paddingSmall: Dp = 4.dp
     val paddingMedium: Dp = 8.dp
