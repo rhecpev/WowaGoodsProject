@@ -21,6 +21,24 @@ data class ReleaseSection(val title: String, val items: List<String>)
 object ReleaseNotes {
 
     private val notes: Map<String, List<ReleaseSection>> = mapOf(
+        "2.5" to listOf(
+            ReleaseSection(
+                "📰 소식 바로가기",
+                listOf(
+                    "바로가기를 누르면 그 굿즈 위치로 이동해 반짝여서 바로 보이게",
+                    "시리즈에서 뒤로가기를 누르면 소식으로 돌아오고, 보던 필터와 위치를 그대로 유지",
+                    "가격·메모만 바뀐 굿즈가 신규 굿즈로도 알림이 가던 문제 수정"
+                )
+            ),
+            ReleaseSection(
+                "🛠 고친 점",
+                listOf(
+                    "다른 탭에서 시리즈로 이동하면 공식 탭에 걸려 있던 필터가 남아 있던 문제 수정",
+                    "소식에서 바로가기 후 마이페이지 탭을 누르면 소식 화면이 다시 뜨던 문제 수정",
+                    "시리즈를 빠르게 바꿀 때 이전 시리즈 굿즈가 보일 수 있던 문제 수정"
+                )
+            )
+        ),
         "2.4" to listOf(
             ReleaseSection(
                 "🔎 굿즈 검색 탭",

@@ -310,6 +310,11 @@ object UpdateManager {
         val news = mutableListOf<NewsEntity>()
         // 가격/메모가 바뀌면 키가 달라져 삭제+추가로 처리되므로, 느슨한 키로 대체 항목을 찾는다.
         val remoteByLooseKey = remoteGoods.groupBy { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}" }
+        // 이번에 사라지는 로컬 굿즈의 느슨한 키. 같은 키로 새로 들어온 굿즈는 신규가 아니라 정보가 바뀐 것이다.
+        val replacedLooseKeys = localGoods
+            .filter { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsPrice}|${it.goodsMemo}" !in remoteKeySet }
+            .map { "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}" }
+            .toSet()
 
         val update = UpdateData<GoodsEntity>()
 
@@ -322,6 +327,7 @@ object UpdateManager {
 
                 if (!isFirstLoad &&
                     remote.goodsCategory != CATEGORY_SET &&
+                    "${remote.goodsSeries}|${remote.goodsChara}|${remote.goodsCategory}" !in replacedLooseKeys &&
                     matchesFavorite(remote.goodsChara, favorites)
                 ) {
                     news.add(newsOf(NewsType.NEW_GOODS, newsTime, remote))

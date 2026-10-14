@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class SeriesViewModel : ViewModel() {
@@ -54,6 +55,10 @@ class SeriesViewModel : ViewModel() {
 
     private val _filteredSeriesList = MutableStateFlow<List<SeriesEntity>>(emptyList())
     val filteredSeriesList: StateFlow<List<SeriesEntity>> = _filteredSeriesList
+
+    private val _goodsFocus = MutableStateFlow<GoodsFocus?>(null)
+    /** 시리즈를 열면서 강조해 보여 줄 굿즈. 소식에서 바로가기로 들어올 때 쓴다. */
+    val goodsFocus: StateFlow<GoodsFocus?> = _goodsFocus
 
     private val _titleQuery = MutableStateFlow("")
     val titleQuery: StateFlow<String> = _titleQuery
@@ -179,16 +184,30 @@ class SeriesViewModel : ViewModel() {
         updateFilteredList()
     }
 
+    private var loadGoodsJob: Job? = null
+
     fun selectSeries(series: SeriesEntity) {
         _selectedSeries.value = series
-        viewModelScope.launch {
+        // 앞서 연 시리즈의 굿즈가 늦게 읽혀 지금 시리즈 목록을 덮지 않게 이전 읽기를 취소한다.
+        loadGoodsJob?.cancel()
+        loadGoodsJob = viewModelScope.launch {
             _seriesGoods.value = App.database.goodsDao().getBySeries(series.seriesNm)
         }
     }
 
     fun clearSelectedSeries() {
+        loadGoodsJob?.cancel()
         _selectedSeries.value = null
         _seriesGoods.value = emptyList()
+        _goodsFocus.value = null
+    }
+
+    fun focusGoods(focus: GoodsFocus) {
+        _goodsFocus.value = focus
+    }
+
+    fun clearGoodsFocus() {
+        _goodsFocus.value = null
     }
 
     // 아래 쓰기 함수들은 DB 의 최신 값을 다시 읽어 저장한다(GoodsWrites.kt).
@@ -230,5 +249,19 @@ class SeriesViewModel : ViewModel() {
 
     fun getSeriesCharaCount(seriesNm: String, charaNm: String): Pair<Int, Int> {
         return _seriesCharaCountMap.value["$seriesNm|$charaNm"] ?: Pair(0, 0)
+    }
+}
+
+/** 소식에는 굿즈 id 가 없어서 시리즈·캐릭터·카테고리·가격으로 굿즈를 찾는다. */
+data class GoodsFocus(
+    val series: String,
+    val chara: String,
+    val category: String,
+    val price: String
+) {
+    /** 가격이 바뀐 경우도 있어 가격까지 맞는 굿즈가 없으면 나머지만 맞는 굿즈를 고른다. */
+    fun findIn(goods: List<GoodsEntity>): GoodsEntity? {
+        val candidates = goods.filter { it.series == series && it.chara == chara && it.category == category }
+        return candidates.firstOrNull { it.price == price } ?: candidates.firstOrNull()
     }
 }

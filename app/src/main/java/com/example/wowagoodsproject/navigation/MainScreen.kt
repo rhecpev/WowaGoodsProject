@@ -5,6 +5,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import com.example.wowagoodsproject.App
 import android.content.res.Configuration
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -32,9 +33,12 @@ import com.example.wowagoodsproject.screen.fan.FanAddScreen
 import com.example.wowagoodsproject.screen.mypage.MyPageScreen
 import com.example.wowagoodsproject.screen.mypage.PatchNotesScreen
 import com.example.wowagoodsproject.screen.news.NewsScreen
+import com.example.wowagoodsproject.screen.news.NewsViewModel
+import androidx.compose.foundation.lazy.LazyListState
 import com.example.wowagoodsproject.screen.search.SearchScreen
 import com.example.wowagoodsproject.screen.search.SearchViewModel
 import com.example.wowagoodsproject.screen.series.SeriesScreen
+import com.example.wowagoodsproject.screen.series.GoodsFocus
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -87,6 +91,9 @@ fun MainScreen(
     val fanListModeViewModel: ListModeViewModel = viewModel(key = "fanListMode") { ListModeViewModel("fan") }
     val fanDetailViewModel: GoodsDetailViewModel = viewModel(key = "fanDetail")
     val searchViewModel: SearchViewModel = viewModel()
+    // 소식에서 바로가기로 나갔다가 돌아올 때 필터와 스크롤 위치를 이어 가도록 화면 밖에 둔다.
+    val newsViewModel: NewsViewModel = viewModel(key = "news")
+    var newsListState by remember { mutableStateOf(LazyListState()) }
     val searchDetailViewModel: GoodsDetailViewModel = viewModel(key = "searchDetail")
     val myPageListModeViewModel: ListModeViewModel = viewModel(key = "myPageListMode") { ListModeViewModel("mypage") }
     val pendingListModeViewModel: ListModeViewModel = viewModel(key = "pendingListMode") { ListModeViewModel("pending") }
@@ -118,6 +125,9 @@ fun MainScreen(
     fun navigateToSeries(seriesName: String) {
         characterViewModel.clearSelectedChara()
         myPageViewModel.setSection(null)
+        // 공식 탭에서 예전에 걸어 둔 굿즈 필터가 새로 여는 시리즈에 남지 않게 푼다.
+        filterViewModel.setFilter(FilterType.ALL)
+        filterViewModel.clearGoodsFilter()
         navController.navigate(BottomNavItem.Series.route) {
             popUpTo(navController.graph.findStartDestination().id) {
                 saveState = true
@@ -141,13 +151,37 @@ fun MainScreen(
         }
     }
 
+    // 소식에서 시리즈로 이동했으면, 그 시리즈를 뒤로가기로 닫을 때 소식으로 돌아간다.
+    // 탭 이동은 시작 화면까지 비우므로 소식이 뒤 스택에 남지 않아 따로 기억해 둔다.
+    var returnToNews by remember { mutableStateOf(false) }
+    LaunchedEffect(currentRoute, seriesSelectedSeries) {
+        // 다른 탭으로 가거나 시리즈를 다른 방법으로 닫으면 더는 돌아가지 않는다.
+        if (currentRoute != BottomNavItem.Series.route || seriesSelectedSeries == null) returnToNews = false
+    }
+
+    /** 소식 화면을 새로 연다. 지난번 필터·스크롤 위치는 지운다. */
+    fun openNews() {
+        newsViewModel.clearFilter()
+        newsListState = LazyListState()
+        navController.navigate("news") { launchSingleTop = true }
+    }
+
+    fun backToNews() {
+        returnToNews = false
+        // 소식은 이동할 때 닫았으므로 마이페이지 탭으로 돌아간 뒤 다시 연다.
+        navigateToTab(BottomNavItem.MyPage.route)
+        if (navController.currentDestination?.route != "news") {
+            navController.navigate("news") { launchSingleTop = true }
+        }
+    }
+
     // 알림을 눌러 들어오면 해당 위치로 이동한다.
     // 공식 굿즈는 공식 탭의 그 시리즈를 열고 상세를 띄우고, 2차창작은 2차창작 탭에서 상세를 띄운다.
     // 신규 굿즈 알림은 소식 화면을 연다.
     LaunchedEffect(openTarget) {
         val target = openTarget ?: return@LaunchedEffect
         if (target is OpenTarget.News) {
-            navController.navigate("news") { launchSingleTop = true }
+            if (navController.currentDestination?.route != "news") openNews()
         } else if (target is OpenTarget.Goods && target.isFan) {
             val goods = App.fanDatabase.fanGoodsDao().getById(target.id)
             navigateToTab(BottomNavItem.FanArt.route)
@@ -182,7 +216,8 @@ fun MainScreen(
                         viewModel = seriesViewModel,
                         filterViewModel = filterViewModel,
                         detailViewModel = detailViewModel,
-                        listModeViewModel = listModeViewModel
+                        listModeViewModel = listModeViewModel,
+                        onSeriesClosed = { if (returnToNews) backToNews() }
                     )
                 }
                 composable(BottomNavItem.Character.route) {
@@ -223,7 +258,7 @@ fun MainScreen(
                         pendingListModeViewModel = pendingListModeViewModel,
                         onThemeChange = { currentOnThemeChange(it) },
                         onNavigateToPatchNotes = { navController.navigate("patch_notes") },
-                        onNavigateToNews = { navController.navigate("news") },
+                        onNavigateToNews = { openNews() },
                         onNavigateToSeries = { navigateToSeries(it) }
                     )
                 }
@@ -235,8 +270,25 @@ fun MainScreen(
                 }
                 composable("news") {
                     NewsScreen(
+                        widthSizeClass = widthSizeClass,
+                        viewModel = newsViewModel,
+                        listState = newsListState,
                         onNavigateBack = { navController.popBackStack() },
-                        onNavigateToSeries = { navigateToSeries(it) }
+                        onNavigateToGoods = { news ->
+                            if (seriesViewModel.seriesList.value.none { it.seriesNm == news.newsSeries }) {
+                                // 원본 데이터에서 시리즈가 없어진 경우. 소식에 그대로 남는다.
+                                Toast.makeText(context, "시리즈를 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+                            } else {
+                                // 소식을 띄운 채로 탭을 옮기면 마이페이지 탭 상태에 소식까지 저장돼,
+                                // 나중에 마이페이지 탭을 누를 때 소식 화면이 다시 열린다. 먼저 닫고 옮긴다.
+                                navController.popBackStack("news", inclusive = true)
+                                navigateToSeries(news.newsSeries)
+                                seriesViewModel.focusGoods(
+                                    GoodsFocus(news.newsSeries, news.newsChara, news.newsCategory, news.newsPrice)
+                                )
+                                returnToNews = true
+                            }
+                        }
                     )
                 }
             }

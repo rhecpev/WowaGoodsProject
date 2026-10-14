@@ -75,7 +75,9 @@ fun SeriesScreen(
     viewModel: SeriesViewModel = viewModel(),
     filterViewModel: FilterViewModel = viewModel(),
     detailViewModel: GoodsDetailViewModel = viewModel(),
-    listModeViewModel: ListModeViewModel = viewModel()
+    listModeViewModel: ListModeViewModel = viewModel(),
+    /** 다른 화면(소식)에서 시리즈를 열고 들어왔을 때, 시리즈를 닫으면 그 화면으로 돌아간다. */
+    onSeriesClosed: (() -> Unit)? = null
 ) {
     val filteredList by viewModel.filteredSeriesList.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
@@ -89,6 +91,7 @@ fun SeriesScreen(
     val seriesCharaCountMap by viewModel.seriesCharaCountMap.collectAsState()
     val seriesList by viewModel.seriesList.collectAsState()
     val titleQuery by viewModel.titleQuery.collectAsState()
+    val goodsFocus by viewModel.goodsFocus.collectAsState()
 
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
@@ -137,17 +140,32 @@ fun SeriesScreen(
     val context = LocalContext.current
     val selection = rememberGoodsSelection()
 
+    val focusGoodsId = goodsFocus?.findIn(filteredGoods)?.goodsId
+    // 시리즈 굿즈를 다 읽었는데도 못 찾으면(원본에서 삭제된 굿즈 등) 강조를 포기한다.
+    // 효과 안에서 seriesGoods 를 다시 읽으면 위의 focusGoodsId 보다 새 값이 읽혀 아직 찾기 전인데 지워질 수 있어,
+    // 같은 화면 그리기에서 계산한 값끼리 비교한다.
+    val focusGoodsLoaded = goodsFocus?.let { focus ->
+        seriesGoods.isNotEmpty() && seriesGoods.all { it.series == focus.series }
+    } == true
+    LaunchedEffect(goodsFocus, focusGoodsId, focusGoodsLoaded) {
+        if (goodsFocus != null && focusGoodsId == null && focusGoodsLoaded) viewModel.clearGoodsFocus()
+    }
+
     val closeSeries: () -> Unit = {
         selection.exit()
         viewModel.clearSelectedSeries()
         filterViewModel.setFilter(FilterType.ALL)
         filterViewModel.clearGoodsFilter()
     }
+    val backFromSeries: () -> Unit = {
+        closeSeries()
+        onSeriesClosed?.invoke()
+    }
 
     // 하단 메뉴를 다시 눌러 시리즈 목록으로 돌아온 경우에도 다중 선택을 끝낸다.
     LaunchedEffect(selectedSeries == null) { if (selectedSeries == null) selection.exit() }
 
-    BackHandler(enabled = selectedSeries != null) { closeSeries() }
+    BackHandler(enabled = selectedSeries != null) { backFromSeries() }
     // 나중에 등록한 BackHandler 가 먼저 받으므로, 선택 중이면 뒤로가기는 선택만 끝낸다.
     BackHandler(enabled = selection.mode) { selection.exit() }
 
@@ -189,7 +207,13 @@ fun SeriesScreen(
             onSeriesClick = { seriesName ->
                 detailViewModel.dismissDialog()
                 val series = seriesList.find { it.seriesNm == seriesName }
-                series?.let { viewModel.selectSeries(it) }
+                // 다른 시리즈로 옮겨 가면 지금 시리즈에 걸어 둔 필터·선택은 푼다.
+                if (series != null && series.seriesNm != selectedSeries?.seriesNm) {
+                    selection.exit()
+                    filterViewModel.setFilter(FilterType.ALL)
+                    filterViewModel.clearGoodsFilter()
+                    viewModel.selectSeries(series)
+                }
             }
         )
     }
@@ -269,7 +293,7 @@ fun SeriesScreen(
                 subtitle = listOf(series.seriesDate, series.seriesCountry)
                     .filter { it.isNotBlank() }
                     .joinToString(" · "),
-                onBack = closeSeries,
+                onBack = backFromSeries,
                 actions = {
                     TopBarAction(
                         icon = Icons.Default.FilterList,
@@ -328,7 +352,9 @@ fun SeriesScreen(
                         onGoodsClick = {
                             if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
                         },
-                        selectedIds = if (selection.mode) selection.ids else null
+                        selectedIds = if (selection.mode) selection.ids else null,
+                        focusId = focusGoodsId,
+                        onFocusShown = { viewModel.clearGoodsFocus() }
                     )
                 }
             }

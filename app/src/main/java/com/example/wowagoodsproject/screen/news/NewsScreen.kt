@@ -11,6 +11,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import android.widget.Toast
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -43,8 +45,9 @@ private fun NewsEntity.charaNames(): List<String> =
 fun NewsScreen(
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
     onNavigateBack: () -> Unit = {},
-    onNavigateToSeries: (String) -> Unit = {},
-    viewModel: NewsViewModel = viewModel()
+    onNavigateToGoods: (NewsEntity) -> Unit = {},
+    viewModel: NewsViewModel = viewModel(),
+    listState: LazyListState = rememberLazyListState()
 ) {
     val news by viewModel.news.collectAsState()
     val restorableIds by viewModel.restorableIds.collectAsState()
@@ -172,6 +175,7 @@ fun NewsScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
+                state = listState,
                 contentPadding = PaddingValues(vertical = AppStyles.paddingSmall),
                 verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
             ) {
@@ -180,7 +184,7 @@ fun NewsScreen(
                         news = item,
                         timeText = dateFormat.format(Date(item.newsTime)),
                         canRestore = item.newsChangedId in restorableIds,
-                        onGoClick = { onNavigateToSeries(item.newsSeries) },
+                        onGoClick = { onNavigateToGoods(item) },
                         onRestore = { viewModel.restoreStatus(item) },
                         onDelete = { viewModel.delete(item) }
                     )
