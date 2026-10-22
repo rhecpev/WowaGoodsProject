@@ -19,8 +19,8 @@ android {
         applicationId = "com.example.wowagoodsproject"
         minSdk = 24
         targetSdk = 36
-        versionCode = 16
-        versionName = "2.5"
+        versionCode = 17
+        versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,10 +36,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-
-    buildFeatures {
-        compose = true
+    // 단위 테스트(Robolectric)가 PC 에서 Room DB·리소스를 그대로 쓰게 한다.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
     }
 }
 
@@ -61,6 +62,12 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     testImplementation(libs.junit)
+    // 기기 없이 PC 에서 Room·zip 백업·동기화를 실제로 돌려 보는 테스트용
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("androidx.test:core:1.6.1")
+    // 화면을 PC 에서 눌러 보는 테스트(Robolectric + Compose)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -78,5 +85,7 @@ dependencies {
     implementation(libs.gson)
     implementation("io.coil-kt:coil-gif:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // 구글 드라이브 연동(DriveSync): drive.appdata 권한 받기
+    implementation("com.google.android.gms:play-services-auth:21.5.1")
 
 }

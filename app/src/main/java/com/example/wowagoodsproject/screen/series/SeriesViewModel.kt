@@ -14,6 +14,7 @@ import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.component.CATEGORY_COMPONENT
 import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.component.GoodsStatus
+import com.example.wowagoodsproject.component.hasChara
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.db.series.SeriesEntity
@@ -21,8 +22,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SeriesViewModel : ViewModel() {
 
@@ -104,8 +107,13 @@ class SeriesViewModel : ViewModel() {
                         _seriesGoods.value = goods.filter { it.goodsSeries == selected.seriesNm }
                     }
                     updateFilteredList()
-                    loadSeriesCharaCount()
-                    loadCharaGoodsCount()
+                    // 굿즈 하나만 바뀌어도 다시 세므로, 화면이 끊기지 않게 메인 스레드 밖에서 센다.
+                    val (seriesCounts, charaCounts) = withContext(Dispatchers.Default) {
+                        val single = goods.filter { it.goodsCategory != CATEGORY_SET }
+                        countSeriesCharas(series, single) to countCharas(single)
+                    }
+                    _seriesCharaCountMap.value = seriesCounts
+                    _charaGoodsCountMap.value = charaCounts
                 }
         }
     }
@@ -119,43 +127,33 @@ class SeriesViewModel : ViewModel() {
         }
     }
 
-    private suspend fun loadCharaGoodsCount() {
-        val allGoods = App.database.goodsDao().getAll()
-            .filter { it.goodsCategory != CATEGORY_SET }
+    /** 캐릭터마다 (보유, 전체) 굿즈 수. 세트 굿즈는 뺀 목록을 받는다. */
+    private fun countCharas(goods: List<GoodsEntity>): Map<String, Pair<Int, Int>> {
         val countMap = mutableMapOf<String, Pair<Int, Int>>()
-        allGoods.forEach { goods ->
-            goods.goodsChara.split(",").forEach { chara ->
-                val name = chara.trim()
-                if (name.isEmpty()) return@forEach
+        goods.forEach { g ->
+            g.goodsChara.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct().forEach { name ->
                 val current = countMap[name] ?: Pair(0, 0)
-                val gotten = if (goods.goodsStatus == GoodsStatus.GOTTEN.name) current.first + 1 else current.first
+                val gotten = if (g.goodsStatus == GoodsStatus.GOTTEN.name) current.first + 1 else current.first
                 countMap[name] = Pair(gotten, current.second + 1)
             }
         }
-        _charaGoodsCountMap.value = countMap
+        return countMap
     }
 
-    private suspend fun loadSeriesCharaCount() {
-        val allGoods = App.database.goodsDao().getAll()
-            .filter { it.goodsCategory != CATEGORY_SET }
-
+    /** "시리즈|캐릭터" 마다 (보유, 전체) 굿즈 수. 세트 굿즈는 뺀 목록을 받는다. */
+    private fun countSeriesCharas(series: List<SeriesEntity>, goods: List<GoodsEntity>): Map<String, Pair<Int, Int>> {
+        val bySeries = goods.groupBy { it.goodsSeries }
         val countMap = mutableMapOf<String, Pair<Int, Int>>()
-        _seriesList.value.forEach { series ->
-            series.seriesCharas.split(",").forEach { chara ->
-                val name = chara.trim()
-                if (name.isEmpty()) return@forEach
-                val seriesGoods = allGoods.filter {
-                    it.goodsSeries == series.seriesNm &&
-                            it.goodsChara.contains(name)
-                }
-                countMap["${series.seriesNm}|$name"] = Pair(
-                    seriesGoods.count { it.goodsStatus == GoodsStatus.GOTTEN.name },
-                    seriesGoods.size
-                )
+        series.forEach { s ->
+            val inSeries = bySeries[s.seriesNm].orEmpty()
+            s.seriesCharas.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { name ->
+                val charaGoods = inSeries.filter { hasChara(it.goodsChara, name) }
+                countMap["${s.seriesNm}|$name"] = Pair(charaGoods.count { it.goodsStatus == GoodsStatus.GOTTEN.name }, charaGoods.size)
             }
         }
-        _seriesCharaCountMap.value = countMap
+        return countMap
     }
+
     fun updateFilteredList() {
         val country = countries[_selectedTab.value]
         val byCountry = if (country == "전체") _seriesList.value

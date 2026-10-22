@@ -4,8 +4,9 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.wowagoodsproject.db.convertIntegerColumnToText
 
-@Database(entities = [GoodsEntity::class], version = 7)
+@Database(entities = [GoodsEntity::class], version = 8)
 abstract class GoodsDatabase : RoomDatabase() {
     abstract fun goodsDao(): GoodsDao
 
@@ -18,6 +19,7 @@ abstract class GoodsDatabase : RoomDatabase() {
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                db.convertIntegerColumnToText("tb_goods", "goodsPrice")
                 db.execSQL("ALTER TABLE tb_goods ADD COLUMN goodsStatus TEXT NOT NULL DEFAULT 'NOT_GOTTEN'")
                 db.execSQL("UPDATE tb_goods SET goodsStatus = 'GOTTEN' WHERE goodsIsGotten = 1")
             }
@@ -49,6 +51,13 @@ abstract class GoodsDatabase : RoomDatabase() {
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tb_goods ADD COLUMN goodsShippingDate TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** 원본 데이터의 굿즈 번호. 기존 굿즈는 다음 데이터 업데이트 때 내용으로 짝을 찾아 채운다. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tb_goods ADD COLUMN goodsUid INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

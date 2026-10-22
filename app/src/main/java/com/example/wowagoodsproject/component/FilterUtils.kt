@@ -19,6 +19,15 @@ fun <T : GoodsItem> List<T>.filterPendingInfo(filter: PendingInfoFilter?): List<
     if (filter == null) this else filter(filter.matches)
 
 /**
+ * 캐릭터 칸("A,B")에 [name] 이 한 명으로 들어 있는지.
+ * 글자 일부만 같은 다른 캐릭터는 아니다("양양현령" 굿즈는 "양양" 굿즈가 아니다).
+ */
+fun hasChara(charaField: String, name: String): Boolean {
+    val target = name.trim()
+    return target.isNotEmpty() && charaField.split(",").any { it.trim().equals(target, ignoreCase = true) }
+}
+
+/**
  * 목록용 필터.
  * 세트 굿즈는 목록에 노출하지 않고, 세트에 묶인 구성품을 포함한 모든 낱개 굿즈를 그대로 보여준다.
  */
@@ -28,7 +37,7 @@ fun filterGoodsList(
     categoryFilter: String? = null
 ): List<GoodsEntity> {
     var result = list.filter { it.category != CATEGORY_SET }
-    if (charaFilter != null) result = result.filter { it.chara.contains(charaFilter) }
+    if (charaFilter != null) result = result.filter { hasChara(it.chara, charaFilter) }
     if (categoryFilter != null) result = result.filter { it.category == categoryFilter }
     return result
 }
@@ -39,7 +48,7 @@ fun filterFanGoodsList(
     categoryFilter: String? = null
 ): List<FanGoodsEntity> {
     var result = list
-    if (charaFilter != null) result = result.filter { it.chara.contains(charaFilter) }
+    if (charaFilter != null) result = result.filter { hasChara(it.chara, charaFilter) }
     if (categoryFilter != null) result = result.filter { it.category == categoryFilter }
     return result
 }

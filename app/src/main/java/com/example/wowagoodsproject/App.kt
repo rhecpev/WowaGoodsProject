@@ -54,7 +54,8 @@ class App : Application() {
             GoodsDatabase.MIGRATION_3_4,
             GoodsDatabase.MIGRATION_4_5,
             GoodsDatabase.MIGRATION_5_6,
-            GoodsDatabase.MIGRATION_6_7
+            GoodsDatabase.MIGRATION_6_7,
+            GoodsDatabase.MIGRATION_7_8
         ).build()
 
         fanDatabase = Room.databaseBuilder(
@@ -98,10 +99,13 @@ class App : Application() {
             ChangedGoodsDatabase::class.java,
             "changed_goods_database"
         ).addMigrations(
-            ChangedGoodsDatabase.MIGRATION_1_2
+            ChangedGoodsDatabase.MIGRATION_1_2,
+            ChangedGoodsDatabase.MIGRATION_2_3,
+            ChangedGoodsDatabase.MIGRATION_3_4
         ).build()
 
         DailySchedule.schedule(this)
+        DriveSync.watch(this)
 
 
     }

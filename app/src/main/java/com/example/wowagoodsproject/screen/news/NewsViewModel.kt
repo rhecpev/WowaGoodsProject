@@ -1,8 +1,6 @@
 package com.example.wowagoodsproject.screen.news
 
-import com.example.wowagoodsproject.db.official.modify
-import com.example.wowagoodsproject.component.GoodsStatus
-import com.example.wowagoodsproject.db.official.withStatus
+import com.example.wowagoodsproject.db.changed.restoreChangedGoods
 import com.example.wowagoodsproject.db.character.CharaEntity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -69,34 +67,7 @@ class NewsViewModel : ViewModel() {
     /** 보관해 둔 원래 상태를 대체된 굿즈에 다시 적용한다. */
     fun restoreStatus(news: NewsEntity) {
         viewModelScope.launch {
-            val record = App.changedGoodsDatabase.changedGoodsDao().getById(news.newsChangedId)
-            if (record == null || !record.canRestore) {
-                _message.value = "되돌릴 기록을 찾을 수 없습니다"
-                return@launch
-            }
-            val target = App.database.goodsDao().getByUniqueKey(
-                series = record.newSeries,
-                chara = record.newChara,
-                category = record.newCategory,
-                memo = record.newMemo,
-                price = record.newPrice
-            )
-            if (target == null) {
-                _message.value = "대상 굿즈를 찾을 수 없습니다"
-                return@launch
-            }
-            // 상태와 함께 사용자가 적어 둔 수량/구매 정보/배송 시작일도 되돌린다.
-            App.database.goodsDao().modify(target.goodsId) {
-                it.withStatus(record.oldStatus).copy(
-                    goodsQuantity = record.oldQuantity,
-                    goodsPurchaseStore = record.oldPurchaseStore,
-                    goodsPurchaseDate = record.oldPurchaseDate,
-                    goodsReceiveDate = record.oldReceiveDate,
-                    goodsShippingDate = if (record.oldStatus == GoodsStatus.PENDING.name) record.oldShippingDate else ""
-                )
-            }
-            App.changedGoodsDatabase.changedGoodsDao().markRestored(record.changedId)
-            _message.value = "상태를 되돌렸습니다"
+            _message.value = restoreChangedGoods(news.newsChangedId)
         }
     }
 

@@ -30,8 +30,6 @@ import com.example.wowagoodsproject.component.PendingInfoFilter
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,73 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 import android.content.Intent
 import com.example.wowagoodsproject.UpdateManager
 import com.example.wowagoodsproject.component.GoodsStatus
-
-/**
- * 백업 파일에 담기는 공식 굿즈 한 줄.
- *
- * 모든 칸이 nullable 인 이유: 예전 버전에서 만든 zip 에는 나중에 생긴 칸(상태·메모·구매 정보)이
- * 아예 없고, Gson 은 그 자리에 코틀린 기본값 대신 null 을 넣는다.
- * 그대로 엔티티에 옮기면 non-null 칸에 null 이 들어가 복원이 통째로 실패한다.
- */
-data class OfficialGoodsBackup(
-    val goodsSeries: String? = null,
-    val goodsChara: String? = null,
-    val goodsCategory: String? = null,
-    val goodsStatus: String? = null,
-    val goodsMemo: String? = null,
-    val goodsPrice: String? = null,
-    val goodsPurchaseDate: String? = null,
-    val goodsPurchaseStore: String? = null,
-    val goodsReceiveDate: String? = null,
-    val goodsQuantity: Int? = null,
-    val goodsShippingDate: String? = null
-)
-
-/** 백업 파일에 담기는 2차창작 굿즈. nullable 인 이유는 [OfficialGoodsBackup] 과 같다. */
-data class FanGoodsBackup(
-    val fanGoodsReleaseDate: String? = null,
-    val fanGoodsSeries: String? = null,
-    val fanGoodsPrice: String? = null,
-    val fanGoodsChara: String? = null,
-    val fanGoodsCategory: String? = null,
-    val fanGoodsImgPath: String? = null,
-    val fanGoodsIsGotten: Boolean? = null,
-    val fanGoodsStatus: String? = null,
-    val fanGoodsMemo: String? = null,
-    val fanGoodsPurchaseDate: String? = null,
-    val fanGoodsPurchaseStore: String? = null,
-    val fanGoodsReceiveDate: String? = null,
-    val fanGoodsQuantity: Int? = null,
-    val fanGoodsShippingDate: String? = null
-) {
-    /** @param imgPath 백업 안 이미지를 앱 폴더에 풀어 놓은 뒤의 경로 */
-    fun toEntity(imgPath: String) = FanGoodsEntity(
-        fanGoodsId = 0,
-        fanGoodsReleaseDate = fanGoodsReleaseDate.orEmpty(),
-        fanGoodsSeries = fanGoodsSeries.orEmpty(),
-        fanGoodsPrice = fanGoodsPrice.orEmpty(),
-        fanGoodsChara = fanGoodsChara.orEmpty(),
-        fanGoodsCategory = fanGoodsCategory.orEmpty(),
-        fanGoodsImgPath = imgPath,
-        fanGoodsIsGotten = fanGoodsIsGotten ?: false,
-        // 상태 칸이 생기기 전 백업이면 보유 여부로 상태를 되살린다.
-        fanGoodsStatus = fanGoodsStatus
-            ?: if (fanGoodsIsGotten == true) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
-        fanGoodsMemo = fanGoodsMemo.orEmpty(),
-        fanGoodsPurchaseDate = fanGoodsPurchaseDate.orEmpty(),
-        fanGoodsPurchaseStore = fanGoodsPurchaseStore.orEmpty(),
-        fanGoodsReceiveDate = fanGoodsReceiveDate.orEmpty(),
-        fanGoodsQuantity = fanGoodsQuantity ?: 1,
-        fanGoodsShippingDate = fanGoodsShippingDate.orEmpty()
-    )
-}
 
 class MyPageViewModel : ViewModel() {
 
@@ -167,6 +101,10 @@ class MyPageViewModel : ViewModel() {
     private val _unreadNewsCount = MutableStateFlow(0)
     val unreadNewsCount: StateFlow<Int> = _unreadNewsCount
 
+    /** 마이페이지 변경된 굿즈 중 아직 처리하지 않은 기록 수. 들어가면 처음 보이는 미처리 목록의 개수와 같다. */
+    private val _changedGoodsCount = MutableStateFlow(0)
+    val changedGoodsCount: StateFlow<Int> = _changedGoodsCount
+
     init {
         loadCharaList()
         observeGoods()
@@ -187,6 +125,11 @@ class MyPageViewModel : ViewModel() {
         viewModelScope.launch {
             App.newsDatabase.newsDao().getUnreadCountFlow().collectLatest {
                 _unreadNewsCount.value = it
+            }
+        }
+        viewModelScope.launch {
+            App.changedGoodsDatabase.changedGoodsDao().uncheckedCountFlow().collectLatest {
+                _changedGoodsCount.value = it
             }
         }
     }
@@ -335,57 +278,8 @@ class MyPageViewModel : ViewModel() {
     }
 
 
-    /**
-     * 백업 zip 을 [zipFile] 에 만든다. 추출과 테스트가 함께 쓴다.
-     * 새 칸을 추가하면 여기(추출)와 importData(입력), 백업 클래스 세 곳을 함께 고쳐야 한다.
-     */
-    internal suspend fun writeBackupZip(zipFile: File) = withContext(Dispatchers.IO) {
-        val gson = Gson()
-        val fanGoods = App.fanDatabase.fanGoodsDao().getAll()
-        val fanGoodsJson = gson.toJson(fanGoods)
-        val officialGoods = App.database.goodsDao().getAll()
-        val officialBackup = officialGoods.map {
-            OfficialGoodsBackup(
-                goodsSeries = it.goodsSeries,
-                goodsChara = it.goodsChara,
-                goodsCategory = it.goodsCategory,
-                goodsStatus = it.goodsStatus,
-                goodsMemo = it.goodsMemo,
-                goodsPrice = it.goodsPrice,
-                goodsPurchaseDate = it.goodsPurchaseDate,
-                goodsPurchaseStore = it.goodsPurchaseStore,
-                goodsReceiveDate = it.goodsReceiveDate,
-                goodsQuantity = it.goodsQuantity,
-                goodsShippingDate = it.goodsShippingDate
-            )
-        }
-        val officialJson = gson.toJson(officialBackup)
-        val charas = App.charaDatabase.charaDao().getAll()
-        val favoriteCharas = charas.filter { it.charaIsFavorite }.map { it.charaNm }
-        val charaJson = gson.toJson(favoriteCharas)
-
-        ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
-            zip.putNextEntry(ZipEntry("fan_goods.json"))
-            zip.write(fanGoodsJson.toByteArray())
-            zip.closeEntry()
-            zip.putNextEntry(ZipEntry("official_gotten.json"))
-            zip.write(officialJson.toByteArray())
-            zip.closeEntry()
-            zip.putNextEntry(ZipEntry("favorite_charas.json"))
-            zip.write(charaJson.toByteArray())
-            zip.closeEntry()
-            fanGoods.forEach { goods ->
-                if (goods.fanGoodsImgPath.isNotEmpty()) {
-                    val imgFile = File(goods.fanGoodsImgPath)
-                    if (imgFile.exists()) {
-                        zip.putNextEntry(ZipEntry("images/${imgFile.name}"))
-                        FileInputStream(imgFile).use { it.copyTo(zip) }
-                        zip.closeEntry()
-                    }
-                }
-            }
-        }
-    }
+    /** 백업 zip 을 [zipFile] 에 만든다. 추출과 테스트가 함께 쓴다. */
+    internal suspend fun writeBackupZip(zipFile: File) = BackupZip.write(zipFile)
 
     fun exportData(context: Context) {
         viewModelScope.launch {
@@ -405,13 +299,21 @@ class MyPageViewModel : ViewModel() {
                         val downloadUri = resolver.insert(
                             android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                             contentValues
-                        )
-                        downloadUri?.let { uri ->
-                            resolver.openOutputStream(uri)?.use { output ->
-                                FileInputStream(zipFile).copyTo(output)
-                            }
+                        ) ?: throw IllegalStateException("다운로드 폴더에 파일을 만들지 못했습니다")
+                        try {
+                            val output = resolver.openOutputStream(downloadUri)
+                                ?: throw IllegalStateException("다운로드 폴더에 쓰지 못했습니다")
+                            output.use { FileInputStream(zipFile).use { input -> input.copyTo(it) } }
+                        } catch (e: Exception) {
+                            // 반쯤 쓴 파일이 다운로드 폴더에 남으면 나중에 백업으로 착각해 불러올 수 있다.
+                            resolver.delete(downloadUri, null, null)
+                            throw e
                         }
+                        // 다운로드 폴더로 옮겼으니 앱 안의 임시 파일은 지운다.
+                        zipFile.delete()
                     } else {
+                        // 공유받는 앱이 나중에 이 파일을 읽으므로 여기서 지우지 않는다.
+                        // 다음 추출 때 같은 이름으로 덮어쓴다.
                         val uri = FileProvider.getUriForFile(
                             context,
                             "${context.packageName}.provider",
@@ -427,7 +329,6 @@ class MyPageViewModel : ViewModel() {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         })
                     }
-                    zipFile.delete()
                 }
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, "추출 완료!", Toast.LENGTH_SHORT).show()
@@ -445,118 +346,18 @@ class MyPageViewModel : ViewModel() {
             _isImporting.value = true
             _importProgress.value = 0f
             try {
-                withContext(Dispatchers.IO) {
-                    val gson = Gson()
-                    var fanGoodsJson: String? = null
-                    var officialJson: String? = null
-                    var favoriteCharaJson: String? = null
-                    val imageMap = mutableMapOf<String, ByteArray>()
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        ZipInputStream(input).use { zip ->
-                            var entry = zip.nextEntry
-                            while (entry != null) {
-                                when {
-                                    entry.name == "fan_goods.json" -> fanGoodsJson =
-                                        zip.bufferedReader().readText()
-
-                                    entry.name == "official_gotten.json" -> officialJson =
-                                        zip.bufferedReader().readText()
-
-                                    entry.name == "favorite_charas.json" -> favoriteCharaJson =
-                                        zip.bufferedReader().readText()
-
-                                    entry.name.startsWith("images/") -> {
-                                        val fileName = entry.name.removePrefix("images/")
-                                        imageMap[fileName] = zip.readBytes()
-                                    }
-                                }
-                                zip.closeEntry()
-                                entry = zip.nextEntry
-                            }
-                        }
-                    }
-                    reportImport(0.25f)
-
-                    if (imageMap.isEmpty()) {
-                        reportImport(0.45f)
-                    } else {
-                        imageMap.entries.forEachIndexed { i, (fileName, bytes) ->
-                            val imgFile = File(context.filesDir, fileName)
-                            imgFile.writeBytes(bytes)
-                            reportImport(0.25f + 0.20f * (i + 1) / imageMap.size)
-                        }
-                    }
-                    fanGoodsJson?.let { json ->
-                        val type = object : TypeToken<List<FanGoodsBackup>>() {}.type
-                        val fanGoods: List<FanGoodsBackup> = gson.fromJson(json, type)
-                        App.fanDatabase.fanGoodsDao().deleteAll()
-                        val mappedGoods = fanGoods.map { backup ->
-                            val oldPath = backup.fanGoodsImgPath.orEmpty()
-                            val newPath = if (oldPath.isNotEmpty()) {
-                                File(context.filesDir, File(oldPath).name).absolutePath
-                            } else ""
-                            backup.toEntity(newPath)
-                        }
-                        App.fanDatabase.fanGoodsDao().insertAll(mappedGoods)
-                    }
-                    reportImport(0.6f)
-                    officialJson?.let { json ->
-                        val type = object : TypeToken<List<OfficialGoodsBackup>>() {}.type
-                        val backups: List<OfficialGoodsBackup> = gson.fromJson(json, type)
-                        App.database.goodsDao().resetAllGotten()
-                        val allLocalGoods = App.database.goodsDao().getAll()
-                        val localGoodsMap = allLocalGoods.associateBy {
-                            "${it.goodsSeries}|${it.goodsChara}|${it.goodsCategory}|${it.goodsMemo}|${it.goodsPrice}"
-                        }
-                        backups.forEachIndexed { i, backup ->
-                            // null 을 그대로 문자열에 끼우면 "null" 이 되어 짝을 못 찾는다.
-                            val key = listOf(
-                                backup.goodsSeries.orEmpty(),
-                                backup.goodsChara.orEmpty(),
-                                backup.goodsCategory.orEmpty(),
-                                backup.goodsMemo.orEmpty(),
-                                backup.goodsPrice.orEmpty()
-                            ).joinToString("|")
-                            localGoodsMap[key]?.let { goods ->
-                                App.database.goodsDao().update(
-                                    goods.copy(
-                                        goodsStatus = backup.goodsStatus ?: GoodsStatus.NOT_GOTTEN.name,
-                                        goodsPurchaseDate = backup.goodsPurchaseDate.orEmpty(),
-                                        goodsPurchaseStore = backup.goodsPurchaseStore.orEmpty(),
-                                        goodsReceiveDate = backup.goodsReceiveDate.orEmpty(),
-                                        goodsQuantity = backup.goodsQuantity ?: 1,
-                                        goodsShippingDate = backup.goodsShippingDate.orEmpty()
-                                    )
-                                )
-                            }
-                            if (backups.isNotEmpty()) {
-                                reportImport(0.6f + 0.32f * (i + 1) / backups.size)
-                            }
-                        }
-                    }
-                    reportImport(0.92f)
-                    favoriteCharaJson?.let { json ->
-                        val type = object : TypeToken<List<String>>() {}.type
-                        val favoriteCharas: List<String> = gson.fromJson(json, type)
-                        val allCharas = App.charaDatabase.charaDao().getAll()
-                        allCharas.forEachIndexed { i, chara ->
-                            App.charaDatabase.charaDao().update(
-                                chara.copy(charaIsFavorite = favoriteCharas.contains(chara.charaNm))
-                            )
-                            if (allCharas.isNotEmpty()) {
-                                reportImport(0.92f + 0.08f * (i + 1) / allCharas.size)
-                            }
-                        }
-                    }
-                    reportImport(1f)
+                val report = withContext(Dispatchers.IO) {
+                    val input = context.contentResolver.openInputStream(uri)
+                        ?: throw IllegalStateException("파일을 열 수 없습니다")
+                    input.use { BackupZip.restore(it, context.filesDir) { p -> reportImport(p) } }
                 }
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, "입력 완료!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(App.appContext, report.message(), Toast.LENGTH_LONG).show()
                 }
                 loadGottenGoods()
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, "입력 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(App.appContext, "입력 실패: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             } finally {
                 _isImporting.value = false

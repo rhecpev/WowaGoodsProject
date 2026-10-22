@@ -1,5 +1,8 @@
 package com.example.wowagoodsproject.screen.character
 
+import com.example.wowagoodsproject.db.fan.deleteWithImage
+import com.example.wowagoodsproject.component.hasChara
+
 import com.example.wowagoodsproject.db.fan.setQuantity
 import com.example.wowagoodsproject.db.fan.applyStatus
 import com.example.wowagoodsproject.db.fan.savePending
@@ -68,7 +71,7 @@ class CharacterViewModel : ViewModel() {
             App.fanDatabase.fanGoodsDao().getAllFlow().collectLatest { allFan ->
                 _selectedChara.value?.let { chara ->
                     _fanGoods.value = allFan
-                        .filter { it.fanGoodsChara.contains(chara.charaNm, ignoreCase = true) }
+                        .filter { hasChara(it.fanGoodsChara, chara.charaNm) }
                         .sortedByDescending { it.fanGoodsId }
                 }
             }
@@ -94,13 +97,14 @@ class CharacterViewModel : ViewModel() {
     fun selectChara(chara: CharaEntity) {
         _selectedChara.value = chara
         viewModelScope.launch {
-            val charaGoods = App.database.goodsDao().getByChara(chara.charaNm)
+            // DB 의 LIKE 는 글자 일부도 맞으므로 한 명으로 들어 있는 굿즈만 남긴다.
+            val charaGoods = App.database.goodsDao().getByChara(chara.charaNm).filter { hasChara(it.goodsChara, chara.charaNm) }
             _officialGoods.value = charaGoods
             val seriesList = charaGoods.map { it.goodsSeries }.distinct()
             _allSeriesGoods.value = seriesList.flatMap {
                 App.database.goodsDao().getBySeries(it)
             }
-            _fanGoods.value = App.fanDatabase.fanGoodsDao().getByChara(chara.charaNm)
+            _fanGoods.value = App.fanDatabase.fanGoodsDao().getByChara(chara.charaNm).filter { hasChara(it.fanGoodsChara, chara.charaNm) }
         }
     }
     fun clearSelectedChara() {
@@ -181,7 +185,7 @@ class CharacterViewModel : ViewModel() {
 
                 // 다른 탭·데이터 입력·백그라운드 업데이트로 바뀐 값도 열려 있는 캐릭터 화면에 바로 반영한다.
                 _selectedChara.value?.let { chara ->
-                    val charaGoods = allGoods.filter { it.goodsChara.contains(chara.charaNm, ignoreCase = true) }
+                    val charaGoods = allGoods.filter { hasChara(it.goodsChara, chara.charaNm) }
                     _officialGoods.value = charaGoods
                     val seriesSet = charaGoods.map { it.goodsSeries }.toSet()
                     _allSeriesGoods.value = allGoods.filter { it.goodsSeries in seriesSet }
@@ -191,7 +195,7 @@ class CharacterViewModel : ViewModel() {
     }
     fun deleteFanGoods(goods: FanGoodsEntity) {
         viewModelScope.launch {
-            App.fanDatabase.fanGoodsDao().delete(goods)
+            App.fanDatabase.fanGoodsDao().deleteWithImage(goods)
         }
     }
 

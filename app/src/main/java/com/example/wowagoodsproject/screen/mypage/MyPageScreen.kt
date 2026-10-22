@@ -9,6 +9,7 @@ import com.example.wowagoodsproject.component.BulkStatusArea
 import com.example.wowagoodsproject.component.GridColumnsBar
 import com.example.wowagoodsproject.component.rememberGridColumns
 import com.example.wowagoodsproject.component.WhatsNewDialog
+import com.example.wowagoodsproject.isNewerVersion
 import com.example.wowagoodsproject.component.ReleaseNotes
 import androidx.compose.material.icons.filled.NewReleases
 import java.util.Locale
@@ -26,7 +27,11 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.PrivacyTip
+import com.example.wowagoodsproject.DriveSync
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -41,6 +46,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.ChangeCircle
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FilterList
@@ -111,6 +117,7 @@ fun MyPageScreen(
     detailViewModel: GoodsDetailViewModel = viewModel(),
     onThemeChange: (Int) -> Unit = {},
     onNavigateToPatchNotes: () -> Unit = {},
+    onNavigateToChangedGoods: () -> Unit = {},
     onNavigateToNews: () -> Unit = {},
     onNavigateToSeries: (String) -> Unit = {}
 ) {
@@ -141,6 +148,7 @@ fun MyPageScreen(
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
     val unreadNewsCount by viewModel.unreadNewsCount.collectAsState()
+    val changedGoodsCount by viewModel.changedGoodsCount.collectAsState()
     val pendingOfficialGoods by viewModel.pendingOfficialGoods.collectAsState()
     val pendingFanGoods by viewModel.pendingFanGoods.collectAsState()
     val pendingInfoFilter by viewModel.pendingInfoFilter.collectAsState()
@@ -245,6 +253,102 @@ fun MyPageScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { viewModel.importData(context, it) }
+    }
+
+    // 구글 드라이브 연동. 계정을 고르거나 허락을 받아야 하면 구글 화면을 띄우고, 돌아오면 연결을 마친다.
+    val driveState by DriveSync.state.collectAsState()
+    var showDriveDialog by remember { mutableStateOf(false) }
+    // 처음 켤 때는 구글 화면으로 넘어가기 전에 무엇을 어디에 저장하는지 먼저 알린다.
+    var showDriveIntro by remember { mutableStateOf(false) }
+    val openPrivacyPolicy: () -> Unit = {
+        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(PRIVACY_POLICY_URL)))
+    }
+    val scope = rememberCoroutineScope()
+    val driveAuthLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != android.app.Activity.RESULT_OK) {
+            Toast.makeText(context, "구글 드라이브 연결을 취소했습니다", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        try {
+            DriveSync.finishConnect(context, result.data)
+            Toast.makeText(context, "구글 드라이브에 연결했습니다. 지금 내용을 올립니다", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, "구글 드라이브 연결 실패: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    val onConnectDrive: () -> Unit = {
+        scope.launch {
+            try {
+                val pending = DriveSync.connect(context)
+                if (pending != null) {
+                    driveAuthLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+                } else {
+                    Toast.makeText(context, "구글 드라이브에 연결했습니다. 지금 내용을 올립니다", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "구글 드라이브 연결 실패: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    if (showDriveIntro) {
+        AlertDialog(
+            onDismissRequest = { showDriveIntro = false },
+            title = { Text("구글 드라이브 연동") },
+            text = {
+                Column {
+                    Text(
+                        "보유 현황·2차창작·선호 캐릭터를 본인 구글 드라이브의 앱 전용 숨김 폴더에 저장하고, 바뀔 때마다 새로 저장합니다.\n\n" +
+                                "드라이브의 다른 파일은 볼 수 없으며, 저장한 기록은 운영자에게 보내지 않습니다. " +
+                                "웹(명조 굿즈 도감)에서 같은 구글 계정으로 연결하면 같은 기록을 볼 수 있습니다."
+                    )
+                    TextButton(
+                        onClick = openPrivacyPolicy,
+                        contentPadding = PaddingValues(0.dp)
+                    ) { Text("개인정보 처리방침 보기") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDriveIntro = false
+                    onConnectDrive()
+                }) { Text("연결") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDriveIntro = false }) { Text("취소") }
+            }
+        )
+    }
+    if (showDriveDialog) {
+        AlertDialog(
+            onDismissRequest = { showDriveDialog = false },
+            title = { Text("구글 드라이브 연동") },
+            text = {
+                Text(
+                    "보유 현황·2차창작·선호 캐릭터가 바뀔 때마다 구글 드라이브의 앱 전용 숨김 폴더에 저장합니다.\n\n" +
+                            "웹(명조 굿즈 도감)에서 같은 구글 계정으로 연결하면 앱에서 바꾼 내용을 볼 수 있습니다." +
+                            (driveState.lastSync?.let { "\n\n마지막 저장: $it" } ?: "")
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDriveDialog = false
+                    DriveSync.schedule(context, delaySec = 0, force = true)
+                    Toast.makeText(context, "구글 드라이브에 올립니다", Toast.LENGTH_SHORT).show()
+                }) { Text("지금 저장") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        showDriveDialog = false
+                        DriveSync.unlink(context)
+                        Toast.makeText(context, "구글 드라이브 연동을 껐습니다. 드라이브의 파일은 그대로 남습니다", Toast.LENGTH_LONG).show()
+                    }) { Text("연동 끄기") }
+                    TextButton(onClick = { showDriveDialog = false }) { Text("닫기") }
+                }
+            }
+        )
     }
 
     val selection = rememberGoodsSelection()
@@ -556,6 +660,18 @@ fun MyPageScreen(
                     }
                 )
             }
+            val changedRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.ChangeCircle,
+                    title = "변경된 굿즈",
+                    subtitle = if (changedGoodsCount > 0) "확인하지 않은 변경이 있습니다"
+                    else "확인할 변경이 없습니다",
+                    trailing = if (changedGoodsCount > 0) {
+                        { StatusPill(text = "${changedGoodsCount}개", color = MaterialTheme.colorScheme.primary) }
+                    } else null,
+                    onClick = onNavigateToChangedGoods
+                )
+            }
             val exportRow: @Composable () -> Unit = {
                 SettingsRow(
                     icon = Icons.Default.FileDownload,
@@ -571,7 +687,46 @@ fun MyPageScreen(
                     title = "데이터 입력",
                     subtitle = "백업 파일(zip)에서 불러오기",
                     showChevron = false,
-                    onClick = { fileLauncher.launch(arrayOf("application/zip")) }
+                    // 메신저·클라우드로 받은 zip 은 형식이 다르게 붙어 있어 고를 수 없게 되므로 넓게 받는다.
+                    // 백업인지는 불러올 때 내용으로 확인한다.
+                    onClick = {
+                        fileLauncher.launch(
+                            arrayOf("application/zip", "application/x-zip-compressed", "application/x-zip", "application/octet-stream")
+                        )
+                    }
+                )
+            }
+            val driveRow: @Composable () -> Unit = {
+                val drive = driveState
+                SettingsRow(
+                    icon = Icons.Default.CloudSync,
+                    title = "구글 드라이브 연동",
+                    subtitle = when {
+                        !drive.linked -> "켜면 굿즈를 바꿀 때마다 저장하고 웹에서도 볼 수 있습니다"
+                        drive.needsAuth -> "연결이 풀렸습니다. 눌러서 다시 연결하세요"
+                        drive.syncing -> "저장 중…"
+                        drive.error != null -> "저장 실패 (${drive.error}) · 잠시 뒤 다시 시도합니다"
+                        else -> drive.lastSync?.let { "마지막 저장 $it" } ?: "곧 저장합니다"
+                    },
+                    subtitleColor = if (drive.linked && (drive.needsAuth || drive.error != null)) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    showChevron = false,
+                    trailing = when {
+                        !drive.linked -> null
+                        drive.needsAuth -> {
+                            { StatusPill(text = "다시 연결", color = MaterialTheme.colorScheme.error) }
+                        }
+                        else -> {
+                            { StatusPill(text = "연동 중", color = AppStyles.colorGotten) }
+                        }
+                    },
+                    onClick = {
+                        when {
+                            !drive.linked -> showDriveIntro = true
+                            drive.needsAuth -> onConnectDrive()
+                            else -> showDriveDialog = true
+                        }
+                    }
                 )
             }
             val manualUpdateRow: @Composable () -> Unit = {
@@ -618,7 +773,7 @@ fun MyPageScreen(
             }
             val versionRow: @Composable () -> Unit = {
                 val latest = latestVersion
-                val hasNewVersion = latest != null && latest != BuildConfig.VERSION_NAME
+                val hasNewVersion = latest != null && isNewerVersion(latest, BuildConfig.VERSION_NAME)
                 SettingsRow(
                     icon = Icons.Default.Info,
                     title = "현재 버전 v${BuildConfig.VERSION_NAME}",
@@ -649,6 +804,14 @@ fun MyPageScreen(
                     title = "변경점",
                     subtitle = "v${ReleaseNotes.currentVersion}에서 달라진 점",
                     onClick = { showReleaseNotes = true }
+                )
+            }
+            val privacyRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.PrivacyTip,
+                    title = "개인정보 처리방침",
+                    subtitle = "앱과 웹에서 어떤 정보를 어디에 저장하는지",
+                    onClick = openPrivacyPolicy
                 )
             }
             val themeBlock: @Composable () -> Unit = {
@@ -704,7 +867,7 @@ fun MyPageScreen(
             }
 
             if (isLandscape) {
-                // 가로 화면: 두 칸씩 나란히. 짝이 없는 줄(업데이트 이력, 화면 테마)은 폭을 다 쓴다.
+                // 가로 화면: 두 칸씩 나란히. 짝이 없는 줄(화면 테마)은 폭을 다 쓴다.
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -720,7 +883,11 @@ fun MyPageScreen(
                         left = { SettingsCard(fillHeight = true, content = exportRow) },
                         right = { SettingsCard(fillHeight = true, content = importRow) }
                     )
-                    SettingsCard(content = historyRow)
+                    SettingsCard(content = driveRow)
+                    SettingsPairRow(
+                        left = { SettingsCard(fillHeight = true, content = changedRow) },
+                        right = { SettingsCard(fillHeight = true, content = historyRow) }
+                    )
                     SettingsPairRow(
                         left = { SettingsCard(fillHeight = true, content = manualUpdateRow) },
                         right = { SettingsCard(fillHeight = true, content = lastUpdateRow) }
@@ -730,8 +897,12 @@ fun MyPageScreen(
                             left = { SettingsCard(fillHeight = true, content = versionRow) },
                             right = { SettingsCard(fillHeight = true, content = releaseNotesRow) }
                         )
+                        SettingsCard(content = privacyRow)
                     } else {
-                        SettingsCard(content = versionRow)
+                        SettingsPairRow(
+                            left = { SettingsCard(fillHeight = true, content = versionRow) },
+                            right = { SettingsCard(fillHeight = true, content = privacyRow) }
+                        )
                     }
                     themeBlock()
                 }
@@ -744,8 +915,14 @@ fun MyPageScreen(
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     summaryCard()
-                    SettingsGroup(title = "굿즈") { pendingRow() }
+                    SettingsGroup(title = "굿즈") {
+                        pendingRow()
+                        SettingsDivider()
+                        changedRow()
+                    }
                     SettingsGroup(title = "유저 데이터") {
+                        driveRow()
+                        SettingsDivider()
                         exportRow()
                         SettingsDivider()
                         importRow()
@@ -760,6 +937,8 @@ fun MyPageScreen(
                     SettingsGroup(title = "앱 정보") {
                         versionRow()
                         if (hasReleaseNotes) releaseNotesRow()
+                        SettingsDivider()
+                        privacyRow()
                     }
                     themeBlock()
                 }
@@ -1281,6 +1460,9 @@ private const val MANUAL_LIMIT_BYPASS_KEY = "manual_limit_bypass_until"
 
 private const val MANUAL_UPDATE_LIMIT = 3
 private const val MANUAL_UPDATE_WORK_NAME = "manual_data_update"
+
+/** 앱과 웹이 함께 쓰는 개인정보 처리방침(웹 페이지). 구글 OAuth 동의 화면에 넣은 주소와 같다. */
+private const val PRIVACY_POLICY_URL = "https://wuwa-goods-catalog.vercel.app/#privacy"
 
 private fun todayKey(): String =
     java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())

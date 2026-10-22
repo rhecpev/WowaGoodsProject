@@ -22,17 +22,9 @@ interface GoodsDao {
     @Delete
     suspend fun delete(goods: GoodsEntity)
 
-    @Query("SELECT * FROM tb_goods WHERE goodsChara LIKE '%' || :chara || '%' ORDER BY goodsReleaseDate DESC")
-    fun getByCharaFlow(chara: String): Flow<List<GoodsEntity>>
-
     @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series ORDER BY goodsReleaseDate DESC")
     suspend fun getBySeries(series: String): List<GoodsEntity>
 
-    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트'")
-    suspend fun countBySeriesAndChara(series: String, chara: String): Int
-
-    @Query("SELECT COUNT(*) FROM tb_goods WHERE goodsSeries = :series AND goodsChara LIKE '%' || :chara || '%' AND goodsCategory != '세트' AND goodsStatus = 'GOTTEN'")
-    suspend fun countGottenBySeriesAndChara(series: String, chara: String): Int
     // 백업 불러오기 전에 상태를 초기화한다. 구매 정보도 백업 값으로 다시 채워지므로 같이 비운다.
     @Query("UPDATE tb_goods SET goodsStatus = 'NOT_GOTTEN', goodsPurchaseDate = '', goodsPurchaseStore = '', goodsReceiveDate = '', goodsQuantity = 1, goodsShippingDate = ''")
     suspend fun resetAllGotten()
@@ -45,12 +37,16 @@ interface GoodsDao {
     @Query("SELECT * FROM tb_goods WHERE goodsId = :id")
     suspend fun getById(id: Int): GoodsEntity?
 
+    @Query("SELECT * FROM tb_goods WHERE goodsUid = :uid LIMIT 1")
+    suspend fun getByUid(uid: Int): GoodsEntity?
+
     @Query("SELECT * FROM tb_goods ORDER BY goodsReleaseDate DESC")
     fun getAllFlow(): Flow<List<GoodsEntity>>
 
     @Query("SELECT DISTINCT goodsCategory FROM tb_goods WHERE goodsCategory != ''")
     suspend fun getAllCategories(): List<String>
 
+    /** 글자 일부도 맞는다("양양" → "양양현령"). 부르는 쪽에서 hasChara 로 한 번 더 거른다. */
     @Query("SELECT * FROM tb_goods WHERE goodsChara LIKE '%' || :chara || '%' ORDER BY goodsReleaseDate DESC")
     suspend fun getByChara(chara: String): List<GoodsEntity>
 

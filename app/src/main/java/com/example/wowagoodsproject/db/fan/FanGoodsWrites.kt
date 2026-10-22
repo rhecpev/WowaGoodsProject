@@ -1,6 +1,9 @@
 package com.example.wowagoodsproject.db.fan
 
 import androidx.room.withTransaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.PurchaseInfo
@@ -12,6 +15,23 @@ import com.example.wowagoodsproject.component.purchaseInfo
  * 공식 굿즈(GoodsWrites.kt)와 같은 이유로, 화면이 들고 있던 값이 아니라
  * id 로 DB 의 최신 값을 다시 읽어 바꿀 칸만 고친 뒤 저장한다(트랜잭션 안에서).
  */
+
+/**
+ * 굿즈를 지우고, 다른 굿즈가 쓰지 않는 사진 파일도 지운다.
+ * 사진은 앱 폴더에 굿즈마다 복사해 두므로 지우지 않으면 저장 공간에 계속 쌓인다.
+ */
+suspend fun FanGoodsDao.deleteWithImage(goods: FanGoodsEntity) {
+    delete(goods)
+    deleteUnusedImages(listOf(goods.fanGoodsImgPath))
+}
+
+/** [paths] 중 이제 어느 2차창작 굿즈도 쓰지 않는 사진 파일을 지운다. */
+suspend fun FanGoodsDao.deleteUnusedImages(paths: Collection<String>) {
+    val used = getAll().map { it.fanGoodsImgPath }.toSet()
+    withContext(Dispatchers.IO) {
+        paths.filter { it.isNotEmpty() && it !in used }.forEach { File(it).delete() }
+    }
+}
 
 /** 최신 값을 읽어 [change] 만 반영해 저장한다. 굿즈가 없어졌으면 null. */
 suspend fun FanGoodsDao.modify(id: Int, change: (FanGoodsEntity) -> FanGoodsEntity): FanGoodsEntity? =

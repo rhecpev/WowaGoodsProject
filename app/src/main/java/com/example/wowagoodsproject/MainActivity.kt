@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
 
             WowaGoodsProjectTheme(theme = appTheme) {
                 var isReady by remember { mutableStateOf(false) }
+                // 새 버전 확인이 끝났는지. 끝나기 전에 '달라진 점' 을 띄우면 새 버전 안내와 겹친다.
+                var appUpdateChecked by remember { mutableStateOf(false) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
                 var showWhatsNew by remember { mutableStateOf(false) }
                 var latestVersion by remember { mutableStateOf("") }
@@ -96,13 +98,15 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        // 새 버전 확인은 인터넷이 느리면 수십 초 걸릴 수 있어, 화면을 먼저 띄운 뒤에 한다.
+                        isReady = true
                         val result = UpdateManager.checkAppUpdate()
                         if (result != null) {
                             latestVersion = result.first
                             releaseNote = result.second
                             showUpdateDialog = true
                         }
-                        isReady = true
+                        appUpdateChecked = true
                     }
                 }
 
@@ -138,7 +142,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // 업데이트 후 처음 열 때 한 번만 변경점을 보여 준다. 새 버전 안내 팝업이 있으면 그걸 먼저 닫은 뒤에 띄운다.
-                if (isReady && showWhatsNew && !showUpdateDialog) {
+                if (isReady && appUpdateChecked && showWhatsNew && !showUpdateDialog) {
                     ReleaseNotes.forCurrentVersion()?.let { sections ->
                         WhatsNewDialog(
                             version = ReleaseNotes.currentVersion,

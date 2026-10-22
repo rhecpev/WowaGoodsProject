@@ -32,6 +32,9 @@ import com.example.wowagoodsproject.screen.fan.FanArtScreen
 import com.example.wowagoodsproject.screen.fan.FanAddScreen
 import com.example.wowagoodsproject.screen.mypage.MyPageScreen
 import com.example.wowagoodsproject.screen.mypage.PatchNotesScreen
+import com.example.wowagoodsproject.screen.mypage.ChangedGoodsScreen
+import com.example.wowagoodsproject.screen.mypage.ChangedGoodsViewModel
+import com.example.wowagoodsproject.component.ProcessFilter
 import com.example.wowagoodsproject.screen.news.NewsScreen
 import com.example.wowagoodsproject.screen.news.NewsViewModel
 import androidx.compose.foundation.lazy.LazyListState
@@ -94,6 +97,8 @@ fun MainScreen(
     // 소식에서 바로가기로 나갔다가 돌아올 때 필터와 스크롤 위치를 이어 가도록 화면 밖에 둔다.
     val newsViewModel: NewsViewModel = viewModel(key = "news")
     var newsListState by remember { mutableStateOf(LazyListState()) }
+    val changedGoodsViewModel: ChangedGoodsViewModel = viewModel(key = "changedGoods")
+    var changedGoodsListState by remember { mutableStateOf(LazyListState()) }
     val searchDetailViewModel: GoodsDetailViewModel = viewModel(key = "searchDetail")
     val myPageListModeViewModel: ListModeViewModel = viewModel(key = "myPageListMode") { ListModeViewModel("mypage") }
     val pendingListModeViewModel: ListModeViewModel = viewModel(key = "pendingListMode") { ListModeViewModel("pending") }
@@ -151,12 +156,12 @@ fun MainScreen(
         }
     }
 
-    // 소식에서 시리즈로 이동했으면, 그 시리즈를 뒤로가기로 닫을 때 소식으로 돌아간다.
-    // 탭 이동은 시작 화면까지 비우므로 소식이 뒤 스택에 남지 않아 따로 기억해 둔다.
-    var returnToNews by remember { mutableStateOf(false) }
+    // 소식·변경된 굿즈에서 시리즈로 이동했으면, 그 시리즈를 뒤로가기로 닫을 때 그 화면으로 돌아간다.
+    // 탭 이동은 시작 화면까지 비우므로 그 화면이 뒤 스택에 남지 않아 따로 기억해 둔다.
+    var returnRoute by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(currentRoute, seriesSelectedSeries) {
         // 다른 탭으로 가거나 시리즈를 다른 방법으로 닫으면 더는 돌아가지 않는다.
-        if (currentRoute != BottomNavItem.Series.route || seriesSelectedSeries == null) returnToNews = false
+        if (currentRoute != BottomNavItem.Series.route || seriesSelectedSeries == null) returnRoute = null
     }
 
     /** 소식 화면을 새로 연다. 지난번 필터·스크롤 위치는 지운다. */
@@ -166,13 +171,29 @@ fun MainScreen(
         navController.navigate("news") { launchSingleTop = true }
     }
 
-    fun backToNews() {
-        returnToNews = false
-        // 소식은 이동할 때 닫았으므로 마이페이지 탭으로 돌아간 뒤 다시 연다.
+    fun backToReturnRoute() {
+        val route = returnRoute ?: return
+        returnRoute = null
+        // 소식·변경된 굿즈는 이동할 때 닫았으므로 마이페이지 탭으로 돌아간 뒤 다시 연다.
         navigateToTab(BottomNavItem.MyPage.route)
-        if (navController.currentDestination?.route != "news") {
-            navController.navigate("news") { launchSingleTop = true }
+        if (navController.currentDestination?.route != route) {
+            navController.navigate(route) { launchSingleTop = true }
         }
+    }
+
+    /** [route] 화면(소식·변경된 굿즈)에서 굿즈가 있는 시리즈로 옮겨 그 굿즈를 보여 준다. */
+    fun openGoodsFrom(route: String, focus: GoodsFocus) {
+        if (seriesViewModel.seriesList.value.none { it.seriesNm == focus.series }) {
+            // 원본 데이터에서 시리즈가 없어진 경우. 기록은 그대로 남는다.
+            Toast.makeText(context, "시리즈를 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 화면을 띄운 채로 탭을 옮기면 마이페이지 탭 상태에 그 화면까지 저장돼,
+        // 나중에 마이페이지 탭을 누를 때 그 화면이 다시 열린다. 먼저 닫고 옮긴다.
+        navController.popBackStack(route, inclusive = true)
+        navigateToSeries(focus.series)
+        seriesViewModel.focusGoods(focus)
+        returnRoute = route
     }
 
     // 알림을 눌러 들어오면 해당 위치로 이동한다.
@@ -217,7 +238,7 @@ fun MainScreen(
                         filterViewModel = filterViewModel,
                         detailViewModel = detailViewModel,
                         listModeViewModel = listModeViewModel,
-                        onSeriesClosed = { if (returnToNews) backToNews() }
+                        onSeriesClosed = { backToReturnRoute() }
                     )
                 }
                 composable(BottomNavItem.Character.route) {
@@ -258,6 +279,12 @@ fun MainScreen(
                         pendingListModeViewModel = pendingListModeViewModel,
                         onThemeChange = { currentOnThemeChange(it) },
                         onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToChangedGoods = {
+                            // 새로 열 때마다 미처리만 보이는 처음 상태로 연다.
+                            changedGoodsViewModel.setProcessFilter(ProcessFilter.TODO)
+                            changedGoodsListState = LazyListState()
+                            navController.navigate("changed_goods") { launchSingleTop = true }
+                        },
                         onNavigateToNews = { openNews() },
                         onNavigateToSeries = { navigateToSeries(it) }
                     )
@@ -275,19 +302,23 @@ fun MainScreen(
                         listState = newsListState,
                         onNavigateBack = { navController.popBackStack() },
                         onNavigateToGoods = { news ->
-                            if (seriesViewModel.seriesList.value.none { it.seriesNm == news.newsSeries }) {
-                                // 원본 데이터에서 시리즈가 없어진 경우. 소식에 그대로 남는다.
-                                Toast.makeText(context, "시리즈를 찾을 수 없습니다", Toast.LENGTH_SHORT).show()
-                            } else {
-                                // 소식을 띄운 채로 탭을 옮기면 마이페이지 탭 상태에 소식까지 저장돼,
-                                // 나중에 마이페이지 탭을 누를 때 소식 화면이 다시 열린다. 먼저 닫고 옮긴다.
-                                navController.popBackStack("news", inclusive = true)
-                                navigateToSeries(news.newsSeries)
-                                seriesViewModel.focusGoods(
-                                    GoodsFocus(news.newsSeries, news.newsChara, news.newsCategory, news.newsPrice)
-                                )
-                                returnToNews = true
-                            }
+                            openGoodsFrom(
+                                "news",
+                                GoodsFocus(news.newsSeries, news.newsChara, news.newsCategory, news.newsPrice)
+                            )
+                        }
+                    )
+                }
+                composable("changed_goods") {
+                    ChangedGoodsScreen(
+                        viewModel = changedGoodsViewModel,
+                        listState = changedGoodsListState,
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToGoods = { goods ->
+                            openGoodsFrom(
+                                "changed_goods",
+                                GoodsFocus(goods.goodsSeries, goods.goodsChara, goods.goodsCategory, goods.goodsPrice)
+                            )
                         }
                     )
                 }

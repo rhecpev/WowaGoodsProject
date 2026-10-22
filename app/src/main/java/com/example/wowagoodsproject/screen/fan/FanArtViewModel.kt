@@ -1,5 +1,7 @@
 package com.example.wowagoodsproject.screen.fan
 
+import com.example.wowagoodsproject.db.fan.deleteWithImage
+
 import com.example.wowagoodsproject.db.fan.setQuantity
 import com.example.wowagoodsproject.db.fan.applyStatus
 import com.example.wowagoodsproject.db.fan.savePending
@@ -74,7 +76,7 @@ class FanArtViewModel : ViewModel() {
 
     fun delete(goods: FanGoodsEntity) {
         viewModelScope.launch {
-            App.fanDatabase.fanGoodsDao().delete(goods)
+            App.fanDatabase.fanGoodsDao().deleteWithImage(goods)
             loadGoods()
         }
     }

@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.wowagoodsproject.db.convertIntegerColumnToText
 
 @Database(entities = [FanGoodsEntity::class], version = 7)
 abstract class FanGoodsDatabase : RoomDatabase() {
@@ -18,6 +19,7 @@ abstract class FanGoodsDatabase : RoomDatabase() {
 
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                db.convertIntegerColumnToText("tb_fan_goods", "fanGoodsPrice")
                 db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsStatus TEXT NOT NULL DEFAULT 'NOT_GOTTEN'")
                 db.execSQL("UPDATE tb_fan_goods SET fanGoodsStatus = 'GOTTEN' WHERE fanGoodsIsGotten = 1")
             }

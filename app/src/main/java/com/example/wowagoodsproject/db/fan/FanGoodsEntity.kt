@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.wowagoodsproject.component.GoodsItem
 import com.example.wowagoodsproject.component.GoodsStatus
+import com.example.wowagoodsproject.component.goodsStatusOf
 import com.example.wowagoodsproject.component.PurchaseInfo
 
 @Entity(tableName = "tb_fan_goods")
@@ -31,7 +32,7 @@ data class FanGoodsEntity(
     override val category get() = fanGoodsCategory
     override val price get() = fanGoodsPrice
     override val isGotten get() = fanGoodsStatus == GoodsStatus.GOTTEN.name
-    override val status get() = GoodsStatus.valueOf(fanGoodsStatus)
+    override val status get() = goodsStatusOf(fanGoodsStatus)
     override val memo get() = fanGoodsMemo
     override val purchaseDate get() = fanGoodsPurchaseDate
     override val purchaseStore get() = fanGoodsPurchaseStore

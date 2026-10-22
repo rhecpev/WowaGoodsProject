@@ -65,9 +65,9 @@ fun SetGoodsDetailDialog(
         components.sortedWith(
             compareByDescending<GoodsEntity> { component ->
                 when {
-                    (highlightChara != null && component.chara.contains(highlightChara)) &&
+                    (highlightChara != null && hasChara(component.chara, highlightChara)) &&
                             (highlightCategory != null && component.category == highlightCategory) -> 2
-                    (highlightChara != null && component.chara.contains(highlightChara)) ||
+                    (highlightChara != null && hasChara(component.chara, highlightChara)) ||
                             (highlightCategory != null && component.category == highlightCategory) -> 1
                     else -> 0
                 }
@@ -373,8 +373,8 @@ private fun ComponentList(
                 val isSelected = selectedId == component.goodsId
                 val isHighlighted = when {
                     highlightChara != null && highlightCategory != null ->
-                        component.chara.contains(highlightChara) && component.category == highlightCategory
-                    highlightChara != null -> component.chara.contains(highlightChara)
+                        hasChara(component.chara, highlightChara) && component.category == highlightCategory
+                    highlightChara != null -> hasChara(component.chara, highlightChara)
                     highlightCategory != null -> component.category == highlightCategory
                     else -> false
                 }

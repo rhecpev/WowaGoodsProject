@@ -42,6 +42,10 @@ const val CATEGORY_SET = "세트"
 const val CATEGORY_COMPONENT = "구성품"
 
 enum class GoodsStatus { GOTTEN, NOT_GOTTEN, PENDING }
+
+/** DB·백업에 적힌 상태 문자열을 읽는다. 모르는 값이면 앱이 꺼지지 않게 미보유로 본다. */
+fun goodsStatusOf(name: String?): GoodsStatus =
+    GoodsStatus.entries.firstOrNull { it.name == name } ?: GoodsStatus.NOT_GOTTEN
 enum class GottenStatus { GOTTEN, NOT_GOTTEN, PARTIAL, PENDING }
 
 /** 한글 등 비 ASCII 문자가 섞인 이미지 URL을 Coil이 읽을 수 있게 인코딩한다. */

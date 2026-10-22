@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.wowagoodsproject.component.GoodsItem
 import com.example.wowagoodsproject.component.GoodsStatus
+import com.example.wowagoodsproject.component.goodsStatusOf
 import com.example.wowagoodsproject.component.PurchaseInfo
 
 @Entity(tableName = "tb_goods")
@@ -23,7 +24,9 @@ data class GoodsEntity(
     val goodsPurchaseStore: String = "",
     val goodsReceiveDate: String = "",
     val goodsQuantity: Int = 1,
-    val goodsShippingDate: String = ""
+    val goodsShippingDate: String = "",
+    /** 원본 데이터(goods.json)가 굿즈마다 붙인 바뀌지 않는 번호. 0 이면 아직 번호를 받지 못한 굿즈. */
+    val goodsUid: Int = 0
 ) : GoodsItem {
     override val imgPath get() = goodsUrl
     override val series get() = goodsSeries
@@ -31,7 +34,7 @@ data class GoodsEntity(
     override val category get() = goodsCategory
     override val price get() = goodsPrice
     override val isGotten get() = goodsStatus == GoodsStatus.GOTTEN.name
-    override val status get() = GoodsStatus.valueOf(goodsStatus)
+    override val status get() = goodsStatusOf(goodsStatus)
     override val memo get() = goodsMemo
     override val purchaseDate get() = goodsPurchaseDate
     override val purchaseStore get() = goodsPurchaseStore

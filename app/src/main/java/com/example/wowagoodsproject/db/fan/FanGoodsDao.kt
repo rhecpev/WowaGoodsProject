@@ -32,15 +32,13 @@ interface FanGoodsDao {
     @Delete
     suspend fun delete(fanGoods: FanGoodsEntity)
 
-    @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsChara LIKE '%' || :chara || '%' ORDER BY fanGoodsReleaseDate DESC")
-    fun getByCharaFlow(chara: String): Flow<List<FanGoodsEntity>>
-
     @Query("DELETE FROM tb_fan_goods")
     suspend fun deleteAll()
 
     @Query("SELECT DISTINCT fanGoodsCategory FROM tb_fan_goods WHERE fanGoodsCategory != ''")
     suspend fun getFanCategories(): List<String>
 
+    /** 글자 일부도 맞는다. 부르는 쪽에서 hasChara 로 한 번 더 거른다. */
     @Query("SELECT * FROM tb_fan_goods WHERE fanGoodsChara LIKE '%' || :chara || '%' ORDER BY fanGoodsId DESC")
     suspend fun getByChara(chara: String): List<FanGoodsEntity>
     @Insert

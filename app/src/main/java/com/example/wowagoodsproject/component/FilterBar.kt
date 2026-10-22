@@ -97,6 +97,40 @@ fun PendingInfoFilterBar(
     }
 }
 
+/** 변경된 굿즈의 처리 여부 필터. 처리 = 그 화면에서 다이얼로그로 굿즈를 고쳐 확인 표시가 붙은 기록. */
+enum class ProcessFilter(val label: String) {
+    ALL("전체"),
+    DONE("처리"),
+    TODO("미처리")
+}
+
+/**
+ * 변경된 굿즈 목록의 처리 여부 필터. [FilterBar] 의 보유 상태 칩과 같은 자리·모양이다.
+ * [doneCount] 는 처리된 기록 수, [totalCount] 는 전체 기록 수다.
+ */
+@Composable
+fun ProcessFilterBar(
+    selected: ProcessFilter,
+    onSelect: (ProcessFilter) -> Unit,
+    totalCount: Int,
+    doneCount: Int
+) {
+    FilterRow(selectionMode = false, onToggleSelection = null) {
+        ProcessFilter.entries.forEach { filter ->
+            CountFilterChip(
+                label = filter.label,
+                count = when (filter) {
+                    ProcessFilter.ALL -> totalCount
+                    ProcessFilter.DONE -> doneCount
+                    ProcessFilter.TODO -> totalCount - doneCount
+                },
+                selected = filter == selected,
+                onClick = { onSelect(filter) }
+            )
+        }
+    }
+}
+
 /**
  * 필터 줄의 틀. 다중 선택 버튼은 왼쪽에 고정하고, 칩들만 그 오른쪽에서 가로로 스크롤한다.
  * 칩이 많아 옆으로 밀어도 다중 선택 버튼은 항상 보인다.

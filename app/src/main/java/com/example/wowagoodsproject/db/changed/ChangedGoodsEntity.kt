@@ -4,11 +4,11 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * 보유 중이거나 구매 예정이던 굿즈가 데이터 업데이트로 사라졌을 때의 보관 기록.
+ * 보유 중이거나 구매 예정이던 굿즈가 데이터 업데이트로 바뀌었을 때의 기록. 마이페이지의 변경된 굿즈에 보여 준다.
  *
- * 굿즈의 고유 키가 `시리즈|캐릭터|카테고리|가격|메모` 라서 가격이나 메모가 바뀌면
- * 수정이 아니라 삭제 + 추가로 처리된다. 그 과정에서 사용자가 직접 표시해 둔
- * 보유/구매예정 상태가 함께 사라지므로, 사라지기 직전의 정보를 여기에 남겨 둔다.
+ * - 정보 변경([statusKept]): 굿즈 번호가 같아 가격·메모·이미지 등만 고쳤고, 상태는 그대로다.
+ * - 대체·삭제: 굿즈가 원본에서 사라져 상태도 함께 사라졌다. 사라지기 직전의 정보를 남겨 두고,
+ *   대체 항목이 있으면 그 굿즈에 상태를 되돌릴 수 있다.
  */
 @Entity(tableName = "tb_changed_goods")
 data class ChangedGoodsEntity(
@@ -44,10 +44,20 @@ data class ChangedGoodsEntity(
     val oldShippingDate: String = "",
 
     /** 사용자가 상태를 되돌렸는지 */
-    val isRestored: Boolean = false
+    val isRestored: Boolean = false,
+
+    /** 같은 굿즈의 정보만 바뀌어 상태가 그대로 남았는지. 되돌릴 것이 없다. */
+    val statusKept: Boolean = false,
+    /** 바뀐 뒤 굿즈의 번호(goodsUid). 0 이면 내용(new* 칸)으로 찾는다. */
+    val newUid: Int = 0,
+    /** 변경된 굿즈 화면에서 다이얼로그를 열어 이 굿즈의 상태·수량 등을 고쳤는지(확인 표시) */
+    val isChecked: Boolean = false
 ) {
     /** 대체 항목이 있어야 상태를 되돌릴 수 있다. */
-    val canRestore: Boolean get() = !isRestored && newSeries.isNotEmpty()
+    val canRestore: Boolean get() = !isRestored && !statusKept && newSeries.isNotEmpty()
+
+    /** 원본에서 완전히 사라져 옮겨 갈 굿즈가 없는 기록 */
+    val isDeleted: Boolean get() = newSeries.isEmpty()
 
     val detailLines: List<String> get() = changedDetail.split("\n").filter { it.isNotBlank() }
 }

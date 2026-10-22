@@ -3,6 +3,7 @@ package com.example.wowagoodsproject.screen.fan
 import com.example.wowagoodsproject.component.GoodsStatus
 import android.content.Context
 import android.net.Uri
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.wowagoodsproject.App
@@ -93,13 +94,20 @@ class FanAddViewModel : ViewModel() {
 
     private suspend fun copyImageToInternalStorage(context: Context, uri: Uri): String {
         return withContext(Dispatchers.IO) {
+            // 사진을 못 열면 없는 파일 경로를 저장하지 않고 실패로 알린다.
             val inputStream = context.contentResolver.openInputStream(uri)
+                ?: throw IllegalStateException("사진을 읽을 수 없습니다")
             val fileName = "fan_${UUID.randomUUID()}.jpg"
             val file = File(context.filesDir, fileName)
-            inputStream?.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
+            try {
+                inputStream.use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
+            } catch (e: Exception) {
+                file.delete() // 반쯤 쓴 사진을 남기지 않는다
+                throw e
             }
             file.absolutePath
         }
@@ -113,12 +121,17 @@ class FanAddViewModel : ViewModel() {
         if (_isSaving.value) return
         _isSaving.value = true
         viewModelScope.launch {
-            try {
+            // 저장소가 가득 찼거나 사진 권한이 사라지면 복사가 실패한다. 앱이 꺼지지 않게 알리고 화면에 남는다.
+            val saved = try {
                 saveGoods(context)
+                true
+            } catch (e: Exception) {
+                Toast.makeText(context, "저장 실패: ${e.message}", Toast.LENGTH_LONG).show()
+                false
             } finally {
                 _isSaving.value = false
             }
-            onSuccess()
+            if (saved) onSuccess()
         }
     }
 
