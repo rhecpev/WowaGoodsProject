@@ -63,7 +63,8 @@ import com.example.wowagoodsproject.navigation.TopBarAction
 
 /**
  * 굿즈 검색 탭. 공식/2차창작 굿즈를 한꺼번에 찾는다.
- * 위쪽 왼쪽에서 캐릭터, 오른쪽에서 카테고리를 고르면 둘 다 맞는 굿즈만 남긴다. 하나만 골라도 된다.
+ * 맨 위 검색창에 글자를 넣으면 시리즈·캐릭터·카테고리·메모·가격에 그 낱말이 모두 들어 있는 굿즈를 찾는다.
+ * 그 아래 왼쪽에서 캐릭터, 오른쪽에서 카테고리를 고르면 둘 다 맞는 굿즈만 남긴다. 셋 중 하나만 써도 된다.
  * 그 결과를 보유 상태로 한 번 더 거를 수 있고, 다중 선택으로 여러 굿즈의 상태를 한꺼번에 바꿀 수 있다.
  */
 @Composable
@@ -74,6 +75,7 @@ fun SearchScreen(
     listModeViewModel: ListModeViewModel = viewModel(),
     onNavigateToSeries: (String) -> Unit = {}
 ) {
+    val query by viewModel.query.collectAsState()
     val charaFilter by viewModel.charaFilter.collectAsState()
     val categoryFilter by viewModel.categoryFilter.collectAsState()
     val statusFilter by viewModel.statusFilter.collectAsState()
@@ -96,30 +98,35 @@ fun SearchScreen(
 
     // 세트 굿즈는 다른 목록처럼 노출하지 않고 구성품만 보여준다.
     val listedOfficial = remember(officialGoods) { officialGoods.filter { it.category != CATEGORY_SET } }
-    val hasFilter = charaFilter != null || categoryFilter != null
-    val officialResults = remember(listedOfficial, charaFilter, categoryFilter) {
-        if (!hasFilter) emptyList()
-        else listedOfficial.filter { it.hasChara(charaFilter) && it.hasCategory(categoryFilter) }
+    val words = remember(query) { searchWords(query) }
+    val hasFilter = words.isNotEmpty() || charaFilter != null || categoryFilter != null
+    // 검색어에 맞는 굿즈. 캐릭터·카테고리 결과와 고를 수 있는 값 모두 이 안에서 찾는다.
+    val textMatched = remember(listedOfficial, fanGoods, words) {
+        listedOfficial.filter { it.hasWords(words) } to fanGoods.filter { it.hasWords(words) }
     }
-    val fanResults = remember(fanGoods, charaFilter, categoryFilter) {
+    val officialResults = remember(textMatched, charaFilter, categoryFilter) {
         if (!hasFilter) emptyList()
-        else fanGoods.filter { it.hasChara(charaFilter) && it.hasCategory(categoryFilter) }
+        else textMatched.first.filter { it.hasChara(charaFilter) && it.hasCategory(categoryFilter) }
+    }
+    val fanResults = remember(textMatched, charaFilter, categoryFilter) {
+        if (!hasFilter) emptyList()
+        else textMatched.second.filter { it.hasChara(charaFilter) && it.hasCategory(categoryFilter) }
     }
     // 화면에 실제로 보여 줄 목록: 위 결과를 보유 상태로 한 번 더 거른다.
     val shownOfficial = remember(officialResults, statusFilter) { officialResults.filter { it.hasStatus(statusFilter) } }
     val shownFan = remember(fanResults, statusFilter) { fanResults.filter { it.hasStatus(statusFilter) } }
 
     // 고를 수 있는 값은 다른 쪽 필터에 맞는 굿즈에 실제로 있는 것만 보여 주어, 결과가 없는 조합을 고르지 않게 한다.
-    val charaChoices = remember(listedOfficial, fanGoods, categoryFilter, allCharaList) {
-        val names = (listedOfficial + fanGoods)
+    val charaChoices = remember(textMatched, categoryFilter, allCharaList) {
+        val names = (textMatched.first + textMatched.second)
             .filter { it.hasCategory(categoryFilter) }
             .flatMap { it.charaNames() }
             .toSet()
         allCharaList.filter { it.charaNm in names }
             .sortedWith(compareByDescending<CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm })
     }
-    val categoryChoices = remember(listedOfficial, fanGoods, charaFilter) {
-        (listedOfficial + fanGoods)
+    val categoryChoices = remember(textMatched, charaFilter) {
+        (textMatched.first + textMatched.second)
             .filter { it.hasChara(charaFilter) }
             .map { it.category }
             .filter { it.isNotEmpty() && it != CATEGORY_SET }
@@ -296,6 +303,13 @@ fun SearchScreen(
             }
         )
 
+        SearchField(
+            query = query,
+            onQueryChange = { viewModel.setQuery(it) },
+            placeholder = "시리즈, 캐릭터, 카테고리, 메모로 검색",
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)
+        )
+
         // 가로 화면에서는 캐릭터·카테고리 고르기와 상태 필터를 왼쪽 세로 줄들로 옮겨 목록이 쓸 높이를 넓힌다.
         // 상태 필터 줄이 맨 왼쪽, 캐릭터·카테고리 줄이 그 오른쪽에 선다.
         SidePanelLayout(
@@ -364,12 +378,12 @@ fun SearchScreen(
                     !hasFilter -> EmptyState(
                         icon = Icons.Default.Search,
                         title = "굿즈를 검색해 보세요",
-                        message = "캐릭터나 카테고리를 고르면\n공식 굿즈와 2차창작 굿즈를 한꺼번에 찾습니다."
+                        message = "검색어를 넣거나 캐릭터·카테고리를 고르면\n공식 굿즈와 2차창작 굿즈를 한꺼번에 찾습니다.\n여러 낱말을 띄어 쓰면 모두 들어간 굿즈만 나옵니다."
                     )
                     shownOfficial.isEmpty() && shownFan.isEmpty() -> EmptyState(
                         icon = Icons.Outlined.SearchOff,
                         title = "검색 결과가 없습니다",
-                        message = "다른 조건을 골라 보세요"
+                        message = "다른 검색어를 넣거나 조건을 바꿔 보세요"
                     )
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         val onClick: (GoodsItem) -> Unit = { item ->
@@ -421,6 +435,17 @@ private fun GoodsItem.hasChara(name: String?): Boolean = name == null || name in
 
 /** [name] 이 null 이면 거르지 않는다. */
 private fun GoodsItem.hasCategory(name: String?): Boolean = name == null || category == name
+
+/** 검색창 글자를 띄어쓰기로 나눈 낱말들(소문자). 비어 있으면 검색어로 거르지 않는다. */
+internal fun searchWords(query: String): List<String> =
+    query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+
+/** 낱말이 모두 시리즈·캐릭터·카테고리·메모·가격 어딘가에 들어 있는지. 대소문자는 가리지 않는다. */
+internal fun GoodsItem.hasWords(words: List<String>): Boolean {
+    if (words.isEmpty()) return true
+    val text = listOf(series, chara, category, memo, price).joinToString(" ").lowercase()
+    return words.all { it in text }
+}
 
 /**
  * 필터 하나를 고르는 버튼. 고르기 전에는 이름([label])만, 고른 뒤에는 고른 값과 지우기(X)를 보여준다.

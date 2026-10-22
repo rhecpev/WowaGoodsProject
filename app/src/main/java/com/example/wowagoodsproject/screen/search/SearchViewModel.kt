@@ -26,8 +26,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-/** 굿즈 검색 탭. 공식/2차창작 굿즈 전체를 지켜보고, 화면에서 캐릭터·카테고리로 거른다. */
+/** 굿즈 검색 탭. 공식/2차창작 굿즈 전체를 지켜보고, 화면에서 검색어·캐릭터·카테고리로 거른다. */
 class SearchViewModel : ViewModel() {
+
+    /** 검색창에 넣은 글자. 띄어 쓴 낱말이 모두 들어 있는 굿즈만 남긴다. */
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query
 
     /** 고른 캐릭터 이름. null 이면 캐릭터로 거르지 않는다. */
     private val _charaFilter = MutableStateFlow<String?>(null)
@@ -66,6 +70,10 @@ class SearchViewModel : ViewModel() {
         }
     }
 
+    fun setQuery(query: String) {
+        _query.value = query
+    }
+
     fun setCharaFilter(chara: String?) {
         _charaFilter.value = chara
     }
@@ -79,6 +87,7 @@ class SearchViewModel : ViewModel() {
     }
 
     fun clearFilters() {
+        _query.value = ""
         _charaFilter.value = null
         _categoryFilter.value = null
         _statusFilter.value = FilterType.ALL

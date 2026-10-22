@@ -21,7 +21,7 @@ data class ReleaseSection(val title: String, val items: List<String>)
 object ReleaseNotes {
 
     private val notes: Map<String, List<ReleaseSection>> = mapOf(
-        "3.0" to listOf(
+        "2.6" to listOf(
             ReleaseSection(
                 "🔒 보유 기록 지키기",
                 listOf(
