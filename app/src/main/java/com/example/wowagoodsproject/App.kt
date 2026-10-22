@@ -105,7 +105,6 @@ class App : Application() {
         ).build()
 
         DailySchedule.schedule(this)
-        DriveSync.watch(this)
 
 
     }

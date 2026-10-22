@@ -25,7 +25,8 @@ interface ChangedGoodsDao {
     @Insert
     suspend fun insert(changed: ChangedGoodsEntity): Long
 
-    @Query("UPDATE tb_changed_goods SET isRestored = 1 WHERE changedId = :id")
+    /** 상태를 되돌린 것도 고친 것이므로 처리(확인 표시)로 넘긴다. */
+    @Query("UPDATE tb_changed_goods SET isRestored = 1, isChecked = 1 WHERE changedId = :id")
     suspend fun markRestored(id: Int)
 
     @Query("UPDATE tb_changed_goods SET isChecked = 1 WHERE changedId IN (:ids)")

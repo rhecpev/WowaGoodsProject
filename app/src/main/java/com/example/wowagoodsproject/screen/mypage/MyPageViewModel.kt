@@ -155,12 +155,6 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
-    fun loadGottenGoods() {
-        viewModelScope.launch {
-            applyGoods(App.database.goodsDao().getAll(), App.fanDatabase.fanGoodsDao().getAll())
-        }
-    }
-
     private fun applyGoods(allGoods: List<GoodsEntity>, allFanGoods: List<FanGoodsEntity>) {
         // 세트 굿즈는 카운트/목록에서 제외하고 낱개 굿즈만 집계한다.
         // 구매예정은 '구매예정 굿즈' 페이지에서 따로 보므로 여기서는 보유만 센다.
@@ -354,7 +348,6 @@ class MyPageViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, report.message(), Toast.LENGTH_LONG).show()
                 }
-                loadGottenGoods()
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, "입력 실패: ${e.message}", Toast.LENGTH_LONG).show()

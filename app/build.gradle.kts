@@ -85,7 +85,5 @@ dependencies {
     implementation(libs.gson)
     implementation("io.coil-kt:coil-gif:2.6.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-    // 구글 드라이브 연동(DriveSync): drive.appdata 권한 받기
-    implementation("com.google.android.gms:play-services-auth:21.5.1")
 
 }

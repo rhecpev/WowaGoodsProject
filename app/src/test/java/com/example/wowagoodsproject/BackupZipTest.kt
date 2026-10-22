@@ -301,6 +301,26 @@ class BackupZipTest {
     }
 
     @Test
+    fun 깨진_백업이면_풀어_둔_사진도_남기지_않는다() = runBlocking {
+        seedOfficial()
+        restoreFails(zipOf(
+            "fan_goods.json" to "[]".toByteArray(),
+            "images/fan_new.jpg" to "x".toByteArray(),
+            "official_gotten.json" to "{}".toByteArray()
+        ))
+        assertEquals(emptySet<String>(), filesDir.list()!!.toSet())
+    }
+
+    @Test
+    fun 굿즈_데이터를_받기_전이라_멈춰도_풀어_둔_사진을_남기지_않는다() = runBlocking {
+        restoreFails(zipOf(
+            "images/fan_new2.jpg" to "y".toByteArray(),
+            "official_gotten.json" to """[{"goodsSeries":"1.0버전","goodsChara":"감심","goodsCategory":"인형","goodsStatus":"GOTTEN"}]""".toByteArray()
+        ))
+        assertEquals(emptySet<String>(), filesDir.list()!!.toSet())
+    }
+
+    @Test
     fun 빈_항목이_섞여_있으면_그_항목만_버린다() = runBlocking {
         seedOfficial()
         restore(zipOf(

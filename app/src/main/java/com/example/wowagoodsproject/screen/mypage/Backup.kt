@@ -221,6 +221,8 @@ object BackupZip {
     private const val FAN = "fan_goods.json"
     private const val FAVORITES = "favorite_charas.json"
     private const val IMAGES = "images"
+    /** 불러오는 동안 사진을 잠시 풀어 두는 폴더(앱 폴더 안) */
+    private const val STAGING = ".restore_staging"
 
     /** 백업 zip 을 [zipFile] 에 만든다. */
     suspend fun write(zipFile: File) = withContext(Dispatchers.IO) {
@@ -261,6 +263,22 @@ object BackupZip {
         filesDir: File,
         onProgress: (Float) -> Unit = {}
     ): RestoreReport = withContext(Dispatchers.IO) {
+        // 사진은 먼저 임시 폴더에 풀고, 백업을 모두 확인한 뒤에 앱 폴더로 옮긴다.
+        // 깨진 백업이라 멈추면 풀어 둔 사진도 남기지 않는다.
+        val staging = File(filesDir, STAGING).apply { deleteRecursively(); mkdirs() }
+        try {
+            restoreWith(input, filesDir, staging, onProgress)
+        } finally {
+            staging.deleteRecursively()
+        }
+    }
+
+    private suspend fun restoreWith(
+        input: InputStream,
+        filesDir: File,
+        staging: File,
+        onProgress: (Float) -> Unit
+    ): RestoreReport = withContext(Dispatchers.IO) {
         var fanJson: String? = null
         var officialJson: String? = null
         var favoriteJson: String? = null
@@ -276,8 +294,8 @@ object BackupZip {
                     parts.size >= 2 && parts[parts.size - 2] == IMAGES -> {
                         // 경로는 버리고 파일 이름만 써서, zip 안의 "../" 같은 경로로 앱 폴더 밖에 쓰지 않게 한다.
                         // 사진을 메모리에 모아 두지 않고 바로 파일로 써서, 사진이 많아도 메모리가 넘치지 않는다.
-                        if (name != "." && name != "..") {
-                            File(filesDir, name).outputStream().use { zip.copyTo(it) }
+                        if (name != "." && name != ".." && name != STAGING) {
+                            File(staging, name).outputStream().use { zip.copyTo(it) }
                         }
                     }
                     name == FAN -> fanJson = zip.bufferedReader().readText()
@@ -313,6 +331,12 @@ object BackupZip {
         // 굿즈 데이터를 아직 받지 않았으면 짝을 하나도 못 찾아 보유 기록이 모두 사라진다.
         if (officialBackups.orEmpty().any { it.isOwned } && App.database.goodsDao().count() == 0) {
             throw IllegalStateException("굿즈 데이터가 아직 없습니다. 마이페이지에서 수동 업데이트를 한 뒤 다시 불러오세요")
+        }
+
+        // 확인을 마쳤으니 풀어 둔 사진을 앱 폴더로 옮긴다. 같은 이름이 있으면 백업 것으로 바꾼다.
+        staging.listFiles()?.forEach { photo ->
+            val target = File(filesDir, photo.name)
+            if (!photo.renameTo(target)) photo.copyTo(target, overwrite = true)
         }
 
         fanBackups?.let { backups ->
