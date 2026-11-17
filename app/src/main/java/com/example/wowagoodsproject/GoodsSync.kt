@@ -96,3 +96,24 @@ internal fun planGoodsSync(local: List<GoodsEntity>, remote: List<GoodsEntity>):
         deletes = local.filter { it.goodsId !in usedLocalIds }
     )
 }
+
+/** 같은 사진을 다른 형식으로 다시 올린 것으로 보는 확장자 */
+private val IMAGE_FORMATS = setOf("png", "jpg", "jpeg", "webp", "gif", "avif")
+
+/**
+ * 사진 주소가 형식(확장자)만 바뀐 것인지. 예: `…/12.png` → `…/12.webp`.
+ * 원본 저장소의 사진을 WebP 등으로 바꿔 올릴 때, 보유 굿즈마다 '이미지 변경' 기록·소식이 쏟아지지 않게
+ * 이 경우는 바뀐 것으로 치지 않는다(주소는 새 값으로 저장된다). 쿼리·조각(?…, #…)은 비교에서 뺀다.
+ */
+internal fun isImageFormatOnlyChange(old: String, new: String): Boolean {
+    if (old.isBlank() || new.isBlank() || old == new) return false
+    fun split(url: String): Pair<String, String>? {
+        val path = url.substringBefore('#').substringBefore('?')
+        val name = path.substringAfterLast('/')
+        if ('.' !in name) return null
+        return path.substringBeforeLast('.') to path.substringAfterLast('.').lowercase()
+    }
+    val (oldBase, oldExt) = split(old) ?: return false
+    val (newBase, newExt) = split(new) ?: return false
+    return oldBase == newBase && oldExt != newExt && oldExt in IMAGE_FORMATS && newExt in IMAGE_FORMATS
+}

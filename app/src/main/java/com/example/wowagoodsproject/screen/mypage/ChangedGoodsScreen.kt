@@ -17,6 +17,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +81,8 @@ fun ChangedGoodsScreen(
 
     if (showClearCheckedDialog) {
         AlertDialog(
+            // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+            shape = RectangleShape,
             onDismissRequest = { showClearCheckedDialog = false },
             title = { Text("체크완료 삭제") },
             text = { Text("처리한 기록 ${doneCount}개를 삭제할까요?") },
@@ -96,6 +100,8 @@ fun ChangedGoodsScreen(
 
     if (showClearDialog) {
         AlertDialog(
+            // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+            shape = RectangleShape,
             onDismissRequest = { showClearDialog = false },
             title = { Text("기록 전체 삭제") },
             text = { Text("변경 기록 ${items.size}개를 모두 삭제할까요?\n삭제하면 초기화된 상태를 되돌릴 수 없습니다.") },
@@ -150,8 +156,8 @@ fun ChangedGoodsScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
-                contentPadding = PaddingValues(vertical = AppStyles.paddingSmall),
-                verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
+                // 항목마다 아래 구분선이 있어 항목 사이 간격은 두지 않는다.
+                contentPadding = PaddingValues(vertical = AppStyles.paddingSmall)
             ) {
                 items(filteredItems, key = { it.record.changedId }) { item ->
                     ChangedGoodsCard(
@@ -193,19 +199,27 @@ private fun ChangedGoodsCard(
     val encodedPath = encodeGoodsImagePath(current?.goodsUrl ?: record.oldUrl)
 
     // 열 굿즈가 없으면 누를 수 없다. 버튼(바로가기·되돌리기·삭제)은 각자 눌림을 받는다.
-    Card(
-        onClick = onOpen,
-        enabled = current != null,
+    // 소식 화면과 같이 박스 없이 왼쪽에 기록 종류 색의 세로선을 긋고 항목 아래를 얇은 선으로 나눈다.
+    // 카드 배경(surface)은 밝은 테마에서 바탕과 거의 같아 항목 경계가 보이지 않았다.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppStyles.paddingMedium),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            disabledContainerColor = MaterialTheme.colorScheme.surface,
-            disabledContentColor = MaterialTheme.colorScheme.onSurface
-        )
+            .clickable(enabled = current != null, onClick = onOpen)
+            .padding(horizontal = AppStyles.paddingMedium)
     ) {
-        Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(vertical = AppStyles.paddingSmall)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(kindColor)
+        )
+        Column(modifier = Modifier.padding(start = AppStyles.paddingMedium, top = 4.dp, bottom = 4.dp)) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -297,7 +311,7 @@ private fun ChangedGoodsCard(
 
             if (record.detailLines.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     record.detailLines.forEach { line ->
@@ -311,12 +325,15 @@ private fun ChangedGoodsCard(
             }
             if (record.canRestore) {
                 Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                OutlinedButton(
+                TextButton(
                     onClick = onRestore,
+                    shape = RectangleShape,
                     modifier = Modifier.align(Alignment.End)
-                ) { Text("이전 상태로 되돌리기") }
+                ) { Text("이전 상태로 되돌리기", fontWeight = FontWeight.Bold) }
             }
         }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -451,9 +468,6 @@ private fun StatusPill(text: String, color: Color) {
         text = text,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
-        color = color,
-        modifier = Modifier
-            .background(color.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+        color = color
     )
 }

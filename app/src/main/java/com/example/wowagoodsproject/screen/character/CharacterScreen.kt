@@ -2,6 +2,7 @@ package com.example.wowagoodsproject.screen.character
 
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import android.os.SystemClock
 import com.example.wowagoodsproject.component.BulkStatusButtons
 import com.example.wowagoodsproject.component.BulkSelectionSlot
 import com.example.wowagoodsproject.component.BulkSelection
@@ -33,6 +34,24 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.zIndex
+import com.example.wowagoodsproject.component.mergeFavoriteOrder
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
@@ -49,11 +68,10 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.component.ActiveFilter
 import com.example.wowagoodsproject.component.ActiveFilterChips
 import com.example.wowagoodsproject.component.CATEGORY_SET
-import com.example.wowagoodsproject.component.CategoryChoiceList
 import com.example.wowagoodsproject.component.EmptyState
 import com.example.wowagoodsproject.component.FanGoodsListContent
 import com.example.wowagoodsproject.component.FilterBar
-import com.example.wowagoodsproject.component.FilterDialogFrame
+import com.example.wowagoodsproject.component.LineTab
 import com.example.wowagoodsproject.component.FilterType
 import com.example.wowagoodsproject.component.FilterViewModel
 import com.example.wowagoodsproject.component.GoodsDetailDialog
@@ -65,6 +83,8 @@ import com.example.wowagoodsproject.component.SearchField
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
+import com.example.wowagoodsproject.component.seriesOptions
+import com.example.wowagoodsproject.component.GoodsFilterDialog
 import com.example.wowagoodsproject.component.findSetGoods
 import com.example.wowagoodsproject.component.getSetComponents
 import com.example.wowagoodsproject.db.character.CharaEntity
@@ -95,10 +115,10 @@ fun CharacterScreen(
     val showFavoriteOnly by viewModel.showFavoriteOnly.collectAsState()
     val charaGoodsCountMap by viewModel.charaGoodsCountMap.collectAsState()
     val selectedCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
+    val selectedSeriesFilter by filterViewModel.selectedSeriesFilter.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var showCategoryFilterDialog by remember { mutableStateOf(false) }
-    var categorySearch by remember { mutableStateOf("") }
     var selectedSetGoods by remember { mutableStateOf<GoodsEntity?>(null) }
     var setDialogComponent by remember { mutableStateOf<GoodsEntity?>(null) }
 
@@ -107,9 +127,69 @@ fun CharacterScreen(
         .filter { !showFavoriteOnly || it.charaIsFavorite }
         .filter { it.charaNm.contains(searchQuery, ignoreCase = true) }
         .sortedBy { it.charaNm }
+    // 선호 캐릭터는 사용자가 정한 우선순위대로, 나머지는 이름순.
     val favoriteCharas = filteredCharaList.filter { it.charaIsFavorite }
+        .sortedWith(compareBy<CharaEntity> { it.charaFavoriteOrder }.thenBy { it.charaNm })
     val otherCharas = filteredCharaList.filterNot { it.charaIsFavorite }
     val favoriteTotal = charaList.count { it.charaIsFavorite }
+    // 전체 선호 순서(이름). 번호는 검색으로 일부만 보여도 이 전체 순서 기준이다.
+    val allFavoriteNames = charaList.filter { it.charaIsFavorite }
+        .sortedWith(compareBy<CharaEntity> { it.charaFavoriteOrder }.thenBy { it.charaNm })
+        .map { it.charaNm }
+
+    // ── 선호 순서 끌어서 바꾸기 ──
+    // ≡ 손잡이는 바로, 줄의 나머지는 꾹 누른 뒤 끈다. 끄는 동안은 [dragPreview] 순서로 그리고, 놓으면 저장한다.
+    // 위치는 목록 화면(뷰포트) 좌표로 다룬다: [dragPointer] 손가락 위치, [dragGrab] 잡은 곳(줄 안 좌표).
+    val charaGridState = rememberLazyGridState()
+    val dragScope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val edgePx = with(LocalDensity.current) { 56.dp.toPx() }
+    var dragPreview by remember { mutableStateOf<List<CharaEntity>?>(null) }
+    var dragName by remember { mutableStateOf<String?>(null) }
+    var dragPointer by remember { mutableStateOf(Offset.Zero) }
+    var dragGrab by remember { mutableStateOf(Offset.Zero) }
+    // 꾹 눌렀다 움직이지 않고 떼면 줄 누름(캐릭터 열기)까지 같이 들어오므로, 끌기가 끝난 직후의 누름은 무시한다.
+    var dragEndedAt by remember { mutableLongStateOf(0L) }
+    val latestFavorites by rememberUpdatedState(favoriteCharas)
+    // 저장한 순서가 DB 에서 돌아오면 미리보기를 걷는다(놓자마자 걷으면 잠깐 옛 순서로 튄다).
+    LaunchedEffect(favoriteCharas) { if (dragName == null) dragPreview = null }
+    val shownFavorites = dragPreview ?: favoriteCharas
+    val shownFullOrder = dragPreview?.let { mergeFavoriteOrder(allFavoriteNames, it.map { c -> c.charaNm }) } ?: allFavoriteNames
+
+    val startDrag: (CharaEntity, Offset) -> Unit = start@{ chara, local ->
+        val info = charaGridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == chara.charaNm } ?: return@start
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        dragName = chara.charaNm
+        dragPreview = latestFavorites
+        dragGrab = local
+        dragPointer = Offset(info.offset.x + local.x, info.offset.y + local.y)
+    }
+    val moveDrag: (Offset) -> Unit = move@{ delta ->
+        val name = dragName ?: return@move
+        val order = dragPreview ?: return@move
+        dragPointer += delta
+        val target = charaGridState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+            val key = info.key as? String
+            key != null && key != name && order.any { it.charaNm == key } &&
+                dragPointer.y >= info.offset.y && dragPointer.y < info.offset.y + info.size.height
+        }?.key as? String
+        if (target != null) {
+            val from = order.indexOfFirst { it.charaNm == name }
+            val to = order.indexOfFirst { it.charaNm == target }
+            if (from >= 0 && to >= 0) dragPreview = order.toMutableList().apply { add(to, removeAt(from)) }
+        }
+        // 목록 위·아래 끝 근처로 끌면 그쪽으로 스크롤한다.
+        val viewport = charaGridState.layoutInfo.viewportSize.height
+        if (dragPointer.y < edgePx) dragScope.launch { charaGridState.scrollBy(-24f) }
+        else if (dragPointer.y > viewport - edgePx) dragScope.launch { charaGridState.scrollBy(24f) }
+    }
+    val endDrag: () -> Unit = {
+        val order = dragPreview
+        val changed = order != null && order.map { it.charaNm } != latestFavorites.map { it.charaNm }
+        if (changed) viewModel.reorderFavorites(order!!.map { it.charaNm }) else dragPreview = null
+        dragName = null
+        dragEndedAt = SystemClock.uptimeMillis()
+    }
 
     val categoryList =
         (filterViewModel.applyFilter(officialGoods, filterType).second + filterViewModel.applyFilter(fanGoods, filterType).second)
@@ -118,27 +198,33 @@ fun CharacterScreen(
             .filter { it.isNotEmpty() && it != CATEGORY_SET }
             .sorted()
 
-    val filteredCategories = categoryList.filter {
-        it.contains(categorySearch, ignoreCase = true)
-    }
+    // 시리즈 탭에 보여 줄 값. 보유 상태 필터를 건 목록에서 뽑는다.
+    val seriesList = seriesOptions(
+        filterViewModel.applyFilter(officialGoods, filterType).second +
+                filterViewModel.applyFilter(fanGoods, filterType).second
+    )
     val filteredOfficialGoods = filterGoodsList(
         list = filterViewModel.applyFilter(officialGoods, filterType).second,
-        categoryFilter = selectedCategoryFilter
+        categoryFilter = selectedCategoryFilter,
+        seriesFilter = selectedSeriesFilter
     )
 
     val AllFilteredOfficialGoods = filterGoodsList(
         list = filterViewModel.applyFilter(officialGoods, filterType).first,
-        categoryFilter = selectedCategoryFilter
+        categoryFilter = selectedCategoryFilter,
+        seriesFilter = selectedSeriesFilter
     )
 
     val filteredFanGoods = filterFanGoodsList(
         list = filterViewModel.applyFilter(fanGoods, filterType).second,
-        categoryFilter = selectedCategoryFilter
+        categoryFilter = selectedCategoryFilter,
+        seriesFilter = selectedSeriesFilter
     )
 
     val AllFilteredFanGoods = filterFanGoodsList(
         list = filterViewModel.applyFilter(fanGoods, filterType).first,
-        categoryFilter = selectedCategoryFilter
+        categoryFilter = selectedCategoryFilter,
+        seriesFilter = selectedSeriesFilter
     )
     val gridColumns = rememberGridColumns(listModeViewModel, widthSizeClass)
     val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
@@ -154,14 +240,12 @@ fun CharacterScreen(
         viewModel.setSelectedTab(0)
         filterViewModel.setFilter(FilterType.ALL)
         filterViewModel.clearGoodsFilter()
-        categorySearch = ""
     }
 
     // 하단 메뉴를 다시 눌러 캐릭터 목록으로 돌아온 경우에도 다중 선택을 끝낸다.
     LaunchedEffect(selectedChara == null) {
         if (selectedChara == null) {
             selection.exit()
-            categorySearch = ""
         }
     }
 
@@ -169,36 +253,26 @@ fun CharacterScreen(
     // 나중에 등록한 BackHandler 가 먼저 받으므로, 선택 중이면 뒤로가기는 선택만 끝낸다.
     BackHandler(enabled = selection.mode) { selection.exit() }
 
-    // 카테고리 필터 팝업
+    // 시리즈/카테고리 필터 팝업. 이미 한 캐릭터만 보는 화면이라 캐릭터 탭은 뺀다.
     if (showCategoryFilterDialog) {
-        val closeDialog: () -> Unit = {
-            showCategoryFilterDialog = false
-            categorySearch = ""
-        }
-        FilterDialogFrame(
-            title = "카테고리 필터",
-            onDismiss = closeDialog,
-            onClear = if (selectedCategoryFilter != null) {
-                { filterViewModel.clearGoodsFilter(); closeDialog() }
-            } else null
-        ) {
-            SearchField(
-                query = categorySearch,
-                onQueryChange = { categorySearch = it },
-                placeholder = "카테고리 검색",
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            CategoryChoiceList(
-                categories = filteredCategories,
-                selected = selectedCategoryFilter,
-                onSelect = { cat ->
-                    filterViewModel.setCategoryFilter(if (selectedCategoryFilter == cat) null else cat)
-                    closeDialog()
-                },
-                modifier = Modifier.weight(1f)
-            )
-        }
+        GoodsFilterDialog(
+            widthSizeClass = widthSizeClass,
+            charaList = emptyList(),
+            categoryList = categoryList,
+            selectedCharaFilter = null,
+            selectedCategoryFilter = selectedCategoryFilter,
+            onCharaSelect = {},
+            onCategorySelect = { filterViewModel.setCategoryFilter(it) },
+            onClearFilter = { filterViewModel.clearGoodsFilter() },
+            onDismiss = { showCategoryFilterDialog = false },
+            seriesList = seriesList,
+            selectedSeriesFilter = selectedSeriesFilter,
+            onSeriesSelect = { filterViewModel.setSeriesFilter(it) },
+            showChara = false,
+            // 이 캐릭터의 굿즈(보유 상태 필터 적용)에서만 대표 사진을 고른다.
+            scopeGoods = filterViewModel.applyFilter(officialGoods, filterType).second +
+                    filterViewModel.applyFilter(fanGoods, filterType).second
+        )
     }
 
     // 세트 다이얼로그에서 상태를 바꿔도 아래에 깔린 굿즈 상세가 최신 값을 보여주도록 다시 조회한다.
@@ -296,25 +370,30 @@ fun CharacterScreen(
                 sidePanel = isLandscape,
                 panelWidth = CHARA_SEARCH_PANEL_WIDTH,
                 panel = {
+                    // 보유 상태 필터와 같은 박스 없는 선 탭
                     val allChip: @Composable (Modifier) -> Unit = { modifier ->
-                        FilterChip(
+                        LineTab(
+                            label = "전체",
+                            count = charaList.size,
                             selected = !showFavoriteOnly,
                             onClick = { if (showFavoriteOnly) viewModel.toggleFavoriteOnly() },
-                            label = { Text("전체 ${charaList.size}") },
+                            vertical = isLandscape,
                             modifier = modifier
                         )
                     }
                     val favoriteChip: @Composable (Modifier) -> Unit = { modifier ->
-                        FilterChip(
+                        LineTab(
+                            label = "선호",
+                            count = favoriteTotal,
                             selected = showFavoriteOnly,
                             onClick = { if (!showFavoriteOnly) viewModel.toggleFavoriteOnly() },
-                            label = { Text("선호 $favoriteTotal") },
+                            vertical = isLandscape,
                             leadingIcon = {
                                 Icon(
                                     imageVector = if (showFavoriteOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                     contentDescription = null,
                                     tint = AppStyles.colorFavorite,
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             },
                             modifier = modifier
@@ -333,10 +412,11 @@ fun CharacterScreen(
                             allChip(Modifier.fillMaxWidth())
                             favoriteChip(Modifier.fillMaxWidth())
                         } else {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row {
                                 allChip(Modifier)
                                 favoriteChip(Modifier)
                             }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
@@ -358,22 +438,63 @@ fun CharacterScreen(
                     // 선호/그 외가 섞여 있을 때만 구역 제목을 단다.
                     val showSections = favoriteCharas.isNotEmpty() && otherCharas.isNotEmpty()
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 96.dp),
+                        // 리스트형 한 줄 카드. 가로 화면도 한 줄에 하나만 둬 선호 순서를 위에서 아래로 읽게 한다.
+                        columns = GridCells.Fixed(1),
+                        state = charaGridState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         if (showSections) sectionHeader("선호 캐릭터", favoriteCharas.size)
-                        items(favoriteCharas, key = { it.charaNm }) { item ->
+                        items(shownFavorites, key = { it.charaNm }) { item ->
                             val count = charaGoodsCountMap[item.charaNm] ?: Pair(0, 0)
-                            CharaCard(
-                                chara = item,
-                                gotten = count.first,
-                                total = count.second,
-                                onClick = { viewModel.selectChara(item) },
-                                onToggleFavorite = { viewModel.toggleFavorite(item) }
-                            )
+                            val dragging = dragName == item.charaNm
+                            val canReorder = allFavoriteNames.size >= 2
+                            // 끄는 줄은 손가락을 따라 떠 있고(맨 위에 그림), 나머지 줄은 자리를 비켜 주며 움직인다.
+                            val itemModifier = if (dragging) {
+                                val info = charaGridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.charaNm }
+                                Modifier
+                                    .zIndex(1f)
+                                    .graphicsLayer {
+                                        if (info != null) {
+                                            translationY = dragPointer.y - dragGrab.y - info.offset.y
+                                        }
+                                        shadowElevation = 8.dp.toPx()
+                                    }
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            } else Modifier.animateItem()
+                            Box(
+                                modifier = itemModifier.then(
+                                    if (canReorder) Modifier.pointerInput(item.charaNm) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { startDrag(item, it) },
+                                            onDrag = { change, delta -> change.consume(); moveDrag(delta) },
+                                            onDragEnd = endDrag,
+                                            onDragCancel = endDrag
+                                        )
+                                    } else Modifier
+                                )
+                            ) {
+                                CharaCard(
+                                    chara = item,
+                                    gotten = count.first,
+                                    total = count.second,
+                                    onClick = {
+                                        if (SystemClock.uptimeMillis() - dragEndedAt > 400) viewModel.selectChara(item)
+                                    },
+                                    onToggleFavorite = { viewModel.toggleFavorite(item) },
+                                    // 선호가 둘 이상일 때만 ≡ 손잡이와 순서 번호를 둔다.
+                                    orderNumber = if (canReorder) shownFullOrder.indexOf(item.charaNm) + 1 else null,
+                                    handleModifier = Modifier.pointerInput(item.charaNm) {
+                                        detectDragGestures(
+                                            onDragStart = { local -> startDrag(item, Offset(local.x + 4.dp.toPx(), local.y + 10.dp.toPx())) },
+                                            onDrag = { change, delta -> change.consume(); moveDrag(delta) },
+                                            onDragEnd = endDrag,
+                                            onDragCancel = endDrag
+                                        )
+                                    }
+                                )
+                            }
                         }
                         if (showSections) sectionHeader("다른 캐릭터", otherCharas.size)
                         items(otherCharas, key = { it.charaNm }) { item ->
@@ -399,9 +520,9 @@ fun CharacterScreen(
                 actions = {
                     TopBarAction(
                         icon = Icons.Default.FilterList,
-                        contentDescription = "카테고리 필터",
+                        contentDescription = "필터",
                         onClick = { showCategoryFilterDialog = true },
-                        active = selectedCategoryFilter != null
+                        active = selectedCategoryFilter != null || selectedSeriesFilter != null
                     )
                     TopBarAction(
                         icon = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
@@ -413,6 +534,7 @@ fun CharacterScreen(
 
             ActiveFilterChips(
                 filters = listOfNotNull(
+                    selectedSeriesFilter?.let { ActiveFilter(it) { filterViewModel.setSeriesFilter(null) } },
                     selectedCategoryFilter?.let { ActiveFilter(it) { filterViewModel.setCategoryFilter(null) } }
                 )
             )
@@ -539,59 +661,98 @@ private fun LazyGridScope.sectionHeader(title: String, count: Int) {
     }
 }
 
-/** 원형 아바타 + 이름 + 공식 굿즈 수집 진행률. 오른쪽 위 하트로 선호를 바로 토글한다. */
+/** 선호 캐릭터 줄 맨 왼쪽의 끌기 손잡이(≡)와 순서 번호. 손잡이를 잡고 끌면 바로 옮겨진다. */
+@Composable
+private fun ReorderHandle(orderNumber: Int, charaNm: String, modifier: Modifier) {
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .semantics { contentDescription = "$charaNm 순서 ${orderNumber}번, 끌어서 바꾸기" },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.DragHandle,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Text(
+            text = "$orderNumber",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(min = 22.dp)
+        )
+    }
+}
+
+/**
+ * 캐릭터 목록의 한 줄.
+ * 왼쪽: (선호면 ≡ 손잡이 + 순서 번호) + 캐릭터 사진 + 이름. 오른쪽: 보유율 게이지 + 보유/전체 개수와 퍼센트, 맨 끝에 선호 하트.
+ */
 @Composable
 private fun CharaCard(
     chara: CharaEntity,
     gotten: Int,
     total: Int,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    /** 선호 캐릭터 순서 번호(1부터). 있으면 사진 왼쪽에 ≡ 손잡이와 번호를 둔다. */
+    orderNumber: Int? = null,
+    /** ≡ 손잡이에 붙일 끌기 동작 */
+    handleModifier: Modifier = Modifier
 ) {
     val progress = if (total > 0) gotten.toFloat() / total else 0f
     val isComplete = total > 0 && gotten == total
 
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (chara.charaIsFavorite) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-            else MaterialTheme.colorScheme.outlineVariant
-        )
-    ) {
-        Box {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+    // 박스 없이 줄만 두고, 줄 사이는 아래쪽 얇은 구분선으로 나눈다.
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick)
+                .padding(start = 4.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 왼쪽 섹션: (순서 화살표) + 사진 + 이름
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                if (orderNumber != null) {
+                    ReorderHandle(orderNumber = orderNumber, charaNm = chara.charaNm, modifier = handleModifier)
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
                 Image(
                     painter = rememberAsyncImagePainter(model = chara.charaUrl.ifEmpty { null }),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(68.dp)
+                        .size(44.dp) // 폭 384dp 휴대폰에서도 이름이 잘리지 않게 사진·게이지·하트를 조금씩 줄였다
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentScale = ContentScale.Crop
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = chara.charaNm,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            // 오른쪽 섹션: 게이지 + 개수/퍼센트. 퍼센트는 버림이라 다 모았을 때만 100%가 된다.
+            Column(modifier = Modifier.width(112.dp)) {
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(4.dp)
+                        .height(6.dp)
                         .clip(CircleShape),
                     color = if (isComplete) AppStyles.colorGotten else MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -599,27 +760,42 @@ private fun CharaCard(
                     gapSize = 0.dp,
                     drawStopIndicator = {}
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "$gotten / $total",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isComplete) AppStyles.colorGotten else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "$gotten / $total",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isComplete) AppStyles.colorGotten else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isComplete) AppStyles.colorGotten else MaterialTheme.colorScheme.primary,
+                        maxLines = 1
+                    )
+                }
             }
+            // 선호 하트는 줄 맨 오른쪽 끝, 퍼센트 옆에 둔다.
+            Spacer(modifier = Modifier.width(4.dp))
             IconButton(
                 onClick = onToggleFavorite,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(36.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = if (chara.charaIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = if (chara.charaIsFavorite) "선호 해제" else "선호 캐릭터로 등록",
                     tint = if (chara.charaIsFavorite) AppStyles.colorFavorite
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }

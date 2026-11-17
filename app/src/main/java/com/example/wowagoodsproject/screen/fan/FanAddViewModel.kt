@@ -51,6 +51,9 @@ class FanAddViewModel : ViewModel() {
     private val _memo = MutableStateFlow("")
     val memo: StateFlow<String> = _memo
 
+    private val _quantity = MutableStateFlow(1)
+    val quantity: StateFlow<Int> = _quantity
+
     init {
         loadCharaList()
         loadCategoryList()
@@ -81,6 +84,7 @@ class FanAddViewModel : ViewModel() {
     fun onImageSelected(uri: Uri?) { _imageUri.value = uri }
     fun onIsGottenChange(value: Boolean) { _isGotten.value = value }
     fun onMemoChange(value: String) { _memo.value = value }
+    fun onQuantityChange(value: Int) { _quantity.value = value.coerceIn(1, 99) }
 
     fun toggleChara(chara: String) {
         val current = _selectedCharas.value.toMutableList()
@@ -151,7 +155,9 @@ class FanAddViewModel : ViewModel() {
                 fanGoodsIsGotten = _isGotten.value,
                 // 앱은 보유 여부를 상태 칸으로 판단하므로 상태도 같이 적어야 '보유' 로 보인다.
                 fanGoodsStatus = if (_isGotten.value) GoodsStatus.GOTTEN.name else GoodsStatus.NOT_GOTTEN.name,
-                fanGoodsMemo = _memo.value
+                fanGoodsMemo = _memo.value,
+                // 미보유 굿즈는 수량이 1 로 고정이다(상태를 바꿀 때와 같은 규칙).
+                fanGoodsQuantity = if (_isGotten.value) _quantity.value else 1
             )
         )
     }

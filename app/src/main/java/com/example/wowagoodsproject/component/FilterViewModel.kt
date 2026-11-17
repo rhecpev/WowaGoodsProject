@@ -18,6 +18,9 @@ class FilterViewModel : ViewModel() {
     private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
     val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter
 
+    private val _selectedSeriesFilter = MutableStateFlow<String?>(null)
+    val selectedSeriesFilter: StateFlow<String?> = _selectedSeriesFilter
+
     fun setFilter(filter: FilterType) {
         _filterType.value = filter
     }
@@ -30,9 +33,14 @@ class FilterViewModel : ViewModel() {
         _selectedCategoryFilter.value = category
     }
 
+    fun setSeriesFilter(series: String?) {
+        _selectedSeriesFilter.value = series
+    }
+
     fun clearGoodsFilter() {
         _selectedCharaFilter.value = null
         _selectedCategoryFilter.value = null
+        _selectedSeriesFilter.value = null
     }
 
     /**

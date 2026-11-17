@@ -27,6 +27,13 @@ interface NewsDao {
     @Query("UPDATE tb_news SET newsIsRead = 1")
     suspend fun markAllRead()
 
+    @Query("SELECT * FROM tb_news WHERE newsIsRead = 1")
+    suspend fun getRead(): List<NewsEntity>
+
+    /** 용량 정리: 읽은 소식만 지운다(안 읽은 소식은 남긴다). */
+    @Query("DELETE FROM tb_news WHERE newsIsRead = 1")
+    suspend fun deleteRead()
+
     @Query("DELETE FROM tb_news WHERE newsTime < :before")
     suspend fun deleteOlderThan(before: Long)
 }

@@ -162,6 +162,26 @@ class BackupZipTest {
     }
 
     @Test
+    fun 선호_캐릭터_우선순위는_이름_목록_순서로_저장하고_그대로_되살린다() = runBlocking {
+        seedCharas()
+        // 가나다순·등록순과 다른 순서로 정해 둔다: 플로로 → 감심 → 장리
+        val byName = charaDao.getAll().associateBy { it.charaNm }
+        listOf("플로로", "감심", "장리").forEachIndexed { i, name ->
+            charaDao.update(byName.getValue(name).copy(charaIsFavorite = true, charaFavoriteOrder = i + 1))
+        }
+        val zip = File(workDir, "order.zip")
+        BackupZip.write(zip)
+
+        clearUserData()
+        charaDao.getAll().forEach { charaDao.update(it.copy(charaFavoriteOrder = 0)) }
+        BackupZip.restore(zip.inputStream(), filesDir)
+
+        val favorites = charaDao.getAll().filter { it.charaIsFavorite }.sortedBy { it.charaFavoriteOrder }
+        assertEquals(listOf("플로로" to 1, "감심" to 2, "장리" to 3), favorites.map { it.charaNm to it.charaFavoriteOrder })
+        assertEquals(0, charaDao.getAll().single { it.charaNm == "금희" }.charaFavoriteOrder)
+    }
+
+    @Test
     fun 불러오기는_지금_상태를_백업_상태로_바꾼다() = runBlocking {
         seedOfficial()
         val zip = File(workDir, "b.zip")

@@ -1,6 +1,7 @@
 package com.example.wowagoodsproject.screen.mypage
 
 import androidx.room.withTransaction
+import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.App
 import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.goodsStatusOf
@@ -224,12 +225,20 @@ object BackupZip {
     /** 불러오는 동안 사진을 잠시 풀어 두는 폴더(앱 폴더 안) */
     private const val STAGING = ".restore_staging"
 
-    /** 백업 zip 을 [zipFile] 에 만든다. */
-    suspend fun write(zipFile: File) = withContext(Dispatchers.IO) {
+    /**
+     * 백업 zip 을 [zipFile] 에 만든다.
+     * [onProgress] 로 0~1 진행률을 알린다. DB 읽기·JSON 까지 0.2, 사진을 넣으며 0.2~1.
+     */
+    suspend fun write(zipFile: File, onProgress: (Float) -> Unit = {}) = withContext(Dispatchers.IO) {
+        onProgress(0f)
         val gson = Gson()
         val fanGoods = App.fanDatabase.fanGoodsDao().getAll()
         val officialGoods = App.database.goodsDao().getAll()
-        val favoriteCharas = App.charaDatabase.charaDao().getAll().filter { it.charaIsFavorite }.map { it.charaNm }
+        // 이름 목록의 순서가 곧 선호 우선순위다(형식은 그대로 문자열 배열).
+        val favoriteCharas = App.charaDatabase.charaDao().getAll()
+            .filter { it.charaIsFavorite }
+            .sortedWith(compareBy<CharaEntity> { it.charaFavoriteOrder }.thenBy { it.charaId })
+            .map { it.charaNm }
 
         ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
             fun putText(name: String, text: String) {
@@ -240,17 +249,20 @@ object BackupZip {
             putText(FAN, gson.toJson(fanGoods))
             putText(OFFICIAL, gson.toJson(officialGoods.map { OfficialGoodsBackup.of(it) }))
             putText(FAVORITES, gson.toJson(favoriteCharas))
+            onProgress(0.2f)
             // 같은 사진을 두 굿즈가 쓰면 같은 이름의 항목이 두 번 들어가 zip 만들기가 통째로 실패하므로 한 번만 넣는다.
             val written = mutableSetOf<String>()
-            fanGoods.forEach { goods ->
-                if (goods.fanGoodsImgPath.isEmpty()) return@forEach
+            fanGoods.forEachIndexed { i, goods ->
+                onProgress(0.2f + 0.8f * i / fanGoods.size)
+                if (goods.fanGoodsImgPath.isEmpty()) return@forEachIndexed
                 val imgFile = File(goods.fanGoodsImgPath)
-                if (!imgFile.isFile || !written.add(imgFile.name)) return@forEach
+                if (!imgFile.isFile || !written.add(imgFile.name)) return@forEachIndexed
                 zip.putNextEntry(ZipEntry("$IMAGES/${imgFile.name}"))
                 FileInputStream(imgFile).use { it.copyTo(zip) }
                 zip.closeEntry()
             }
         }
+        onProgress(1f)
     }
 
     /**
@@ -376,13 +388,18 @@ object BackupZip {
         onProgress(0.92f)
 
         favorites?.let { names ->
-            val nameSet = names.map { it.trim() }.toSet()
+            // 목록 순서가 선호 우선순위다. 같은 이름이 두 번 있으면 앞의 것을 쓴다.
+            val orderByName = names.map { it.trim() }.distinct().withIndex().associate { it.value to it.index + 1 }
             // 선호 표시가 반만 바뀐 채로 남지 않게 한 번에 처리한다.
             App.charaDatabase.withTransaction {
                 val dao = App.charaDatabase.charaDao()
                 dao.getAll().forEach { chara ->
-                    val favorite = chara.charaNm.trim() in nameSet
-                    if (chara.charaIsFavorite != favorite) dao.update(chara.copy(charaIsFavorite = favorite))
+                    val order = orderByName[chara.charaNm.trim()]
+                    val favorite = order != null
+                    val newOrder = order ?: 0
+                    if (chara.charaIsFavorite != favorite || chara.charaFavoriteOrder != newOrder) {
+                        dao.update(chara.copy(charaIsFavorite = favorite, charaFavoriteOrder = newOrder))
+                    }
                 }
             }
         }

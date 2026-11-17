@@ -24,6 +24,8 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.wowagoodsproject.component.ActiveFilter
@@ -37,6 +39,7 @@ import com.example.wowagoodsproject.component.GoodsFilterDialog
 import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.ListModeViewModel
 import com.example.wowagoodsproject.component.filterFanGoodsList
+import com.example.wowagoodsproject.component.seriesOptions
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.navigation.TopBarAction
@@ -62,17 +65,20 @@ fun FanArtScreen(
 
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
+    val selectedGoodsSeriesFilter by filterViewModel.selectedSeriesFilter.collectAsState()
 
     val filteredList = filterFanGoodsList(
         list = filterViewModel.applyFilter(goodsList, filterType).second,
         charaFilter = selectedGoodsCharaFilter,
-        categoryFilter = selectedGoodsCategoryFilter
+        categoryFilter = selectedGoodsCategoryFilter,
+        seriesFilter = selectedGoodsSeriesFilter
     )
 
     val AllFilteredList = filterFanGoodsList(
         list = filterViewModel.applyFilter(goodsList, filterType).first,
         charaFilter = selectedGoodsCharaFilter,
-        categoryFilter = selectedGoodsCategoryFilter
+        categoryFilter = selectedGoodsCategoryFilter,
+        seriesFilter = selectedGoodsSeriesFilter
     )
 
     val gridColumns = rememberGridColumns(listModeViewModel, widthSizeClass)
@@ -92,6 +98,8 @@ fun FanArtScreen(
         .distinct()
         .filter { it.isNotEmpty() }
         .sorted()
+    // 2차창작은 시리즈를 비워 두기도 해서, 적어 둔 굿즈가 하나도 없으면 시리즈 탭이 안 보인다.
+    val goodsSeriesList = seriesOptions(goodsList)
 
     LaunchedEffect(Unit) {
         viewModel.loadGoods()
@@ -140,7 +148,11 @@ fun FanArtScreen(
             onCharaSelect = { filterViewModel.setCharaFilter(it) },
             onCategorySelect = { filterViewModel.setCategoryFilter(it) },
             onClearFilter = { filterViewModel.clearGoodsFilter() },
-            onDismiss = { showGoodsFilterDialog = false }
+            onDismiss = { showGoodsFilterDialog = false },
+            seriesList = goodsSeriesList,
+            selectedSeriesFilter = selectedGoodsSeriesFilter,
+            onSeriesSelect = { filterViewModel.setSeriesFilter(it) },
+            scopeGoods = goodsList
         )
     }
 
@@ -153,19 +165,32 @@ fun FanArtScreen(
                         icon = Icons.Default.FilterList,
                         contentDescription = "필터",
                         onClick = { showGoodsFilterDialog = true },
-                        active = selectedGoodsCharaFilter != null || selectedGoodsCategoryFilter != null
+                        active = selectedGoodsCharaFilter != null || selectedGoodsCategoryFilter != null ||
+                                selectedGoodsSeriesFilter != null
                     )
                     TopBarAction(
                         icon = if (isGridMode) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                         contentDescription = "보기 방식 전환",
                         onClick = { listModeViewModel.toggleGridMode() }
                     )
+                    // 등록 화면으로 가는 버튼은 헤더 맨 오른쪽에 둔다. 박스 없이 강조색 글자만.
+                    TextButton(
+                        onClick = onNavigateToAdd,
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("굿즈 등록", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    }
                 }
             )
 
             ActiveFilterChips(
                 filters = listOfNotNull(
                     selectedGoodsCharaFilter?.let { ActiveFilter(it) { filterViewModel.setCharaFilter(null) } },
+                    selectedGoodsSeriesFilter?.let { ActiveFilter(it) { filterViewModel.setSeriesFilter(null) } },
                     selectedGoodsCategoryFilter?.let { ActiveFilter(it) { filterViewModel.setCategoryFilter(null) } }
                 ),
                 onClearAll = { filterViewModel.clearGoodsFilter() }
@@ -213,22 +238,10 @@ fun FanArtScreen(
                             if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
                         },
                         selectedIds = if (selection.mode) selection.ids else null,
-                        // 목록 끝이 등록 버튼에 가려지지 않게 아래 여백을 둔다.
-                        contentPadding = PaddingValues(bottom = 88.dp)
+                        contentPadding = PaddingValues(bottom = 16.dp)
                     )
                 }
             }
         }
-
-        ExtendedFloatingActionButton(
-            onClick = onNavigateToAdd,
-            icon = { Icon(Icons.Default.Add, contentDescription = null) },
-            text = { Text("굿즈 등록") },
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-        )
     }
 }

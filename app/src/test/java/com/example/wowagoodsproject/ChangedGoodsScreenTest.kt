@@ -94,7 +94,7 @@ class ChangedGoodsScreenTest {
         show()
         eventually { shown("감심") }
         compose.onNodeWithText("감심").performClick()
-        eventually { shown("보유 상태") }
+        eventually { shown("굿즈 정보") } // 상세 시트가 열렸다
         compose.onNodeWithText("보유").performClick() // 다이얼로그의 보유 버튼
 
         eventually { runBlocking { changedDao.getAllFlow().first().single { it.newChara == "감심" }.isChecked } }

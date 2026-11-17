@@ -32,6 +32,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -49,6 +50,7 @@ import com.example.wowagoodsproject.component.CategoryChoiceList
 import com.example.wowagoodsproject.component.CharaChoiceGrid
 import com.example.wowagoodsproject.component.FilterDialogFrame
 import com.example.wowagoodsproject.component.GoodsStatus
+import com.example.wowagoodsproject.component.QuantityStepper
 import com.example.wowagoodsproject.component.SearchField
 import com.example.wowagoodsproject.component.StatusSegmentedButtons
 import com.example.wowagoodsproject.db.character.CharaEntity
@@ -57,8 +59,8 @@ import java.io.File
 
 /**
  * 2차창작 굿즈 등록.
- * 위에서부터 사진 → 기본 정보(시리즈/가격/카테고리) → 캐릭터 → 보유 상태 → 메모 순으로 채우고,
- * 아래에 붙은 등록 버튼으로 저장한다. 가로 모드에서는 사진을 왼쪽, 입력란을 오른쪽에 둔다.
+ * 위에서부터 사진 → 기본 정보(시리즈/가격/카테고리) → 캐릭터 → 보유 상태(+수량) → 메모 순으로 채우고,
+ * 헤더 오른쪽 위 등록 버튼으로 저장한다. 가로 모드에서는 사진을 왼쪽, 입력란을 오른쪽에 둔다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +78,7 @@ fun FanAddScreen(
     val categoryList by viewModel.categoryList.collectAsState()
     val isGotten by viewModel.isGotten.collectAsState()
     val memo by viewModel.memo.collectAsState()
+    val quantity by viewModel.quantity.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
 
     val configuration = LocalConfiguration.current
@@ -204,6 +207,11 @@ fun FanAddScreen(
                 onSelect = { viewModel.onIsGottenChange(it == GoodsStatus.GOTTEN) },
                 showPending = false
             )
+            // 수량은 가지고 있는 굿즈에만 의미가 있다.
+            if (isGotten) {
+                Spacer(modifier = Modifier.height(12.dp))
+                QuantityStepper(quantity = quantity, onChange = { viewModel.onQuantityChange(it) })
+            }
         }
 
         FormSection(title = "메모") {
@@ -219,7 +227,32 @@ fun FanAddScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "2차창작 굿즈 등록", onBack = onNavigateBack)
+        // 등록 버튼은 헤더 오른쪽 위에 둔다. 스크롤과 상관없이 언제든 누를 수 있다.
+        TopBar(
+            title = "2차창작 굿즈 등록",
+            onBack = onNavigateBack,
+            // 헤더에 등록 버튼이 있어 입력 중에도 숨기지 않는다.
+            hideWhileTyping = false,
+            actions = {
+                // 박스 없이 강조색 글자만 둔다(2차창작 탭의 '굿즈 등록'과 같은 모양).
+                TextButton(
+                    onClick = { viewModel.insert(context = context, onSuccess = onNavigateBack) },
+                    enabled = !isSaving,
+                    shape = RectangleShape,
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    if (isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("등록", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
 
         if (isLandscape) {
             Row(
@@ -256,33 +289,6 @@ fun FanAddScreen(
                         .height(240.dp)
                 )
                 form()
-            }
-        }
-
-        // 스크롤과 상관없이 언제든 누를 수 있게 등록 버튼은 아래에 붙여 둔다.
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 3.dp
-        ) {
-            Button(
-                onClick = { viewModel.insert(context = context, onSuccess = onNavigateBack) },
-                enabled = !isSaving,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                if (isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Text("등록하기", style = MaterialTheme.typography.titleSmall)
-                }
             }
         }
     }
@@ -514,8 +520,7 @@ private fun CategoryPickerDialog(
         SearchField(
             query = search,
             onQueryChange = { search = it },
-            placeholder = "검색하거나 새 카테고리 입력",
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            placeholder = "검색하거나 새 카테고리 입력"
         )
         Spacer(modifier = Modifier.height(12.dp))
         if (canAdd) {
@@ -577,8 +582,7 @@ private fun CharaPickerDialog(
         SearchField(
             query = search,
             onQueryChange = { search = it },
-            placeholder = "캐릭터 이름 검색",
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            placeholder = "캐릭터 이름 검색"
         )
         Spacer(modifier = Modifier.height(12.dp))
         CharaChoiceGrid(

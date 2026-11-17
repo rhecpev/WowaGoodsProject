@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.wowagoodsproject.db.changed.ChangedGoodsDatabase
+import com.example.wowagoodsproject.db.character.CharaDatabase
 import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
 import com.example.wowagoodsproject.db.official.GoodsDatabase
 import kotlinx.coroutines.flow.first
@@ -100,9 +101,8 @@ class MigrationTest {
 
     @Test
     fun 다른_DB들도_지금_스키마_그대로_열린다() = runBlocking {
-        // 캐릭터·시리즈·소식·업데이트 이력은 스키마 파일이 하나뿐이다. 앱의 빌더와 같은 방식으로 열리는지 본다.
+        // 시리즈·소식·업데이트 이력은 스키마 파일이 하나뿐이다. 앱의 빌더와 같은 방식으로 열리는지 본다.
         for ((name, cls, v) in listOf(
-            Triple("chara", com.example.wowagoodsproject.db.character.CharaDatabase::class.java, 2),
             Triple("series", com.example.wowagoodsproject.db.series.SeriesDatabase::class.java, 2),
             Triple("news", com.example.wowagoodsproject.db.news.NewsDatabase::class.java, 1),
             Triple("patch", com.example.wowagoodsproject.db.patchnote.PatchNoteDatabase::class.java, 1)
@@ -113,6 +113,24 @@ class MigrationTest {
             db.openHelper.writableDatabase // 스키마가 다르면 여기서 실패한다
             db.close()
         }
+    }
+
+    @Test
+    fun 캐릭터_DB_2에서_3으로_올리면_선호_캐릭터에_지금_순서대로_우선순위를_매긴다() = runBlocking {
+        schemaDb("chara2", CharaDatabase::class.java, 2,
+            "INSERT INTO tb_character (charaId, charaNm, charaUrl, charaIsFavorite) VALUES (1,'감심','',0)",
+            "INSERT INTO tb_character (charaId, charaNm, charaUrl, charaIsFavorite) VALUES (2,'금희','',1)",
+            "INSERT INTO tb_character (charaId, charaNm, charaUrl, charaIsFavorite) VALUES (3,'카멜리아','',0)",
+            "INSERT INTO tb_character (charaId, charaNm, charaUrl, charaIsFavorite) VALUES (4,'장리','',1)",
+            "INSERT INTO tb_character (charaId, charaNm, charaUrl, charaIsFavorite) VALUES (5,'카를로타','',1)")
+        val db = Room.databaseBuilder(context, CharaDatabase::class.java, "chara2")
+            .addMigrations(CharaDatabase.MIGRATION_2_3).build()
+        val orders = db.charaDao().getAll().associate { it.charaNm to it.charaFavoriteOrder }
+        assertEquals(mapOf("감심" to 0, "금희" to 1, "카멜리아" to 0, "장리" to 2, "카를로타" to 3), orders)
+        // 목록은 선호 우선순위 순서로 나온다.
+        assertEquals(listOf("금희", "장리", "카를로타", "감심", "카멜리아"),
+            db.charaDao().getAllFlow().first().map { it.charaNm })
+        db.close()
     }
 
     // ── 스키마 파일이 없는 옛 DB ─────────────────────────────────────────

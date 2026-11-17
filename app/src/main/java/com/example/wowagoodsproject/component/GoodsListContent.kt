@@ -34,9 +34,13 @@ fun GoodsListContent(
 
     // 리스트는 굿즈 하나, 격자는 한 줄이 한 항목이라 위치가 서로 맞지 않는다. 보기 방식을 바꾸면 맨 위부터 본다.
     val listState = rememberSaveable(isGridMode, saver = LazyListState.Saver) { LazyListState() }
-    val focusIndex = focusId?.let { id -> goods.indexOfFirst { it.goodsId == id } }?.takeIf { it >= 0 }
+    // 격자는 시리즈가 바뀌면 새 줄에서 시작한다(줄마다 칸 수가 다를 수 있음).
+    val rows = remember(goods, gridColumns) { chunkBySeries(goods, gridColumns) }
     // 격자 모드는 한 줄이 한 항목이다.
-    val focusRow = focusIndex?.let { if (isGridMode) it / gridColumns else it }
+    val focusRow = focusId?.let { id ->
+        if (isGridMode) rows.indexOfFirst { row -> row.any { it.goodsId == id } }
+        else goods.indexOfFirst { it.goodsId == id }
+    }?.takeIf { it >= 0 }
     LaunchedEffect(focusId, focusRow) {
         if (focusRow == null) return@LaunchedEffect
         listState.scrollToItem(focusRow)
@@ -50,9 +54,9 @@ fun GoodsListContent(
     }
 
     if (isGridMode) {
-        val rows = goods.chunked(gridColumns)
         LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
-            itemsIndexed(rows) { _, rowItems ->
+            itemsIndexed(rows) { rowIndex, rowItems ->
+                if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider()
                 Row(modifier = Modifier.fillMaxWidth()) {
                     rowItems.forEach { item ->
                         Box(
@@ -79,7 +83,10 @@ fun GoodsListContent(
                         Box(modifier = Modifier.weight(1f))
                     }
                 }
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                // 다음 줄이 다른 시리즈면 그 줄 위의 이중선이 구분을 맡는다.
+                if (rowIndex < rows.lastIndex && !isSeriesStartRow(rows, rowIndex + 1)) {
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                }
             }
         }
     } else {
@@ -102,7 +109,8 @@ fun GoodsListContent(
                 }
 
                 if (index < goods.lastIndex) {
-                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    if (isSeriesStart(goods, index + 1)) SeriesBoundaryDivider()
+                    else HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }

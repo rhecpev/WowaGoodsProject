@@ -38,6 +38,9 @@ interface ChangedGoodsDao {
     @Query("DELETE FROM tb_changed_goods")
     suspend fun deleteAll()
 
+    @Query("SELECT * FROM tb_changed_goods WHERE isChecked = 1")
+    suspend fun getChecked(): List<ChangedGoodsEntity>
+
     @Query("DELETE FROM tb_changed_goods WHERE isChecked = 1")
     suspend fun deleteChecked()
 }

@@ -19,8 +19,8 @@ android {
         applicationId = "com.example.wowagoodsproject"
         minSdk = 24
         targetSdk = 36
-        versionCode = 17
-        versionName = "2.6"
+        versionCode = 18
+        versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -79,6 +79,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.compose)
+    // 캐릭터 사진에서 대표색을 뽑는다(마이페이지 캐릭터 비율 게이지)
+    implementation(libs.androidx.palette)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.compose.material3.window.size)

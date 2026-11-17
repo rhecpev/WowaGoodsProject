@@ -22,6 +22,9 @@ interface CharaDao {
     @Update
     suspend fun update(chara : CharaEntity)
 
-    @Query("SELECT * FROM tb_character ORDER BY charaIsFavorite DESC, charaId ASC")
+    @Update
+    suspend fun updateAll(charas: List<CharaEntity>)
+
+    @Query("SELECT * FROM tb_character ORDER BY charaIsFavorite DESC, charaFavoriteOrder ASC, charaId ASC")
     fun getAllFlow(): Flow<List<CharaEntity>>
 }

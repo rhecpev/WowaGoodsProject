@@ -21,4 +21,9 @@ class PatchNotesViewModel : ViewModel() {
             }
         }
     }
+
+    /** 업데이트 이력을 모두 지워 용량을 비운다. 마이페이지의 '마지막 업데이트' 표시는 설정 값이라 그대로 남는다. */
+    fun clearAll() {
+        viewModelScope.launch { App.patchNoteDatabase.patchNoteDao().deleteAll() }
+    }
 }

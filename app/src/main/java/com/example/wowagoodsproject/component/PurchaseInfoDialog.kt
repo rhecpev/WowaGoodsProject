@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.component
 
+import androidx.compose.ui.graphics.RectangleShape
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -185,6 +186,8 @@ fun PurchaseInfoDialog(
     }
 
     AlertDialog(
+        // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+        shape = RectangleShape,
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

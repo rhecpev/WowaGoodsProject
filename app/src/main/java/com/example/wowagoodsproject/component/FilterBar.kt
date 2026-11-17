@@ -1,5 +1,7 @@
 package com.example.wowagoodsproject.component
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -7,11 +9,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * 보유 상태별 필터. "전체 12 · 보유 3 ..." 처럼 한 줄짜리 칩을 가로 스크롤로 늘어놓는다.
+ * 보유 상태별 필터. "전체 12 · 보유 3 ..." 처럼 박스 없는 선 탭([LineTab])을 가로 스크롤로 늘어놓는다.
  * [onToggleSelection] 을 넘기면 맨 왼쪽에 다중 선택 버튼을 둔다.
  * 다중 선택 중([selectionMode])에는 필터를 바꾸면 고른 굿즈가 목록에서 사라질 수 있어 칩을 잠근다.
  * [selectionContent] 를 넘기면 다중 선택 중에는 잠긴 칩 대신 그 내용을 칩 자리에 보여준다.
@@ -97,11 +102,14 @@ fun PendingInfoFilterBar(
     }
 }
 
-/** 변경된 굿즈의 처리 여부 필터. 처리 = 그 화면에서 다이얼로그로 굿즈를 고쳐 확인 표시가 붙은 기록. */
+/**
+ * 변경된 굿즈의 처리 여부 필터. 처리 = 그 화면에서 다이얼로그로 굿즈를 고쳐 확인 표시가 붙은 기록.
+ * 선언 순서가 곧 탭 순서다(전체 → 미처리 → 처리). 순서 값을 저장하지 않으므로 바꿔도 된다.
+ */
 enum class ProcessFilter(val label: String) {
     ALL("전체"),
-    DONE("처리"),
-    TODO("미처리")
+    TODO("미처리"),
+    DONE("처리")
 }
 
 /**
@@ -160,10 +168,11 @@ private fun FilterRow(
         }
         return
     }
+    Column {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (onToggleSelection != null) {
@@ -175,7 +184,7 @@ private fun FilterRow(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = if (onToggleSelection != null) 4.dp else 16.dp, end = 8.dp)
+                    .padding(start = if (onToggleSelection != null) 4.dp else 16.dp, end = 8.dp, bottom = 4.dp)
             ) { selectionContent() }
             return@Row
         }
@@ -183,12 +192,14 @@ private fun FilterRow(
             modifier = Modifier
                 .weight(1f)
                 .horizontalScroll(rememberScrollState())
-                .padding(start = if (onToggleSelection != null) 0.dp else 16.dp, end = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = if (onToggleSelection != null) 0.dp else 8.dp, end = 8.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
             chips()
         }
+    }
+    // 탭 아래 얇은 기준선. 고른 탭의 강조색 밑줄이 이 선 바로 위에 놓인다.
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -199,33 +210,99 @@ private fun CountFilterChip(
     selected: Boolean,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    /** 세로 줄에 쌓을 때 켠다. 칩이 줄 폭을 다 쓰고, 이름은 왼쪽, 숫자는 오른쪽 끝에 붙는다. */
+    /** 세로 줄에 쌓을 때 켠다. 탭이 줄 폭을 다 쓰고, 이름은 왼쪽, 숫자는 오른쪽 끝에 붙는다. */
     fillWidth: Boolean = false
 ) {
-    FilterChip(
+    LineTab(
+        label = label,
+        count = count,
         selected = selected,
         onClick = onClick,
         enabled = enabled,
-        modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier,
-        label = {
-            Row(
-                modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(label, maxLines = 1)
-                if (fillWidth) Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "$count",
-                    maxLines = 1,
-                    fontWeight = FontWeight.Bold,
-                    color = when {
-                        !enabled -> LocalContentColor.current
-                        selected -> MaterialTheme.colorScheme.onSecondaryContainer
-                        else -> MaterialTheme.colorScheme.primary
-                    }
-                )
-            }
-        }
+        vertical = fillWidth
     )
+}
+
+/**
+ * 박스 없는 선 탭. 글자만 두고 고른 탭에만 강조색 선을 긋는다.
+ * 가로로 늘어놓을 때는 글자 아래 밑줄, [vertical] 로 세로 줄에 쌓을 때는 왼쪽 세로선.
+ * 고른 탭은 글자가 진하고 굵어지며, 숫자는 늘 강조색이다. 잠기면([enabled] false) 흐리게 보인다.
+ */
+@Composable
+fun LineTab(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    count: Int? = null,
+    enabled: Boolean = true,
+    vertical: Boolean = false,
+    leadingIcon: (@Composable () -> Unit)? = null
+) {
+    val indicator = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val labelColor = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    val content: @Composable RowScope.() -> Unit = {
+        if (leadingIcon != null) {
+            leadingIcon()
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = labelColor,
+            maxLines = 1
+        )
+        if (count != null) {
+            if (vertical) Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "$count",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1
+            )
+        }
+    }
+    val base = modifier
+        .alpha(if (enabled) 1f else 0.38f)
+        .clickable(enabled = enabled, role = Role.Tab, onClick = onClick)
+
+    if (vertical) {
+        Row(
+            modifier = base
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(indicator)
+            )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = content
+            )
+        }
+    } else {
+        Column(modifier = base.width(IntrinsicSize.Max)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = content
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(indicator)
+            )
+        }
+    }
 }

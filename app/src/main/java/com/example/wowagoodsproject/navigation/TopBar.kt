@@ -12,18 +12,23 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.wowagoodsproject.component.isTypingInLandscape
 
 /**
  * 화면 상단 바. [뒤로] 제목(+부제) ........ 액션 아이콘들
  * 뒤로가기는 텍스트 버튼 대신 왼쪽 화살표로, 액션은 오른쪽 아이콘 버튼으로 둔다.
+ * 가로 화면에서 키보드가 올라와 있는 동안은 검색창과 결과가 쓸 높이를 위해 숨긴다([hideWhileTyping]).
+ * 헤더에 저장 같은 주요 버튼이 있는 화면은 false 로 넘겨 그대로 둔다.
  */
 @Composable
 fun TopBar(
     title: String,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    hideWhileTyping: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
+    if (hideWhileTyping && isTypingInLandscape()) return
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         Row(
             modifier = Modifier

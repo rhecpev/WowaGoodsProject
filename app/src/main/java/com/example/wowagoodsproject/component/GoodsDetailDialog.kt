@@ -16,7 +16,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -28,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -45,7 +45,7 @@ import java.io.File
 
 /**
  * 굿즈 상세. 화면 아래에서 올라오는 바텀시트로 띄운다.
- * 큰 이미지 → 시리즈(누르면 이동)·캐릭터 → 가격/카테고리/메모 → 보유 상태 세그먼트 → (구매 정보) → 세트 정보 순.
+ * 큰 이미지 → 시리즈(누르면 이동)·캐릭터 → (세트 정보) → (구매 정보) → 가격/카테고리/메모 → 보유 상태 세그먼트 순.
  *
  * [onSavePendingInfo] 를 넘기면 '구매예정'을 고를 때 구입처/구매일/수령예정일 입력 다이얼로그를 먼저 띄우고,
  * 확인하면 상태와 구매 정보를 함께 저장한다. 구매예정인 동안은 구매 정보를 보여주고 고칠 수 있다.
@@ -136,6 +136,8 @@ fun GoodsDetailDialog(
 
     if (showDeleteConfirm) {
         AlertDialog(
+            // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+            shape = RectangleShape,
             onDismissRequest = { showDeleteConfirm = false },
             icon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
             title = { Text("굿즈를 삭제할까요?") },
@@ -162,6 +164,8 @@ fun GoodsDetailDialog(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        // 필터 시트와 같이 위 모서리를 각지게 둔다.
+        shape = RectangleShape,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         val keepSheet = remember { KeepSheetWhileScrollingConnection() }
@@ -256,7 +260,7 @@ fun GoodsDetailDialog(
  * 내용을 스크롤하던 손짓이 맨 위에 닿았을 때 남은 움직임이 바텀시트로 넘어가 시트가 닫히는 것을 막는다.
  * 내용이 조금이라도 스크롤된 손짓은 맨 위에서 멈추고, 처음부터 맨 위에서 아래로 끄는 손짓만 시트를 내린다.
  */
-private class KeepSheetWhileScrollingConnection : NestedScrollConnection {
+internal class KeepSheetWhileScrollingConnection : NestedScrollConnection {
     /** 이번 손짓(끌기 + 이어지는 플링)에서 내용이 스크롤됐는지 */
     private var contentScrolled = false
 
@@ -281,7 +285,6 @@ private fun HeroImage(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(enabled = model != null, onClick = onClick)
     ) {
@@ -331,7 +334,6 @@ private fun DetailBody(
         // 시리즈명은 링크처럼 보여주고 누르면 해당 시리즈 화면으로 이동한다.
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
                 .clickable { onSeriesClick(series) }
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -360,9 +362,21 @@ private fun DetailBody(
             overflow = TextOverflow.Ellipsis
         )
 
+        // 세트 구성품이면 어느 세트인지 바로 보이게 캐릭터명 바로 아래에 둔다.
+        // 구역(세트 굿즈 / 구매 정보 / 굿즈 정보) 사이는 넓게 띄우고 각자 강조색 제목을 달아, 선이 이어져 한 덩어리로 보이지 않게 한다.
+        if (setGoods != null) {
+            Spacer(modifier = Modifier.height(SECTION_GAP))
+            SetGoodsSummary(
+                setGoods = setGoods,
+                componentTotal = setComponentTotal,
+                componentGotten = setComponentGotten,
+                onClick = onSetClick
+            )
+        }
+
         // 구매예정 굿즈는 구매 정보(배송 포함)를 가장 먼저 보고 고치게 굿즈 정보보다 위에 둔다.
         if (purchaseInfo != null) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(SECTION_GAP))
             PurchaseInfoSummary(
                 info = purchaseInfo,
                 onEdit = onEditPurchase,
@@ -371,46 +385,25 @@ private fun DetailBody(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                InfoLine(label = "가격", value = price.ifEmpty { "-" })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                InfoLine(label = "카테고리", value = category.ifEmpty { "-" })
-                if (memo.isNotEmpty()) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    InfoLine(label = "메모", value = memo)
-                }
+        Spacer(modifier = Modifier.height(SECTION_GAP))
+        SectionTitle("굿즈 정보")
+        LinedSection {
+            InfoLine(label = "가격", value = price.ifEmpty { "-" })
+            LineDivider()
+            InfoLine(label = "카테고리", value = category.ifEmpty { "-" })
+            if (memo.isNotEmpty()) {
+                LineDivider()
+                InfoLine(label = "메모", value = memo)
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Text(
-            text = "보유 상태",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SECTION_GAP))
         StatusSegmentedButtons(current = status, onSelect = onSelectStatus)
 
         // 수량은 가지고 있거나 살 예정인 굿즈에만 의미가 있다.
         if (onQuantityChange != null && status != GoodsStatus.NOT_GOTTEN) {
             Spacer(modifier = Modifier.height(12.dp))
             QuantityStepper(quantity = quantity, onChange = onQuantityChange)
-        }
-
-        if (setGoods != null) {
-            Spacer(modifier = Modifier.height(20.dp))
-            SetGoodsSummary(
-                setGoods = setGoods,
-                componentTotal = setComponentTotal,
-                componentGotten = setComponentGotten,
-                onClick = onSetClick
-            )
         }
 
         if (showDelete) {
@@ -434,9 +427,9 @@ private fun DetailBody(
 
 private const val MAX_QUANTITY = 99
 
-/** 수량 − / + 버튼. 가운데 숫자를 누르면 직접 입력한다. */
+/** 수량 − / + 버튼. 가운데 숫자를 누르면 직접 입력한다. 굿즈 상세와 2차창작 등록 화면이 함께 쓴다. */
 @Composable
-private fun QuantityStepper(quantity: Int, onChange: (Int) -> Unit) {
+fun QuantityStepper(quantity: Int, onChange: (Int) -> Unit) {
     var showInput by remember { mutableStateOf(false) }
     if (showInput) {
         QuantityInputDialog(
@@ -445,13 +438,9 @@ private fun QuantityStepper(quantity: Int, onChange: (Int) -> Unit) {
             onConfirm = { showInput = false; if (it != quantity) onChange(it) }
         )
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer
-    ) {
+    LinedSection {
         Row(
-            modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            modifier = Modifier.padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -471,7 +460,6 @@ private fun QuantityStepper(quantity: Int, onChange: (Int) -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .widthIn(min = 48.dp)
-                    .clip(RoundedCornerShape(8.dp))
                     .clickable { showInput = true }
                     .padding(horizontal = 6.dp, vertical = 6.dp)
             )
@@ -494,6 +482,8 @@ private fun QuantityInputDialog(initial: Int, onDismiss: () -> Unit, onConfirm: 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     AlertDialog(
+        // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+        shape = RectangleShape,
         onDismissRequest = onDismiss,
         title = { Text("수량 입력") },
         text = {
@@ -536,38 +526,27 @@ private fun PurchaseInfoSummary(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "구매 정보",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onEdit) { Text("수정") }
+            SectionTitle("구매 정보", modifier = Modifier.weight(1f))
+            TextButton(onClick = onEdit, shape = RectangleShape) { Text("수정") }
         }
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                InfoLine(label = "구입처", value = info.purchaseStore.ifEmpty { "미정" })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                InfoLine(label = "구매일", value = info.purchaseDate.ifEmpty { "미정" })
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                InfoLine(label = "수령예정일", value = info.receiveDate.ifEmpty { "미정" })
-                if (onToggleShipping != null) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    InfoLine(
-                        label = "배송",
-                        value = if (shippingDate.isEmpty()) "배송 전" else "배송 중 (${shippingDate}~)"
-                    )
-                }
+        LinedSection {
+            InfoLine(label = "구입처", value = info.purchaseStore.ifEmpty { "미정" })
+            LineDivider()
+            InfoLine(label = "구매일", value = info.purchaseDate.ifEmpty { "미정" })
+            LineDivider()
+            InfoLine(label = "수령예정일", value = info.receiveDate.ifEmpty { "미정" })
+            if (onToggleShipping != null) {
+                LineDivider()
+                InfoLine(
+                    label = "배송",
+                    value = if (shippingDate.isEmpty()) "배송 전" else "배송 중 (${shippingDate}~)"
+                )
             }
         }
         if (onToggleShipping != null) {
             Spacer(modifier = Modifier.height(8.dp))
             if (shippingDate.isEmpty()) {
-                FilledTonalButton(onClick = onToggleShipping, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(onClick = onToggleShipping, shape = RectangleShape, modifier = Modifier.fillMaxWidth()) {
                     Icon(
                         imageVector = Icons.Default.LocalShipping,
                         contentDescription = null,
@@ -577,12 +556,42 @@ private fun PurchaseInfoSummary(
                     Text("오늘 배송 시작")
                 }
             } else {
-                OutlinedButton(onClick = onToggleShipping, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onToggleShipping, shape = RectangleShape, modifier = Modifier.fillMaxWidth()) {
                     Text("배송 취소")
                 }
             }
         }
     }
+}
+
+/** 상세 구역 사이 간격 */
+private val SECTION_GAP = 24.dp
+
+/** 구역 제목. 마이페이지 묶음 제목처럼 강조색 굵은 글씨. */
+@Composable
+private fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(bottom = 6.dp)
+    )
+}
+
+/** 박스 대신 위아래 얇은 선으로 감싼 정보 구역. 안의 줄 사이는 [LineDivider] 로 나눈다. */
+@Composable
+private fun LinedSection(content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        LineDivider()
+        content()
+        LineDivider()
+    }
+}
+
+@Composable
+private fun LineDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
@@ -622,31 +631,19 @@ private fun SetGoodsSummary(
     val setName = setGoods.memo.ifEmpty { CATEGORY_SET }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "세트 굿즈",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable { onClick() },
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer
-        ) {
+        SectionTitle("세트 굿즈")
+        LinedSection {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .clickable { onClick() }
+                    .padding(vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .size(56.dp)
-                        .clip(RoundedCornerShape(10.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
@@ -663,7 +660,7 @@ private fun SetGoodsSummary(
                     Text(
                         text = setName,
                         style = AppStyles.textCardSubtitle.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -671,7 +668,7 @@ private fun SetGoodsSummary(
                         Text(
                             text = setGoods.price,
                             style = AppStyles.textCardSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -691,7 +688,7 @@ private fun SetGoodsSummary(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "세트 구성품 보기",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

@@ -27,9 +27,11 @@ fun FanGoodsListContent(
     }
 
     if (isGridMode) {
-        val rows = goods.chunked(gridColumns)
+        // 시리즈가 바뀌면 새 줄에서 시작해 줄 사이에 이중선을 넣는다.
+        val rows = remember(goods, gridColumns) { chunkBySeries(goods, gridColumns) }
         LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
-            itemsIndexed(rows) { _, rowItems ->
+            itemsIndexed(rows) { rowIndex, rowItems ->
+                if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider()
                 Row(modifier = Modifier.fillMaxWidth()) {
                     rowItems.forEach { item ->
                         Box(modifier = Modifier.weight(1f)) {
@@ -52,7 +54,9 @@ fun FanGoodsListContent(
                         Box(modifier = Modifier.weight(1f))
                     }
                 }
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                if (rowIndex < rows.lastIndex && !isSeriesStartRow(rows, rowIndex + 1)) {
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                }
             }
         }
     } else {
@@ -72,7 +76,8 @@ fun FanGoodsListContent(
                     onClick = { onGoodsClick(item) }
                 )
                 if (index < goods.lastIndex) {
-                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    if (isSeriesStart(goods, index + 1)) SeriesBoundaryDivider()
+                    else HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
         }

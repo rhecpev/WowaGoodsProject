@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject
 
+import androidx.compose.ui.graphics.RectangleShape
 import com.example.wowagoodsproject.component.WhatsNewDialog
 import com.example.wowagoodsproject.component.ReleaseNotes
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,6 +113,8 @@ class MainActivity : ComponentActivity() {
 
                 if (showUpdateDialog) {
                     androidx.compose.material3.AlertDialog(
+                        // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+                        shape = RectangleShape,
                         onDismissRequest = { showUpdateDialog = false },
                         title = { Text("업데이트 가능") },
                         text = {

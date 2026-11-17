@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.component
 
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -89,7 +90,7 @@ fun ProgressDialog(
         )
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RectangleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             shadowElevation = 8.dp
         ) {

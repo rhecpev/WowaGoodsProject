@@ -74,6 +74,13 @@ class MyPageViewModel : ViewModel() {
     private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
     val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter
 
+    private val _selectedSeriesFilter = MutableStateFlow<String?>(null)
+    val selectedSeriesFilter: StateFlow<String?> = _selectedSeriesFilter
+
+    fun setSeriesFilter(series: String?) {
+        _selectedSeriesFilter.value = series
+    }
+
     /** 구매예정 목록에서만 쓰는 구매 정보 필터. null 이면 전체. */
     private val _pendingInfoFilter = MutableStateFlow<PendingInfoFilter?>(null)
     val pendingInfoFilter: StateFlow<PendingInfoFilter?> = _pendingInfoFilter
@@ -155,7 +162,12 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
+    private val _charaCollection = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
+    /** 캐릭터별 공식 굿즈 수집 현황(보유, 전체). 캐릭터별 탭의 퍼센트와 같은 기준. */
+    val charaCollection: StateFlow<Map<String, Pair<Int, Int>>> = _charaCollection
+
     private fun applyGoods(allGoods: List<GoodsEntity>, allFanGoods: List<FanGoodsEntity>) {
+        _charaCollection.value = com.example.wowagoodsproject.component.charaCollection(allGoods)
         // 세트 굿즈는 카운트/목록에서 제외하고 낱개 굿즈만 집계한다.
         // 구매예정은 '구매예정 굿즈' 페이지에서 따로 보므로 여기서는 보유만 센다.
         val gottenGoods = allGoods.filter {
@@ -273,14 +285,59 @@ class MyPageViewModel : ViewModel() {
 
 
     /** 백업 zip 을 [zipFile] 에 만든다. 추출과 테스트가 함께 쓴다. */
-    internal suspend fun writeBackupZip(zipFile: File) = BackupZip.write(zipFile)
+    internal suspend fun writeBackupZip(zipFile: File, onProgress: (Float) -> Unit = {}) =
+        BackupZip.write(zipFile, onProgress)
+
+    // ── 용량 정리 ──
+    private val _storageItems = MutableStateFlow<List<CleanItem>?>(null)
+    /** 용량 정리 항목. null 이면 아직 재는 중. */
+    val storageItems: StateFlow<List<CleanItem>?> = _storageItems
+
+    private val _isCleaning = MutableStateFlow(false)
+    val isCleaning: StateFlow<Boolean> = _isCleaning
+
+    fun scanStorage(context: Context) {
+        _storageItems.value = null
+        viewModelScope.launch { _storageItems.value = StorageCleaner.scan(context) }
+    }
+
+    /** 마이페이지에 들어올 때 다시 잰다. 기존 값은 지우지 않아 '최대 n' 표시가 깜빡이지 않는다. */
+    fun refreshStorage(context: Context) {
+        viewModelScope.launch { _storageItems.value = StorageCleaner.scan(context) }
+    }
+
+    /** [targets] 를 지우고 실제로 확보한 크기를 알린 뒤 다시 잰다. */
+    fun cleanStorage(context: Context, targets: Set<CleanTarget>) {
+        if (_isCleaning.value || targets.isEmpty()) return
+        _isCleaning.value = true
+        viewModelScope.launch {
+            val freed = try {
+                StorageCleaner.clean(context, targets)
+            } finally {
+                _isCleaning.value = false
+            }
+            Toast.makeText(App.appContext, "${StorageCleaner.formatBytes(freed)}를 비웠어요", Toast.LENGTH_SHORT).show()
+            _storageItems.value = StorageCleaner.scan(context)
+        }
+    }
+
+    private val _isExporting = MutableStateFlow(false)
+    /** 추출 중에는 진행 팝업을 띄우고, 두 번 눌러도 한 번만 추출한다. */
+    val isExporting: StateFlow<Boolean> = _isExporting
+
+    private val _exportProgress = MutableStateFlow(0f)
+    val exportProgress: StateFlow<Float> = _exportProgress
 
     fun exportData(context: Context) {
+        if (_isExporting.value) return
+        _isExporting.value = true
+        _exportProgress.value = 0f
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
                     val zipFile = File(context.filesDir, "wowa_backup.zip")
-                    writeBackupZip(zipFile)
+                    // zip 만들기가 대부분이라 0.9 까지, 다운로드 폴더로 옮기기가 나머지.
+                    writeBackupZip(zipFile) { _exportProgress.value = (it * 0.9f).coerceIn(0f, 1f) }
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                         val contentValues = android.content.ContentValues().apply {
                             put(
@@ -305,6 +362,7 @@ class MyPageViewModel : ViewModel() {
                         }
                         // 다운로드 폴더로 옮겼으니 앱 안의 임시 파일은 지운다.
                         zipFile.delete()
+                        _exportProgress.value = 1f
                     } else {
                         // 공유받는 앱이 나중에 이 파일을 읽으므로 여기서 지우지 않는다.
                         // 다음 추출 때 같은 이름으로 덮어쓴다.
@@ -331,6 +389,8 @@ class MyPageViewModel : ViewModel() {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, "추출 실패: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
+            } finally {
+                _isExporting.value = false
             }
         }
     }

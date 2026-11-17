@@ -6,6 +6,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.style.TextAlign
@@ -24,14 +28,14 @@ fun MultiSelectToggle(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    FilledTonalIconToggleButton(
+    // 선 탭 옆에 두므로 배경 없는 아이콘만 둔다. 켜지면 아이콘이 강조색이 된다.
+    IconToggleButton(
         checked = selectionMode,
         onCheckedChange = { onToggle() },
-        modifier = modifier.size(36.dp),
-        colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            checkedContainerColor = MaterialTheme.colorScheme.primary,
-            checkedContentColor = MaterialTheme.colorScheme.onPrimary
+        modifier = modifier.size(40.dp),
+        colors = IconButtonDefaults.iconToggleButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            checkedContentColor = MaterialTheme.colorScheme.primary
         )
     ) {
         Icon(
@@ -112,17 +116,17 @@ fun BulkStatusBar(
             TextButton(onClick = if (allSelected) onClearSelection else onSelectAll) {
                 Text(if (allSelected) "선택 해제" else "전체 선택")
             }
+            // 박스 없이 상태 색 글자만 두고 칸 사이를 가로선으로 나눈다.
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             statusButtons.forEach { (status, label) ->
-                OutlinedButton(
-                    onClick = { onStatusClick(status) },
+                LineActionButton(
+                    label = label,
+                    color = statusColor(status),
                     enabled = count > 0,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = statusColor(status)),
-                    border = ButtonDefaults.outlinedButtonBorder(enabled = count > 0),
-                    contentPadding = PaddingValues(horizontal = 8.dp),
+                    onClick = { onStatusClick(status) },
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(label, maxLines = 1)
-                }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
         if (embedded) {
@@ -160,22 +164,54 @@ fun BulkStatusBar(
                     BulkSelectionSummary(count, allSelected, onSelectAll, onClearSelection)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                statusButtons.forEach { (status, label) ->
-                    val color = statusColor(status)
-                    OutlinedButton(
-                        onClick = { onStatusClick(status) },
-                        enabled = count > 0,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = color),
-                        border = ButtonDefaults.outlinedButtonBorder(enabled = count > 0),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(label, maxLines = 1)
+            // 박스 없이 상태 색 글자만 두고 칸 사이를 얇은 세로선으로 나눈다.
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Min),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                statusButtons.forEachIndexed { index, (status, label) ->
+                    if (index > 0) {
+                        VerticalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
                     }
+                    LineActionButton(
+                        label = label,
+                        color = statusColor(status),
+                        enabled = count > 0,
+                        onClick = { onStatusClick(status) },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
+    }
+}
+
+/** 박스 없는 동작 버튼: 색 글자만 있고 누르는 영역은 칸 전체. 잠기면 흐리게 보인다. */
+@Composable
+private fun LineActionButton(
+    label: String,
+    color: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.38f)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+            maxLines = 1
+        )
     }
 }
 

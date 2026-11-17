@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -45,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ChangeCircle
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
@@ -68,6 +68,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.ExistingWorkPolicy
@@ -90,6 +91,7 @@ import com.example.wowagoodsproject.component.ProgressDialog
 import com.example.wowagoodsproject.component.SetGoodsDetailDialog
 import com.example.wowagoodsproject.component.filterFanGoodsList
 import com.example.wowagoodsproject.component.filterGoodsList
+import com.example.wowagoodsproject.component.seriesOptions
 import com.example.wowagoodsproject.component.filterPendingInfo
 import com.example.wowagoodsproject.component.PendingInfoFilterBar
 import com.example.wowagoodsproject.component.findSetGoods
@@ -100,6 +102,11 @@ import com.example.wowagoodsproject.navigation.TopBar
 import com.example.wowagoodsproject.navigation.TopBarAction
 import com.example.wowagoodsproject.component.ActiveFilter
 import com.example.wowagoodsproject.component.ActiveFilterChips
+import com.example.wowagoodsproject.db.character.CharaEntity
+import com.example.wowagoodsproject.component.rememberCharaColors
+import com.example.wowagoodsproject.component.charaShares
+import com.example.wowagoodsproject.component.CharaShareGauge
+import com.example.wowagoodsproject.component.FavoriteCollectionList
 import com.example.wowagoodsproject.ui.theme.AppStyles
 import com.example.wowagoodsproject.ui.theme.AppTheme
 
@@ -129,6 +136,7 @@ fun MyPageScreen(
         }
     }
     val charaList by viewModel.charaList.collectAsState()
+    val charaCollection by viewModel.charaCollection.collectAsState()
     val officialGottenGoods by viewModel.officialGottenGoods.collectAsState()
     val allSeriesGoods by viewModel.allSeriesGoods.collectAsState()
     val fanGottenGoods by viewModel.fanGottenGoods.collectAsState()
@@ -138,11 +146,19 @@ fun MyPageScreen(
     val currentSection by viewModel.currentSection.collectAsState()
     val selectedCharaFilter by viewModel.selectedCharaFilter.collectAsState()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsState()
+    val selectedSeriesFilter by viewModel.selectedSeriesFilter.collectAsState()
     val showFilterDialog by viewModel.showFilterDialog.collectAsState()
     val selectedGoods by detailViewModel.selectedGoods.collectAsState()
     val latestVersion by viewModel.latestVersion.collectAsState()
     val isImporting by viewModel.isImporting.collectAsState()
     val importProgress by viewModel.importProgress.collectAsState()
+    val isExporting by viewModel.isExporting.collectAsState()
+    val storageItems by viewModel.storageItems.collectAsState()
+    val isCleaning by viewModel.isCleaning.collectAsState()
+    var showStorageSheet by remember { mutableStateOf(false) }
+    // 마이페이지 첫 화면에 올 때마다 정리할 수 있는 크기를 다시 잰다('용량 정리' 옆 표시).
+    LaunchedEffect(currentSection) { if (currentSection == null) viewModel.refreshStorage(context) }
+    val exportProgress by viewModel.exportProgress.collectAsState()
     val unreadNewsCount by viewModel.unreadNewsCount.collectAsState()
     val changedGoodsCount by viewModel.changedGoodsCount.collectAsState()
     val pendingOfficialGoods by viewModel.pendingOfficialGoods.collectAsState()
@@ -260,6 +276,7 @@ fun MyPageScreen(
         viewModel.setSection(null)
         viewModel.setCharaFilter(null)
         viewModel.setCategoryFilter(null)
+        viewModel.setSeriesFilter(null)
         viewModel.setPendingInfoFilter(null)
         selectedPendingOfficialIds = emptySet()
         selectedPendingFanIds = emptySet()
@@ -291,19 +308,28 @@ fun MyPageScreen(
             .sorted()
     }
 
-    val filteredOfficialGoods = remember(officialGottenGoods, selectedCharaFilter, selectedCategoryFilter) {
+    val filteredOfficialGoods = remember(officialGottenGoods, selectedCharaFilter, selectedCategoryFilter, selectedSeriesFilter) {
         filterGoodsList(
             list = officialGottenGoods,
             charaFilter = selectedCharaFilter,
-            categoryFilter = selectedCategoryFilter
+            categoryFilter = selectedCategoryFilter,
+            seriesFilter = selectedSeriesFilter
         )
     }
-    val filteredFanGoods = remember(fanGottenGoods, selectedCharaFilter, selectedCategoryFilter) {
+    val filteredFanGoods = remember(fanGottenGoods, selectedCharaFilter, selectedCategoryFilter, selectedSeriesFilter) {
         filterFanGoodsList(
             list = fanGottenGoods,
             charaFilter = selectedCharaFilter,
-            categoryFilter = selectedCategoryFilter
+            categoryFilter = selectedCategoryFilter,
+            seriesFilter = selectedSeriesFilter
         )
+    }
+
+    val combinedSeriesList = remember(officialGottenGoods, fanGottenGoods) {
+        seriesOptions(officialGottenGoods + fanGottenGoods)
+    }
+    val pendingSeriesList = remember(pendingOfficialGoods, pendingFanGoods) {
+        seriesOptions(pendingOfficialGoods + pendingFanGoods)
     }
 
     // 구매예정 목록에도 같은 캐릭터/카테고리 필터를 쓴다. 고를 수 있는 값은 구매예정 굿즈에서 뽑는다.
@@ -324,18 +350,20 @@ fun MyPageScreen(
     }
 
     // 캐릭터/카테고리만 건 목록. 구매 정보 필터 칩의 숫자는 여기서 센다.
-    val charaFilteredPendingOfficial = remember(pendingOfficialGoods, selectedCharaFilter, selectedCategoryFilter) {
+    val charaFilteredPendingOfficial = remember(pendingOfficialGoods, selectedCharaFilter, selectedCategoryFilter, selectedSeriesFilter) {
         filterGoodsList(
             list = pendingOfficialGoods,
             charaFilter = selectedCharaFilter,
-            categoryFilter = selectedCategoryFilter
+            categoryFilter = selectedCategoryFilter,
+            seriesFilter = selectedSeriesFilter
         )
     }
-    val charaFilteredPendingFan = remember(pendingFanGoods, selectedCharaFilter, selectedCategoryFilter) {
+    val charaFilteredPendingFan = remember(pendingFanGoods, selectedCharaFilter, selectedCategoryFilter, selectedSeriesFilter) {
         filterFanGoodsList(
             list = pendingFanGoods,
             charaFilter = selectedCharaFilter,
-            categoryFilter = selectedCategoryFilter
+            categoryFilter = selectedCategoryFilter,
+            seriesFilter = selectedSeriesFilter
         )
     }
     val filteredPendingOfficial = remember(charaFilteredPendingOfficial, pendingInfoFilter) {
@@ -452,8 +480,16 @@ fun MyPageScreen(
             selectedCategoryFilter = selectedCategoryFilter,
             onCharaSelect = { viewModel.setCharaFilter(it) },
             onCategorySelect = { viewModel.setCategoryFilter(it) },
-            onClearFilter = { viewModel.setCharaFilter(null); viewModel.setCategoryFilter(null) },
-            onDismiss = { viewModel.setShowFilterDialog(false) }
+            onClearFilter = {
+                viewModel.setCharaFilter(null); viewModel.setCategoryFilter(null); viewModel.setSeriesFilter(null)
+            },
+            onDismiss = { viewModel.setShowFilterDialog(false) },
+            seriesList = if (currentSection == "pending") pendingSeriesList else combinedSeriesList,
+            selectedSeriesFilter = selectedSeriesFilter,
+            onSeriesSelect = { viewModel.setSeriesFilter(it) },
+            // 지금 보는 목록(보유 또는 구매예정)의 굿즈에서만 대표 사진을 고른다.
+            scopeGoods = if (currentSection == "pending") pendingOfficialGoods + pendingFanGoods
+            else officialGottenGoods + fanGottenGoods
         )
     }
 
@@ -465,11 +501,29 @@ fun MyPageScreen(
         )
     }
 
+    if (showStorageSheet) {
+        StorageCleanSheet(
+            items = storageItems,
+            cleaning = isCleaning,
+            onClean = { targets -> viewModel.cleanStorage(context, targets) },
+            onDismiss = { showStorageSheet = false }
+        )
+    }
+
+    if (isExporting) {
+        ProgressDialog(
+            title = "데이터 추출 중",
+            fraction = exportProgress,
+            icon = Icons.Default.FileDownload
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         val closeSection: () -> Unit = {
             viewModel.setSection(null)
             viewModel.setCharaFilter(null)
             viewModel.setCategoryFilter(null)
+            viewModel.setSeriesFilter(null)
             viewModel.setPendingInfoFilter(null)
             selectedPendingOfficialIds = emptySet()
             selectedPendingFanIds = emptySet()
@@ -488,7 +542,7 @@ fun MyPageScreen(
                         icon = Icons.Default.FilterList,
                         contentDescription = "필터",
                         onClick = { viewModel.setShowFilterDialog(true) },
-                        active = selectedCharaFilter != null || selectedCategoryFilter != null
+                        active = selectedCharaFilter != null || selectedCategoryFilter != null || selectedSeriesFilter != null
                     )
                 }
                 if (currentSection == "goods") {
@@ -529,19 +583,48 @@ fun MyPageScreen(
             ActiveFilterChips(
                 filters = listOfNotNull(
                     selectedCharaFilter?.let { ActiveFilter(it) { viewModel.setCharaFilter(null) } },
+                    selectedSeriesFilter?.let { ActiveFilter(it) { viewModel.setSeriesFilter(null) } },
                     selectedCategoryFilter?.let { ActiveFilter(it) { viewModel.setCategoryFilter(null) } }
                 ),
-                onClearAll = { viewModel.setCharaFilter(null); viewModel.setCategoryFilter(null) }
+                onClearAll = {
+                    viewModel.setCharaFilter(null); viewModel.setCategoryFilter(null); viewModel.setSeriesFilter(null)
+                }
             )
         }
 
         if (currentSection == null) {
             // 줄 하나하나를 따로 만들어 두고, 세로 화면은 묶음 카드로, 가로 화면은 두 칸짜리 표처럼 배치한다.
             val summaryCard: @Composable () -> Unit = {
+                // 보유 굿즈의 캐릭터 비율. 색은 선호 캐릭터부터(우선순위 순), 그다음 많은 순으로 정해 서로 헷갈리지 않게 한다.
+                val favoritesInOrder = remember(charaList) {
+                    charaList.filter { it.charaIsFavorite }
+                        .sortedWith(compareBy<CharaEntity> { it.charaFavoriteOrder }.thenBy { it.charaNm })
+                        .map { it.charaNm }
+                }
+                // 선호 캐릭터는 각자 색, 선호가 아닌 캐릭터는 '기타'로 합친다(선호가 없으면 상위 6명).
+                val shares = remember(officialGottenGoods, fanGottenGoods, favoritesInOrder) {
+                    charaShares(officialGottenGoods + fanGottenGoods, favoritesInOrder, onlyFavorites = true)
+                }
+                val colorOrder = remember(shares, favoritesInOrder) {
+                    val topNames = shares.top.map { it.name }
+                    favoritesInOrder.filter { it in topNames } + topNames.filterNot { it in favoritesInOrder }
+                }
+                val charaColors by rememberCharaColors(colorOrder, charaList)
                 CollectionSummaryCard(
                     officialCount = officialGottenGoods.size,
                     fanCount = fanGottenGoods.size,
-                    onClick = { viewModel.setSection("goods") }
+                    onClick = { viewModel.setSection("goods") },
+                    gauge = {
+                        val avatars = remember(charaList) { charaList.associate { it.charaNm to it.charaUrl } }
+                        CharaShareGauge(shares = shares, colors = charaColors, avatars = avatars)
+                        // 선호 캐릭터 수집률은 게이지 범례와 따로 목록으로 둔다(캐릭터별 탭의 퍼센트와 같은 값).
+                        Spacer(modifier = Modifier.height(20.dp))
+                        FavoriteCollectionList(
+                            favorites = favoritesInOrder.mapNotNull { name -> charaList.find { it.charaNm == name } },
+                            collection = charaCollection,
+                            colors = charaColors
+                        )
+                    }
                 )
             }
             val pendingRow: @Composable () -> Unit = {
@@ -635,6 +718,17 @@ fun MyPageScreen(
                     showChevron = false
                 )
             }
+            val storageRow: @Composable () -> Unit = {
+                // 글자 옆에 지금 정리할 수 있는 최대 크기(고를 수 있는 항목을 모두 지울 때).
+                val maxBytes = storageItems?.sumOf { it.bytes }
+                SettingsRow(
+                    icon = Icons.Default.CleaningServices,
+                    title = "용량 정리",
+                    titleBadge = maxBytes?.takeIf { it > 0 }?.let { "최대 ${StorageCleaner.formatBytes(it)} 정리 가능" },
+                    subtitle = "쌓인 기록·캐시 중 지워도 되는 것만 골라 지우기",
+                    onClick = { showStorageSheet = true; viewModel.scanStorage(context) }
+                )
+            }
             val versionRow: @Composable () -> Unit = {
                 val latest = latestVersion
                 val hasNewVersion = latest != null && isNewerVersion(latest, BuildConfig.VERSION_NAME)
@@ -693,18 +787,14 @@ fun MyPageScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                    ) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    run {
                         // 테마 수가 늘어도 한 줄에 들어가도록 폭을 똑같이 나눠 갖는다.
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .selectableGroup()
-                                .padding(horizontal = AppStyles.paddingMedium, vertical = 10.dp)
+                                .padding(vertical = 10.dp)
                         ) {
                             AppTheme.entries.forEach { theme ->
                                 ThemeSwatchButton(
@@ -719,11 +809,13 @@ fun MyPageScreen(
                             }
                         }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
 
             if (isLandscape) {
-                // 가로 화면: 두 칸씩 나란히. 짝이 없는 줄(화면 테마)은 폭을 다 쓴다.
+                // 가로 화면: 보유 굿즈 요약(캐릭터 비율 게이지)은 한 줄을 다 쓰고, 나머지는 두 칸씩 나란히.
+                // 짝이 없는 줄(화면 테마 등)도 폭을 다 쓴다.
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -731,29 +823,30 @@ fun MyPageScreen(
                         .padding(AppStyles.paddingLarge),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    summaryCard()
                     SettingsPairRow(
-                        left = summaryCard,
-                        right = { SettingsCard(fillHeight = true, content = pendingRow) }
+                        left = { SettingsCard(fillHeight = true, content = pendingRow) },
+                        right = { SettingsCard(fillHeight = true, content = changedRow) }
                     )
                     SettingsPairRow(
                         left = { SettingsCard(fillHeight = true, content = exportRow) },
                         right = { SettingsCard(fillHeight = true, content = importRow) }
                     )
                     SettingsPairRow(
-                        left = { SettingsCard(fillHeight = true, content = changedRow) },
-                        right = { SettingsCard(fillHeight = true, content = historyRow) }
+                        left = { SettingsCard(fillHeight = true, content = historyRow) },
+                        right = { SettingsCard(fillHeight = true, content = manualUpdateRow) }
                     )
                     SettingsPairRow(
-                        left = { SettingsCard(fillHeight = true, content = manualUpdateRow) },
-                        right = { SettingsCard(fillHeight = true, content = lastUpdateRow) }
+                        left = { SettingsCard(fillHeight = true, content = lastUpdateRow) },
+                        right = { SettingsCard(fillHeight = true, content = versionRow) }
                     )
                     if (hasReleaseNotes) {
                         SettingsPairRow(
-                            left = { SettingsCard(fillHeight = true, content = versionRow) },
+                            left = { SettingsCard(fillHeight = true, content = storageRow) },
                             right = { SettingsCard(fillHeight = true, content = releaseNotesRow) }
                         )
                     } else {
-                        SettingsCard(content = versionRow)
+                        SettingsCard(content = storageRow)
                     }
                     themeBlock()
                 }
@@ -775,6 +868,8 @@ fun MyPageScreen(
                         exportRow()
                         SettingsDivider()
                         importRow()
+                        SettingsDivider()
+                        storageRow()
                     }
                     SettingsGroup(title = "업데이트") {
                         manualUpdateRow()
@@ -869,6 +964,7 @@ fun MyPageScreen(
                         officialGoods = filteredPendingOfficial,
                         fanGoods = filteredPendingFan,
                         isFiltered = selectedCharaFilter != null || selectedCategoryFilter != null ||
+                                selectedSeriesFilter != null ||
                                 pendingInfoFilter != null,
                         selectedOfficialIds = selectedPendingOfficialIds,
                         selectedFanIds = selectedPendingFanIds,
@@ -1012,76 +1108,57 @@ fun MyPageScreen(
 }
 
 
-/** 맨 위의 보유 굿즈 요약 카드. 누르면 보유 굿즈 목록으로 들어간다. */
+/**
+ * 맨 위의 보유 굿즈 요약. 누르면 보유 굿즈 목록으로 들어간다.
+ * 박스 없이 위쪽 굵은 강조선과 아래 얇은 선 사이에 제목과 큰 숫자를 둔다.
+ */
 @Composable
 private fun CollectionSummaryCard(
     officialCount: Int,
     fanCount: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /** 숫자 아래에 두는 캐릭터 비율 게이지 */
+    gauge: @Composable () -> Unit = {}
 ) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
-        Box {
-            // 배경 장식용 큰 아이콘
-            Icon(
-                imageVector = Icons.Default.Inventory2,
-                contentDescription = null,
-                tint = LocalContentColor.current.copy(alpha = 0.12f),
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .offset(x = 24.dp)
-                    .size(128.dp)
-            )
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "보유 굿즈",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(text = "목록 보기", style = MaterialTheme.typography.labelLarge)
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SummaryStat(count = officialCount, label = "공식")
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 24.dp)
-                            .width(1.dp)
-                            .height(36.dp)
-                            .background(LocalContentColor.current.copy(alpha = 0.3f))
-                    )
-                    SummaryStat(count = fanCount, label = "2차창작")
-                }
+        HorizontalDivider(thickness = 2.dp, color = MaterialTheme.colorScheme.primary)
+        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp)) {
+            // 공식/2차창작 숫자 대신 총 개수 하나와 캐릭터 비율 게이지(범례에 캐릭터별 개수·비율)만 둔다.
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "보유 굿즈",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${officialCount + fanCount}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "목록 보기",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
             }
+            Spacer(modifier = Modifier.height(12.dp))
+            gauge()
         }
-    }
-}
-
-@Composable
-private fun SummaryStat(count: Int, label: String) {
-    Column {
-        Text(
-            text = "$count",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = label,
-            style = AppStyles.textCardSmall,
-            color = LocalContentColor.current.copy(alpha = 0.8f)
-        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -1096,7 +1173,7 @@ private fun SectionLabel(text: String) {
     )
 }
 
-/** 제목 + 둥근 카드 안에 설정 줄들을 묶는다. */
+/** 제목 + 위아래 얇은 선 사이에 설정 줄들을 묶는다(박스 없음). */
 @Composable
 private fun SettingsGroup(
     title: String,
@@ -1104,19 +1181,14 @@ private fun SettingsGroup(
 ) {
     Column {
         SectionLabel(title)
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(content = content)
-        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Column(content = content)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
 /**
- * 제목 없이 설정 한 줄만 담는 둥근 카드. 가로 화면에서 줄들을 두 칸으로 나눠 놓을 때 쓴다.
+ * 제목 없이 설정 한 줄만 담는 칸(아래 선으로 구분). 가로 화면에서 줄들을 두 칸으로 나눠 놓을 때 쓴다.
  * [fillHeight] 면 옆 칸과 높이를 맞추고, 내용은 세로 가운데에 둔다.
  */
 @Composable
@@ -1124,18 +1196,17 @@ private fun SettingsCard(
     fillHeight: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    Surface(
+    // 박스 없이 칸 아래에 얇은 선만 긋는다.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (fillHeight) Modifier.fillMaxHeight() else Modifier),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            .then(if (fillHeight) Modifier.fillMaxHeight() else Modifier)
     ) {
         Column(
-            modifier = if (fillHeight) Modifier.fillMaxHeight() else Modifier,
+            modifier = if (fillHeight) Modifier.weight(1f) else Modifier,
             verticalArrangement = Arrangement.Center
         ) { content() }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -1162,6 +1233,8 @@ private fun SettingsRow(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
+    /** 제목 바로 옆에 붙이는 작은 강조 글자 */
+    titleBadge: String? = null,
     subtitle: String? = null,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     showIndication: Boolean = true,
@@ -1181,33 +1254,39 @@ private fun SettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(clickModifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 4.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .background(
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                    RoundedCornerShape(12.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
+        // 아이콘은 배경 없이 강조색으로만. 칸 너비는 그대로 둬 구분선 들여쓰기와 맞춘다.
+        Box(modifier = Modifier.size(38.dp), contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (titleBadge != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = titleBadge,
+                        style = AppStyles.textCardSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             if (subtitle != null) {
                 Text(
                     text = subtitle,
@@ -1233,7 +1312,7 @@ private fun SettingsRow(
 @Composable
 private fun SettingsDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(start = 68.dp),
+        modifier = Modifier.padding(start = 56.dp),
         thickness = 1.dp,
         color = MaterialTheme.colorScheme.outlineVariant
     )
@@ -1245,10 +1324,7 @@ private fun StatusPill(text: String, color: Color) {
         text = text,
         style = AppStyles.textCardSmall.copy(fontWeight = FontWeight.Bold),
         color = color,
-        maxLines = 1,
-        modifier = Modifier
-            .background(color.copy(alpha = 0.14f), RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+        maxLines = 1
     )
 }
 
@@ -1271,7 +1347,6 @@ private fun ThemeSwatchButton(
         modifier = modifier
             // 동그라미가 작아 손가락이 닿기 어려우므로 나눠 가진 칸 전체를 누를 수 있게 한다.
             .height(40.dp)
-            .clip(RoundedCornerShape(10.dp))
             .selectable(
                 selected = selected,
                 role = Role.RadioButton,

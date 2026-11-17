@@ -3,6 +3,10 @@ package com.example.wowagoodsproject
 import android.app.Application
 import android.content.Context
 import androidx.room.Room
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.example.wowagoodsproject.db.character.CharaDatabase
 import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
 import com.example.wowagoodsproject.db.official.GoodsDatabase
@@ -14,9 +18,32 @@ import androidx.work.*
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
-class App : Application() {
+/**
+ * [ImageLoaderFactory]: 앱 전체가 쓰는 이미지 로더(Coil)의 캐시 크기를 정한다.
+ * 기본값은 디스크 캐시가 '기기 남은 용량의 2%, 최대 250MB' 라 저장 공간이 넉넉한 기기에서 크게 불어났다.
+ * 디스크 캐시는 받은 원본 파일을 그대로 두므로 한도를 정해 두고, 넘치면 오래 안 본 사진부터 지운다(LRU).
+ */
+class App : Application(), ImageLoaderFactory {
+
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .diskCache {
+            DiskCache.Builder()
+                .directory(cacheDir.resolve("image_cache")) // Coil 기본 위치 그대로(이미 받은 캐시를 이어 쓴다)
+                .maxSizeBytes(IMAGE_DISK_CACHE_BYTES)
+                .build()
+        }
+        .memoryCache {
+            MemoryCache.Builder(this)
+                .maxSizePercent(0.20) // 앱이 쓸 수 있는 메모리의 20%
+                .build()
+        }
+        .build()
+
 
     companion object {
+        /** 이미지 디스크 캐시 한도 100MB */
+        private const val IMAGE_DISK_CACHE_BYTES = 100L * 1024 * 1024
+
         lateinit var database: GoodsDatabase
         lateinit var fanDatabase: FanGoodsDatabase
         lateinit var charaDatabase: CharaDatabase
@@ -75,6 +102,8 @@ class App : Application() {
             applicationContext,
             CharaDatabase::class.java,
             "chara_database"
+        ).addMigrations(
+            CharaDatabase.MIGRATION_2_3
         ).build()
 
         seriesDatabase = Room.databaseBuilder(

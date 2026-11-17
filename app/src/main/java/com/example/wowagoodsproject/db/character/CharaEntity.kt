@@ -9,5 +9,7 @@ data class CharaEntity(
     val charaId: Int = 0,
     val charaNm: String = "",
     val charaUrl: String = "",
-    val charaIsFavorite: Boolean = false
+    val charaIsFavorite: Boolean = false,
+    /** 선호 캐릭터끼리의 우선순위. 작을수록 앞. 선호가 아니면 0. */
+    val charaFavoriteOrder: Int = 0
 )

@@ -34,24 +34,35 @@ fun hasChara(charaField: String, name: String): Boolean {
 fun filterGoodsList(
     list: List<GoodsEntity>,
     charaFilter: String? = null,
-    categoryFilter: String? = null
+    categoryFilter: String? = null,
+    seriesFilter: String? = null
 ): List<GoodsEntity> {
     var result = list.filter { it.category != CATEGORY_SET }
     if (charaFilter != null) result = result.filter { hasChara(it.chara, charaFilter) }
     if (categoryFilter != null) result = result.filter { it.category == categoryFilter }
+    if (seriesFilter != null) result = result.filter { it.series.trim() == seriesFilter }
     return result
 }
 
 fun filterFanGoodsList(
     list: List<FanGoodsEntity>,
     charaFilter: String? = null,
-    categoryFilter: String? = null
+    categoryFilter: String? = null,
+    seriesFilter: String? = null
 ): List<FanGoodsEntity> {
     var result = list
     if (charaFilter != null) result = result.filter { hasChara(it.chara, charaFilter) }
     if (categoryFilter != null) result = result.filter { it.category == categoryFilter }
+    if (seriesFilter != null) result = result.filter { it.series.trim() == seriesFilter }
     return result
 }
+
+/** 필터 팝업의 시리즈 탭에 보여 줄 값. 시리즈를 비워 둔 굿즈(2차창작 등)는 고를 거리가 없어 뺀다. */
+fun seriesOptions(list: List<GoodsItem>): List<String> =
+    list.map { it.series.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .sorted()
 
 /** 낱개 굿즈가 속한 세트 굿즈를 찾는다. 세트에 속하지 않으면 null. */
 fun findSetGoods(goods: GoodsEntity, allGoods: List<GoodsEntity>): GoodsEntity? {
@@ -66,3 +77,40 @@ fun getSetComponents(setGoods: GoodsEntity, allGoods: List<GoodsEntity>): List<G
     allGoods.filter {
         it.category != CATEGORY_SET && it.memo == setGoods.memo && it.series == setGoods.series
     }
+
+/**
+ * 필터 그리드 칸(카테고리·시리즈 등)마다 쓸 대표 사진 경로.
+ * [keyOf] 가 그 칸 값과 같은 굿즈 중 선호 1순위 캐릭터의 굿즈 사진을 쓰고, 없으면 2순위, 3순위… 순으로 찾는다.
+ * 선호 캐릭터 굿즈가 하나도 없으면 그 칸의 아무 굿즈 사진을 쓴다. 사진이 있는 굿즈가 없으면 결과에 넣지 않는다.
+ * [goods] 의 앞쪽 굿즈를 먼저 고르므로, 공식 굿즈를 2차창작보다 앞에 두면 공식 사진이 우선한다. 세트 굿즈는 쓰지 않는다.
+ * @param favoritesInOrder 선호 캐릭터 이름. 우선순위 순서(1순위가 맨 앞).
+ */
+fun coverImages(
+    keys: List<String>,
+    goods: List<GoodsItem>,
+    favoritesInOrder: List<String>,
+    keyOf: (GoodsItem) -> String
+): Map<String, String> {
+    val withImage = goods.filter { it.imgPath.isNotBlank() && it.category != CATEGORY_SET }
+        .groupBy(keyOf)
+    return keys.mapNotNull { key ->
+        val candidates = withImage[key].orEmpty()
+        val pick = favoritesInOrder.firstNotNullOfOrNull { fav -> candidates.firstOrNull { hasChara(it.chara, fav) } }
+            ?: candidates.firstOrNull()
+        pick?.let { key to it.imgPath }
+    }.toMap()
+}
+
+/** 카테고리별 대표 사진. 규칙은 [coverImages]. */
+fun categoryCoverImages(
+    categories: List<String>,
+    goods: List<GoodsItem>,
+    favoritesInOrder: List<String>
+): Map<String, String> = coverImages(categories, goods, favoritesInOrder) { it.category }
+
+/** 시리즈별 대표 사진. 시리즈 DB에 그림이 없는 시리즈(2차창작에 직접 적은 시리즈 등)에 쓴다. 규칙은 [coverImages]. */
+fun seriesCoverImages(
+    series: List<String>,
+    goods: List<GoodsItem>,
+    favoritesInOrder: List<String>
+): Map<String, String> = coverImages(series, goods, favoritesInOrder) { it.series.trim() }

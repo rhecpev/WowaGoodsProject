@@ -33,7 +33,7 @@ import com.example.wowagoodsproject.component.GridColumnsBar
 import com.example.wowagoodsproject.component.rememberGridColumns
 import com.example.wowagoodsproject.component.BulkStatusArea
 import com.example.wowagoodsproject.component.CATEGORY_SET
-import com.example.wowagoodsproject.component.CategoryChoiceList
+import com.example.wowagoodsproject.component.CategoryChoiceGrid
 import com.example.wowagoodsproject.component.CharaChoiceGrid
 import com.example.wowagoodsproject.component.EmptyState
 import com.example.wowagoodsproject.component.FilterBar
@@ -146,8 +146,7 @@ fun SearchScreen(
             SearchField(
                 query = search,
                 onQueryChange = { search = it },
-                placeholder = "캐릭터 이름 검색",
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                placeholder = "캐릭터 이름 검색"
             )
             Spacer(modifier = Modifier.height(12.dp))
             CharaChoiceGrid(
@@ -174,12 +173,13 @@ fun SearchScreen(
             SearchField(
                 query = search,
                 onQueryChange = { search = it },
-                placeholder = "카테고리 검색",
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                placeholder = "카테고리 검색"
             )
             Spacer(modifier = Modifier.height(12.dp))
-            CategoryChoiceList(
+            CategoryChoiceGrid(
                 categories = categoryChoices.filter { it.contains(search, ignoreCase = true) },
+                // 검색어·캐릭터에 맞는 굿즈에서만 대표 사진을 고른다.
+                scopeGoods = (textMatched.first + textMatched.second).filter { it.hasChara(charaFilter) },
                 selected = categoryFilter,
                 onSelect = { cat ->
                     viewModel.setCategoryFilter(if (categoryFilter == cat) null else cat)
@@ -348,8 +348,8 @@ fun SearchScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         charaPicker(Modifier.weight(1f))
                         categoryPicker(Modifier.weight(1f))
@@ -460,35 +460,38 @@ private fun FilterPicker(
     modifier: Modifier = Modifier
 ) {
     val selected = value != null
-    Surface(
-        modifier = modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(26.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh
-    ) {
+    // 검색창과 같은 밑줄형: 박스 없이 '이름  값 ▾' 한 줄과 아래 밑줄. 고르면 값과 밑줄이 강조색이 된다.
+    Column(modifier = modifier.clickable(onClick = onClick)) {
         Row(
-            modifier = Modifier.padding(start = 16.dp, end = 4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .padding(start = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = value ?: label,
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = value ?: "전체",
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             if (selected) {
-                IconButton(onClick = onClear) {
+                IconButton(onClick = onClear, modifier = Modifier.size(40.dp)) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "$label 필터 해제",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             } else {
@@ -496,10 +499,14 @@ private fun FilterPicker(
                     imageVector = Icons.Default.ArrowDropDown,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 12.dp)
+                    modifier = Modifier.padding(end = 8.dp)
                 )
             }
         }
+        HorizontalDivider(
+            thickness = if (selected) 2.dp else 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+        )
     }
 }
 

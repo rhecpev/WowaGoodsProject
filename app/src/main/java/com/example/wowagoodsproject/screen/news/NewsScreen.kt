@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,6 +106,8 @@ fun NewsScreen(
 
     if (showClearDialog) {
         AlertDialog(
+            // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+            shape = RectangleShape,
             onDismissRequest = { showClearDialog = false },
             title = { Text("소식 전체 삭제") },
             text = { Text("소식 ${news.size}개를 모두 삭제할까요?") },
@@ -176,8 +179,8 @@ fun NewsScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
-                contentPadding = PaddingValues(vertical = AppStyles.paddingSmall),
-                verticalArrangement = Arrangement.spacedBy(AppStyles.paddingSmall)
+                // 항목마다 아래 구분선이 있어 항목 사이 간격은 두지 않는다.
+                contentPadding = PaddingValues(vertical = AppStyles.paddingSmall)
             ) {
                 items(filteredNews, key = { it.newsId }) { item ->
                     NewsCard(
@@ -207,13 +210,23 @@ private fun NewsCard(
     val accent = if (isChanged) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     val encodedPath = encodeGoodsImagePath(news.newsImgUrl)
 
-    Card(
+    // 카드 배경(surface)은 밝은 테마에서 바탕과 거의 같아 항목 경계가 사라졌다.
+    // 박스 대신 왼쪽에 소식 종류 색(신규=강조색, 변경=빨강)의 세로선을 긋고 항목 아래를 얇은 선으로 나눈다.
+    // 두 색 모두 모든 테마에서 바탕 대비 3:1 이상이라 항목 시작이 분명하다.
+    Column(modifier = Modifier.padding(horizontal = AppStyles.paddingMedium)) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppStyles.paddingMedium),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .height(IntrinsicSize.Min)
+            .padding(vertical = AppStyles.paddingSmall)
     ) {
-        Column(modifier = Modifier.padding(AppStyles.paddingMedium)) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(accent)
+        )
+        Column(modifier = Modifier.padding(start = AppStyles.paddingMedium, top = 4.dp, bottom = 4.dp)) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -293,7 +306,7 @@ private fun NewsCard(
             // 변경 소식은 같은 카드 아랫줄에 무엇이 바뀌었는지 적는다.
             if (news.detailLines.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline)
+                HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     news.detailLines.forEach { line ->
@@ -306,12 +319,15 @@ private fun NewsCard(
                 }
                 if (canRestore) {
                     Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                    OutlinedButton(
+                    TextButton(
                         onClick = onRestore,
+                        shape = RectangleShape,
                         modifier = Modifier.align(Alignment.End)
-                    ) { Text("이전 상태로 되돌리기") }
+                    ) { Text("이전 상태로 되돌리기", fontWeight = FontWeight.Bold) }
                 }
             }
         }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }

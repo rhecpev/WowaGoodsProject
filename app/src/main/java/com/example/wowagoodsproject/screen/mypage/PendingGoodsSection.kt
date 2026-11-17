@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,14 +24,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.TextAutoSize
 import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.text.style.TextAlign
 import com.example.wowagoodsproject.component.BulkSelectionSummary
 import com.example.wowagoodsproject.component.GoodsItem
+import com.example.wowagoodsproject.component.SeriesBoundaryDivider
+import com.example.wowagoodsproject.component.chunkBySeries
+import com.example.wowagoodsproject.component.isSeriesStart
+import com.example.wowagoodsproject.component.isSeriesStartRow
 import com.example.wowagoodsproject.component.PurchaseInfo
 import com.example.wowagoodsproject.component.PurchaseInfoDialog
 import com.example.wowagoodsproject.component.PurchaseInfoEdit
@@ -173,9 +181,10 @@ private fun PendingBulkButtons(bulk: PendingBulk) {
 /** 배송 시작 / 구매 정보 버튼 두 개. 가로로 놓을지 세로로 쌓을지는 감싸는 쪽이 정한다. */
 @Composable
 private fun PendingBulkActionButtons(bulk: PendingBulk, buttonModifier: Modifier) {
-    OutlinedButton(
+    TextButton(
         onClick = bulk.onStartShipping,
         enabled = bulk.notShippedCount > 0,
+        shape = RectangleShape,
         contentPadding = PaddingValues(horizontal = 8.dp),
         modifier = buttonModifier
     ) {
@@ -187,9 +196,10 @@ private fun PendingBulkActionButtons(bulk: PendingBulk, buttonModifier: Modifier
         Spacer(modifier = Modifier.width(6.dp))
         Text("배송 시작", maxLines = 1)
     }
-    OutlinedButton(
+    TextButton(
         onClick = bulk.onEditPurchase,
         enabled = bulk.selectedCount > 0,
+        shape = RectangleShape,
         contentPadding = PaddingValues(horizontal = 8.dp),
         modifier = buttonModifier
     ) {
@@ -270,6 +280,8 @@ fun PendingGoodsSection(
         if (isGridMode) {
             // 공식과 2차창작을 이어서 한 줄에 gridColumns 개씩 놓는다.
             val cells: List<GoodsItem> = officialGoods + fanGoods
+            // 시리즈가 바뀌면 새 줄에서 시작하고, 그 줄 위에 이중선을 둔다.
+            val rows = remember(cells, gridColumns) { chunkBySeries(cells, gridColumns) }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -282,7 +294,8 @@ fun PendingGoodsSection(
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(cells.chunked(gridColumns), key = { row -> pendingKey(row.first()) }) { rowItems ->
+                itemsIndexed(rows, key = { _, row -> pendingKey(row.first()) }) { rowIndex, rowItems ->
+                    if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider(verticalPadding = 4.dp)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -315,6 +328,7 @@ fun PendingGoodsSection(
             return@Column
         }
 
+        val listItems: List<GoodsItem> = officialGoods + fanGoods
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -324,24 +338,26 @@ fun PendingGoodsSection(
                 end = AppStyles.paddingLarge,
                 top = 4.dp,
                 bottom = AppStyles.paddingMedium
-            ),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            )
         ) {
-            items(officialGoods, key = { "official-${it.goodsId}" }) { goods ->
+            // 줄마다 아래 선이 있어 줄 사이 간격은 두지 않는다. 공식 다음에 2차창작. 앞 굿즈와 시리즈가 다르면 그 줄 위에 이중선을 둔다.
+            itemsIndexed(listItems, key = { _, goods -> pendingKey(goods) }) { index, goods ->
+                if (isSeriesStart(listItems, index)) SeriesBoundaryDivider(verticalPadding = 4.dp)
+                val official = goods as? GoodsEntity
+                val fan = goods as? FanGoodsEntity
                 PendingGoodsRow(
                     goods = goods,
-                    isFanGoods = false,
-                    selected = if (selectionMode) goods.goodsId in selectedOfficialIds else null,
-                    onClick = { if (selectionMode) onToggleOfficial(goods.goodsId) else onOpenGoods(goods) },
-                    onToggleShipping = { onToggleShipping(goods) }
-                )
-            }
-            items(fanGoods, key = { "fan-${it.fanGoodsId}" }) { goods ->
-                PendingGoodsRow(
-                    goods = goods,
-                    isFanGoods = true,
-                    selected = if (selectionMode) goods.fanGoodsId in selectedFanIds else null,
-                    onClick = { if (selectionMode) onToggleFan(goods.fanGoodsId) else onOpenGoods(goods) },
+                    isFanGoods = official == null,
+                    selected = if (!selectionMode) null
+                    else if (official != null) official.goodsId in selectedOfficialIds
+                    else fan?.fanGoodsId in selectedFanIds,
+                    onClick = {
+                        when {
+                            !selectionMode -> onOpenGoods(goods)
+                            official != null -> onToggleOfficial(official.goodsId)
+                            fan != null -> onToggleFan(fan.fanGoodsId)
+                        }
+                    },
                     onToggleShipping = { onToggleShipping(goods) }
                 )
             }
@@ -381,9 +397,8 @@ private fun PendingGoodsCard(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick),
-            shape = RoundedCornerShape(12.dp),
+            shape = RectangleShape,
             color = if (selected == true) MaterialTheme.colorScheme.secondaryContainer
             else MaterialTheme.colorScheme.surfaceContainer
         ) {
@@ -489,18 +504,18 @@ private fun PendingGoodsRow(
     val overdue = goods.receiveDate.isNotEmpty() && goods.receiveDate < today
     val shipping = goods.shippingDate.isNotEmpty()
     val shippingOverdue = PendingGoodsNotifier.isShippingOverdue(goods.shippingDate)
-    Surface(
+    // 박스 없이 줄만 두고 아래 얇은 선으로 나눈다. 다중 선택으로 고른 줄만 옅게 칠한다.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(
+                if (selected == true) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+            )
             // 평소에는 상세 팝업을 열고, 다중 선택 중에는 선택을 바꾼다.
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected == true) MaterialTheme.colorScheme.secondaryContainer
-        else MaterialTheme.colorScheme.surfaceContainer
+            .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -510,7 +525,6 @@ private fun PendingGoodsRow(
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Image(
@@ -580,17 +594,20 @@ private fun PendingGoodsRow(
                 Spacer(modifier = Modifier.height(6.dp))
                 // 줄을 누르면 선택이 바뀌므로, 배송 버튼은 따로 눌리는 작은 버튼으로 둔다.
                 if (shipping) {
-                    OutlinedButton(
+                    TextButton(
                         onClick = onToggleShipping,
-                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
                         modifier = Modifier.height(30.dp)
                     ) {
-                        Text("배송 취소", style = AppStyles.textCardSmall)
+                        Text("배송 취소", style = AppStyles.textCardSmall.copy(fontWeight = FontWeight.SemiBold))
                     }
                 } else {
-                    FilledTonalButton(
+                    TextButton(
                         onClick = onToggleShipping,
-                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 4.dp),
                         modifier = Modifier.height(30.dp)
                     ) {
                         Icon(
@@ -599,11 +616,12 @@ private fun PendingGoodsRow(
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("배송 시작", style = AppStyles.textCardSmall)
+                        Text("배송 시작", style = AppStyles.textCardSmall.copy(fontWeight = FontWeight.SemiBold))
                     }
                 }
             }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -619,10 +637,9 @@ private fun PurchaseChip(
         filled -> AppStyles.colorPending
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    // 박스 없이 아이콘 + 색 글자만 둔다.
     Row(
-        modifier = Modifier
-            .background(color.copy(alpha = if (filled) 0.14f else 0.06f), RoundedCornerShape(50))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier = Modifier.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -632,12 +649,23 @@ private fun PurchaseChip(
             tint = color,
             modifier = Modifier.size(12.dp)
         )
+        // 가로 화면 그리드처럼 칸이 좁으면 날짜 숫자가 잘려 보이지 않게, 잘리기 전에 글자 크기부터 줄인다.
+        // 최소 크기로도 안 들어갈 때(아주 긴 구입처 이름 등)만 말줄임한다.
+        val style = AppStyles.textCardSmall
         Text(
             text = text,
-            style = AppStyles.textCardSmall,
+            style = style,
             color = color,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = PURCHASE_CHIP_MIN_FONT,
+                maxFontSize = style.fontSize,
+                stepSize = 0.5.sp
+            )
         )
     }
 }
+
+private val PURCHASE_CHIP_MIN_FONT = 8.sp

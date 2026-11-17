@@ -8,7 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -35,9 +35,42 @@ fun PatchNotesScreen(
     val patchNotes by viewModel.patchNotes.collectAsState()
     val expandedIds = remember { mutableStateMapOf<Int, Boolean>() }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+    var showClearDialog by remember { mutableStateOf(false) }
+
+    if (showClearDialog) {
+        AlertDialog(
+            // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
+            shape = RectangleShape,
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("업데이트 이력 삭제") },
+            text = { Text("업데이트 이력 ${patchNotes.size}개를 모두 지울까요?\n지운 이력은 되돌릴 수 없어요. 굿즈 데이터는 그대로예요.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.clearAll(); showClearDialog = false },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("삭제") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) { Text("취소") }
+            }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopBar(title = "업데이트 이력", onBack = onNavigateBack)
+        TopBar(
+            title = "업데이트 이력",
+            onBack = onNavigateBack,
+            actions = {
+                // 이력이 쌓이면 용량을 차지하므로 한 번에 비울 수 있게 한다.
+                if (patchNotes.isNotEmpty()) {
+                    TextButton(
+                        onClick = { showClearDialog = true },
+                        shape = RectangleShape,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) { Text("전체 삭제", fontWeight = FontWeight.Bold) }
+                }
+            }
+        )
 
         if (patchNotes.isEmpty()) {
             EmptyState(
@@ -48,8 +81,7 @@ fun PatchNotesScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 items(patchNotes, key = { it.patchId }) { note ->
                     val isExpanded = expandedIds[note.patchId] ?: false
@@ -60,18 +92,14 @@ fun PatchNotesScreen(
                         label = "arrow"
                     )
 
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                    ) {
+                    // 박스 없이 줄과 아래 얇은 선으로 나눈다.
+                    run {
                         Column {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { expandedIds[note.patchId] = !isExpanded }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    .padding(horizontal = 4.dp, vertical = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
@@ -98,7 +126,7 @@ fun PatchNotesScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                                        .padding(start = 4.dp, end = 4.dp, bottom = 14.dp),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     HorizontalDivider(
@@ -108,6 +136,7 @@ fun PatchNotesScreen(
                                     lines.forEach { line -> PatchLine(line) }
                                 }
                             }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                 }
@@ -135,9 +164,7 @@ private fun PatchLine(line: String) {
                 fontWeight = FontWeight.Bold,
                 color = color,
                 maxLines = 1,
-                modifier = Modifier
-                    .background(color.copy(alpha = 0.14f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                modifier = Modifier.padding(vertical = 1.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(

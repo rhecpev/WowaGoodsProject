@@ -401,7 +401,11 @@ object UpdateManager {
         compare("가격", local.goodsPrice, remote.goodsPrice)
         compare("메모", local.goodsMemo, remote.goodsMemo)
         compare("발매일", local.goodsReleaseDate, remote.goodsReleaseDate)
-        if (local.goodsUrl != remote.goodsUrl) changes.add(IMAGE_CHANGED)
+        // 같은 사진을 다른 형식으로 다시 올린 것(…/12.png → …/12.webp)은 바뀐 것으로 치지 않는다.
+        // 주소는 위에서 이미 새 값으로 저장했으므로, 기록·소식만 만들지 않는다.
+        if (local.goodsUrl != remote.goodsUrl && !isImageFormatOnlyChange(local.goodsUrl, remote.goodsUrl)) {
+            changes.add(IMAGE_CHANGED)
+        }
         return changes
     }
 
@@ -433,7 +437,7 @@ object UpdateManager {
                 details.add("가격: ${local.goodsPrice} → ${replacement.goodsPrice}")
             if (local.goodsMemo != replacement.goodsMemo)
                 details.add("메모: ${local.goodsMemo.ifBlank { "없음" }} → ${replacement.goodsMemo.ifBlank { "없음" }}")
-            if (local.goodsUrl != replacement.goodsUrl)
+            if (local.goodsUrl != replacement.goodsUrl && !isImageFormatOnlyChange(local.goodsUrl, replacement.goodsUrl))
                 details.add("이미지가 변경되었습니다")
             if (details.isEmpty()) details.add("굿즈 정보가 변경되었습니다")
             details.add("$label 상태가 초기화되었습니다")

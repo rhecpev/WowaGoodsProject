@@ -102,6 +102,44 @@ class GoodsSyncIntegrationTest {
     }
 
     @Test
+    fun 사진을_다른_형식으로_다시_올리면_주소만_바꾸고_보유_기록은_그대로_소식은_없다() = runBlocking {
+        sync(remote(1), remote(2))
+        own(1)                       // 보유 2개, 구입처 '매장'
+        own(2, status = "PENDING")   // 구매예정
+        // 원본 저장소에서 사진을 .jpg → .webp 로 바꿔 올렸다
+        val webp1 = remote(1).copy(goodsUrl = "https://x/1.webp")
+        val webp2 = remote(2).copy(goodsUrl = "https://x/2.webp")
+
+        sync(webp1, webp2)
+
+        val g1 = byUid(1)
+        assertEquals("https://x/1.webp", g1.goodsUrl) // 주소는 새 값
+        assertEquals(listOf("GOTTEN", 2, "매장"), listOf(g1.goodsStatus, g1.goodsQuantity, g1.goodsPurchaseStore))
+        assertEquals("PENDING", byUid(2).goodsStatus)
+        assertTrue(allChanged().isEmpty()) // 변경된 굿즈 기록 없음
+        assertTrue(allNews().isEmpty())    // 소식 없음
+    }
+
+    @Test
+    fun 사진이_진짜_다른_파일로_바뀌면_지금처럼_알린다() = runBlocking {
+        sync(remote(1))
+        own(1)
+        sync(remote(1).copy(goodsUrl = "https://x/1_new.webp"))
+        assertTrue(allChanged().single().changedDetail.contains("이미지가 변경되었습니다"))
+    }
+
+    @Test
+    fun 확장자만_바뀐_주소를_가린다() {
+        assertTrue(isImageFormatOnlyChange("https://raw.githubusercontent.com/a/b/main/img/12.png", "https://raw.githubusercontent.com/a/b/main/img/12.webp"))
+        assertTrue(isImageFormatOnlyChange("https://x/12.JPG?v=1", "https://x/12.webp"))
+        assertFalse(isImageFormatOnlyChange("https://x/12.png", "https://x/13.webp"))   // 다른 파일
+        assertFalse(isImageFormatOnlyChange("https://x/a/12.png", "https://x/b/12.webp")) // 다른 폴더
+        assertFalse(isImageFormatOnlyChange("https://x/12.png", "https://x/12.png"))    // 안 바뀜
+        assertFalse(isImageFormatOnlyChange("", "https://x/12.webp"))                    // 원래 사진 없음
+        assertFalse(isImageFormatOnlyChange("https://x/12.png", "https://x/12.txt"))    // 사진 형식 아님
+    }
+
+    @Test
     fun 보유하지_않은_굿즈가_바뀌면_기록과_소식은_만들지_않는다() = runBlocking {
         sync(remote(1))
         assertEquals(Triple(0, 1, 0), sync(remote(1, price = "69위안")))

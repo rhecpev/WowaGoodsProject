@@ -2,6 +2,9 @@ package com.example.wowagoodsproject.screen.character
 
 import com.example.wowagoodsproject.db.fan.deleteWithImage
 import com.example.wowagoodsproject.component.hasChara
+import com.example.wowagoodsproject.component.charaCollection
+import com.example.wowagoodsproject.component.mergeFavoriteOrder
+import androidx.room.withTransaction
 
 import com.example.wowagoodsproject.db.fan.setQuantity
 import com.example.wowagoodsproject.db.fan.applyStatus
@@ -86,11 +89,40 @@ class CharacterViewModel : ViewModel() {
         }
     }
 
+    /** 새로 선호한 캐릭터는 선호 목록 맨 뒤 순서를 받는다. 해제하면 순서를 지운다. */
     fun toggleFavorite(chara: CharaEntity) {
         viewModelScope.launch {
-            App.charaDatabase.charaDao().update(
-                chara.copy(charaIsFavorite = !chara.charaIsFavorite)
-            )
+            App.charaDatabase.withTransaction {
+                val dao = App.charaDatabase.charaDao()
+                val updated = if (chara.charaIsFavorite) {
+                    chara.copy(charaIsFavorite = false, charaFavoriteOrder = 0)
+                } else {
+                    val last = dao.getAll().filter { it.charaIsFavorite }.maxOfOrNull { it.charaFavoriteOrder } ?: 0
+                    chara.copy(charaIsFavorite = true, charaFavoriteOrder = last + 1)
+                }
+                dao.update(updated)
+            }
+        }
+    }
+
+    /**
+     * 끌어서 바꾼 선호 순서를 저장한다. [reorderedVisible] 은 화면에 보이던 선호 캐릭터 이름을 새 순서대로 늘어놓은 것.
+     * 검색으로 일부만 보였어도 안 보이던 캐릭터 순서는 그대로 두고 합친 뒤([mergeFavoriteOrder]) 1, 2, 3… 으로 다시 매긴다.
+     * DB 에서 다시 읽어 계산하므로 그사이 바뀐 선호 표시와 섞이지 않는다.
+     */
+    fun reorderFavorites(reorderedVisible: List<String>) {
+        viewModelScope.launch {
+            App.charaDatabase.withTransaction {
+                val dao = App.charaDatabase.charaDao()
+                val favorites = dao.getAll().filter { it.charaIsFavorite }
+                    .sortedWith(compareBy<CharaEntity> { it.charaFavoriteOrder }.thenBy { it.charaNm })
+                val merged = mergeFavoriteOrder(favorites.map { it.charaNm }, reorderedVisible)
+                val byName = favorites.associateBy { it.charaNm }
+                val changed = merged.mapIndexedNotNull { index, name ->
+                    byName[name]?.takeIf { it.charaFavoriteOrder != index + 1 }?.copy(charaFavoriteOrder = index + 1)
+                }
+                if (changed.isNotEmpty()) dao.updateAll(changed)
+            }
         }
     }
 
@@ -170,18 +202,8 @@ class CharacterViewModel : ViewModel() {
     private fun loadCharaGoodsCount() {
         viewModelScope.launch {
             App.database.goodsDao().getAllFlow().collectLatest { allGoods ->
-                val countMap = mutableMapOf<String, Pair<Int, Int>>()
-                allGoods.filter { it.goodsCategory != CATEGORY_SET }.forEach { goods ->
-                    goods.goodsChara.split(",").forEach { chara ->
-                        val name = chara.trim()
-                        if (name.isNotEmpty()) {
-                            val current = countMap[name] ?: Pair(0, 0)
-                            val gotten = if (goods.goodsStatus == GoodsStatus.GOTTEN.name) current.first + 1 else current.first
-                            countMap[name] = Pair(gotten, current.second + 1)
-                        }
-                    }
-                }
-                _charaGoodsCountMap.value = countMap
+                // 마이페이지 수집률과 같은 기준으로 센다.
+                _charaGoodsCountMap.value = charaCollection(allGoods)
 
                 // 다른 탭·데이터 입력·백그라운드 업데이트로 바뀐 값도 열려 있는 캐릭터 화면에 바로 반영한다.
                 _selectedChara.value?.let { chara ->
