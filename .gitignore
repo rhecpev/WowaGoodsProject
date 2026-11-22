@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 앱 업데이트 테스트용 APK
+/update-test

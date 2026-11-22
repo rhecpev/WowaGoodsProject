@@ -183,6 +183,7 @@ fun SeriesScreen(
         val parentSet = officialGoods?.let { findSetGoods(it, seriesGoods) }
         val setComponents = parentSet?.let { getSetComponents(it, seriesGoods) } ?: emptyList()
         GoodsDetailDialog(
+            itemKey = com.example.wowagoodsproject.component.goodsIdentity(goods),
             imgPath = goods.imgPath,
             series = goods.series,
             chara = goods.chara,
@@ -355,7 +356,7 @@ fun SeriesScreen(
                         isGridMode = isGridMode,
                         gridColumns = gridColumns,
                         onGoodsClick = {
-                            if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                            if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.toggleGoods(it)
                         },
                         selectedIds = if (selection.mode) selection.ids else null,
                         focusId = focusGoodsId,

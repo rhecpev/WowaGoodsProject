@@ -17,6 +17,7 @@ import androidx.work.WorkerParameters
 import com.example.wowagoodsproject.component.CATEGORY_SET
 import com.example.wowagoodsproject.component.GoodsItem
 import com.example.wowagoodsproject.component.GoodsStatus
+import com.example.wowagoodsproject.db.betray.BetrayGoodsEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import java.text.SimpleDateFormat
@@ -62,20 +63,32 @@ object PendingGoodsNotifier {
         SHIPPING("s", 2_000_000)
     }
 
-    /** 공식/2차창작 id 가 겹쳐도 알림이 서로 덮지 않도록 2차창작은 이만큼 띄운다. */
+    /** 공식/2차창작/배신 굿즈 id 가 겹쳐도 알림이 서로 덮지 않도록 이만큼 띄운다. */
     private const val FAN_ID_OFFSET = 1_000_000
+    private const val BETRAY_ID_OFFSET = 4_000_000
 
     /**
      * @param slot 몇 번째 알림 차례인지. 같은 알림키에서 이 값이 커졌을 때만 다시 알린다.
      */
-    private class Alert(val kind: Kind, val goods: GoodsItem, val slot: Int) {
+    private class Alert(val kind: Kind, val goods: GoodsItem, val slot: Int, val genreName: String = "") {
         val target = goods.target()
 
+        private val type: String
+        private val id: Int
+        private val typeOffset: Int
+        init {
+            when (target) {
+                is OpenTarget.BetrayGoods -> { type = "b"; id = target.id; typeOffset = BETRAY_ID_OFFSET }
+                is OpenTarget.Goods -> { type = if (target.isFan) "f" else "o"; id = target.id; typeOffset = if (target.isFan) FAN_ID_OFFSET else 0 }
+                else -> { type = "o"; id = 0; typeOffset = 0 }
+            }
+        }
+
         /** 굿즈·알림 종류·날짜가 같으면 같은 알림이다. 날짜가 바뀌면 새 알림으로 본다. */
-        val key = "${kind.keyPrefix}:${if (target.isFan) "f" else "o"}:${target.id}:" +
+        val key = "${kind.keyPrefix}:$type:$id:" +
                 (if (kind == Kind.RECEIVE) goods.receiveDate else goods.shippingDate)
 
-        val notificationId = kind.idOffset + (if (target.isFan) FAN_ID_OFFSET else 0) + target.id
+        val notificationId = kind.idOffset + typeOffset + id
     }
 
     private fun dateFormat() = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA)
@@ -93,26 +106,31 @@ object PendingGoodsNotifier {
         return ((today.time - then.time).toDouble() / DAY_MILLIS).roundToLong()
     }
 
-    /** 구매예정 굿즈(세트 굿즈 제외) */
+    /** 구매예정 굿즈(세트 굿즈 제외). 배신 굿즈도 함께 본다. */
     private suspend fun pendingGoods(): List<GoodsItem> {
         val official = App.database.goodsDao().getAll()
             .filter { it.goodsCategory != CATEGORY_SET && it.status == GoodsStatus.PENDING }
         val fan = App.fanDatabase.fanGoodsDao().getAll().filter { it.status == GoodsStatus.PENDING }
-        return official + fan
+        val betray = App.betrayDatabase.betrayDao().allGoods().filter { it.status == GoodsStatus.PENDING }
+        return official + fan + betray
     }
 
-    private suspend fun findAlerts(): List<Alert> = pendingGoods().flatMap { goods ->
+    private suspend fun findAlerts(): List<Alert> {
+        val genreNames = App.betrayDatabase.betrayDao().genres().associate { it.genreId to it.genreNm }
+        return pendingGoods().flatMap { goods -> alertsFor(goods, (goods as? BetrayGoodsEntity)?.let { genreNames[it.genreId] }.orEmpty()) }
+    }
+
+    private fun alertsFor(goods: GoodsItem, genreName: String): List<Alert> =
         listOfNotNull(
             // 지난 지 1~3일째는 0회차, 4~6일째는 1회차 … 이므로 1, 4, 7, 10일째에 새 회차가 된다.
             goods.receiveDate.takeIf { it.isNotEmpty() }?.let(::daysSince)?.takeIf { it >= 1 }?.let { days ->
-                Alert(Kind.RECEIVE, goods, slot = ((days - 1) / REPEAT_DAYS).toInt())
+                Alert(Kind.RECEIVE, goods, slot = ((days - 1) / REPEAT_DAYS).toInt(), genreName = genreName)
             },
             // 배송 시작 7~9일째는 0회차, 10~12일째는 1회차 … 이므로 7, 10, 13일째에 새 회차가 된다.
             goods.shippingDate.takeIf { it.isNotEmpty() }?.let(::daysSince)?.takeIf { it >= SHIPPING_ALERT_DAYS }?.let { days ->
-                Alert(Kind.SHIPPING, goods, slot = ((days - SHIPPING_ALERT_DAYS) / REPEAT_DAYS).toInt())
+                Alert(Kind.SHIPPING, goods, slot = ((days - SHIPPING_ALERT_DAYS) / REPEAT_DAYS).toInt(), genreName = genreName)
             }
         )
-    }
 
     /** 배송 시작 후 [SHIPPING_ALERT_DAYS]일이 지났는지. 목록에서 강조 표시할 때 쓴다. */
     fun isShippingOverdue(shippingDate: String): Boolean =
@@ -198,7 +216,8 @@ object PendingGoodsNotifier {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
-            .setContentText(listOf(goods.series, detail).filter { it.isNotBlank() }.joinToString(" · "))
+            // 배신 굿즈는 어느 장르인지 앞에 붙인다.
+            .setContentText(listOf(alert.genreName, goods.series, detail).filter { it.isNotBlank() }.joinToString(" · "))
             .setContentIntent(openGoods)
             .addAction(0, "이 굿즈 알림 받지 않기", muteIntent)
             .setAutoCancel(true)
@@ -214,7 +233,8 @@ object PendingGoodsNotifier {
     private fun GoodsItem.displayName(): String =
         listOf(chara, category).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { series }
 
-    private fun GoodsItem.target(): OpenTarget.Goods = when (this) {
+    private fun GoodsItem.target(): OpenTarget = when (this) {
+        is BetrayGoodsEntity -> OpenTarget.BetrayGoods(goodsId)
         is FanGoodsEntity -> OpenTarget.Goods(isFan = true, id = fanGoodsId)
         is GoodsEntity -> OpenTarget.Goods(isFan = false, id = goodsId)
         else -> OpenTarget.Goods(isFan = false, id = 0)

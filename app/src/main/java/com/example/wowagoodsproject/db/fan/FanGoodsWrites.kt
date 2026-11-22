@@ -27,7 +27,7 @@ suspend fun FanGoodsDao.deleteWithImage(goods: FanGoodsEntity) {
 
 /** [paths] 중 이제 어느 2차창작 굿즈도 쓰지 않는 사진 파일을 지운다. */
 suspend fun FanGoodsDao.deleteUnusedImages(paths: Collection<String>) {
-    val used = getAll().map { it.fanGoodsImgPath }.toSet()
+    val used = com.example.wowagoodsproject.db.allUsedImagePaths()
     withContext(Dispatchers.IO) {
         paths.filter { it.isNotEmpty() && it !in used }.forEach { File(it).delete() }
     }

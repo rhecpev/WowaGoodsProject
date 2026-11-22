@@ -73,7 +73,9 @@ fun SearchScreen(
     viewModel: SearchViewModel = viewModel(),
     detailViewModel: GoodsDetailViewModel = viewModel(),
     listModeViewModel: ListModeViewModel = viewModel(),
-    onNavigateToSeries: (String) -> Unit = {}
+    onNavigateToSeries: (String) -> Unit = {},
+    /** 비공식 굿즈의 시리즈 이름을 누르면 비공식 탭의 그 시리즈로 간다 */
+    onNavigateToFanSeries: (String) -> Unit = {}
 ) {
     val query by viewModel.query.collectAsState()
     val charaFilter by viewModel.charaFilter.collectAsState()
@@ -205,6 +207,7 @@ fun SearchScreen(
         val parentSet = official?.let { findSetGoods(it, officialGoods) }
         val setComponents = parentSet?.let { getSetComponents(it, officialGoods) } ?: emptyList()
         GoodsDetailDialog(
+            itemKey = com.example.wowagoodsproject.component.goodsIdentity(goods),
             imgPath = goods.imgPath,
             series = goods.series,
             chara = goods.chara,
@@ -239,11 +242,12 @@ fun SearchScreen(
                 official?.let { viewModel.setOfficialPending(it) }
                 fan?.let { viewModel.setFanPending(it) }
             },
+            onEdit = fan?.let { g -> { com.example.wowagoodsproject.screen.fan.FanEditRequest.open(g.fanGoodsId) } },
             onDelete = {},
             showDelete = false,
             onSeriesClick = { seriesName ->
                 detailViewModel.dismissDialog()
-                onNavigateToSeries(seriesName)
+                if (fan != null) onNavigateToFanSeries(seriesName) else onNavigateToSeries(seriesName)
             }
         )
     }
@@ -387,7 +391,7 @@ fun SearchScreen(
                     )
                     else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                         val onClick: (GoodsItem) -> Unit = { item ->
-                            if (selection.mode) selection.toggle(item.selectionKey()) else detailViewModel.selectGoods(item)
+                            if (selection.mode) selection.toggle(item.selectionKey()) else detailViewModel.toggleGoods(item)
                         }
                         val selectedOf: (GoodsItem) -> Boolean? = { item ->
                             if (selection.mode) item.selectionKey() in selection.ids else null
@@ -452,7 +456,7 @@ internal fun GoodsItem.hasWords(words: List<String>): Boolean {
  * 누르면 고르는 팝업을 연다.
  */
 @Composable
-private fun FilterPicker(
+internal fun FilterPicker(
     label: String,
     value: String?,
     onClick: () -> Unit,
@@ -514,7 +518,7 @@ private fun FilterPicker(
  * 구역 제목(이름 + 개수)과 그 아래 굿즈들. 결과가 없으면 구역째로 생략한다.
  * 격자 보기에서는 한 줄에 [gridColumns] 개씩 놓는다.
  */
-private fun <T : GoodsItem> LazyListScope.resultSection(
+internal fun <T : GoodsItem> LazyListScope.resultSection(
     title: String,
     goods: List<T>,
     isGridMode: Boolean,

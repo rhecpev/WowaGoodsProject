@@ -20,11 +20,27 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.stateIn
+import com.example.wowagoodsproject.db.fan.deleteSeriesWithImages
 
 class FanArtViewModel : ViewModel() {
 
     private val _goodsList = MutableStateFlow<List<FanGoodsEntity>>(emptyList())
     val goodsList: StateFlow<List<FanGoodsEntity>> = _goodsList
+    /** 등록한 2차창작 시리즈(이름·배경·아이콘) */
+    val series: StateFlow<List<com.example.wowagoodsproject.db.fan.FanSeriesEntity>> =
+        App.fanDatabase.fanGoodsDao().seriesFlow()
+            .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
+
+    fun deleteSeries(name: String) {
+        viewModelScope.launch { App.fanDatabase.fanGoodsDao().deleteSeriesWithImages(name) }
+    }
+
+    private val _openSeries = MutableStateFlow<String?>(null)
+    /** 연 시리즈. null 이면 시리즈 카드 목록 */
+    val openSeries: StateFlow<String?> = _openSeries
+    fun setOpenSeries(name: String?) { _openSeries.value = name }
+
     private val _allCharaList = MutableStateFlow<List<CharaEntity>>(emptyList())
     val allCharaList: StateFlow<List<CharaEntity>> = _allCharaList
 

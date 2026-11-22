@@ -7,6 +7,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.example.wowagoodsproject.db.betray.BetrayDatabase
 import com.example.wowagoodsproject.db.character.CharaDatabase
 import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
 import com.example.wowagoodsproject.db.official.GoodsDatabase
@@ -52,6 +53,8 @@ class App : Application(), ImageLoaderFactory {
         lateinit var patchNoteDatabase: PatchNoteDatabase
         lateinit var newsDatabase: NewsDatabase
         lateinit var changedGoodsDatabase: ChangedGoodsDatabase
+        /** 배신 굿즈(다른 장르) 전용 DB */
+        lateinit var betrayDatabase: BetrayDatabase
         lateinit var appContext: Context
 
         fun getThemeMode(): Int {
@@ -82,7 +85,8 @@ class App : Application(), ImageLoaderFactory {
             GoodsDatabase.MIGRATION_4_5,
             GoodsDatabase.MIGRATION_5_6,
             GoodsDatabase.MIGRATION_6_7,
-            GoodsDatabase.MIGRATION_7_8
+            GoodsDatabase.MIGRATION_7_8,
+            GoodsDatabase.MIGRATION_8_9
         ).build()
 
         fanDatabase = Room.databaseBuilder(
@@ -95,7 +99,9 @@ class App : Application(), ImageLoaderFactory {
             FanGoodsDatabase.MIGRATION_3_4,
             FanGoodsDatabase.MIGRATION_4_5,
             FanGoodsDatabase.MIGRATION_5_6,
-            FanGoodsDatabase.MIGRATION_6_7
+            FanGoodsDatabase.MIGRATION_6_7,
+            FanGoodsDatabase.MIGRATION_7_8,
+            FanGoodsDatabase.MIGRATION_8_9
         ).build()
 
         charaDatabase = Room.databaseBuilder(
@@ -131,6 +137,17 @@ class App : Application(), ImageLoaderFactory {
             ChangedGoodsDatabase.MIGRATION_1_2,
             ChangedGoodsDatabase.MIGRATION_2_3,
             ChangedGoodsDatabase.MIGRATION_3_4
+        ).build()
+
+        betrayDatabase = Room.databaseBuilder(
+            applicationContext,
+            BetrayDatabase::class.java,
+            "betray_database"
+        ).addMigrations(
+            BetrayDatabase.MIGRATION_1_2,
+            BetrayDatabase.MIGRATION_2_3,
+            BetrayDatabase.MIGRATION_3_4,
+            BetrayDatabase.MIGRATION_4_5
         ).build()
 
         DailySchedule.schedule(this)

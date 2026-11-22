@@ -1,13 +1,18 @@
 package com.example.wowagoodsproject.db.official
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.wowagoodsproject.component.GoodsItem
 import com.example.wowagoodsproject.component.GoodsStatus
 import com.example.wowagoodsproject.component.goodsStatusOf
 import com.example.wowagoodsproject.component.PurchaseInfo
 
-@Entity(tableName = "tb_goods")
+/**
+ * 공식 굿즈(수천 줄). 시리즈로 묶어 읽는 일(시리즈 상세·캐릭터 화면·세트 구성품)과
+ * 서버 굿즈 번호로 한 건 찾는 일(변경된 굿즈 되돌리기)이 잦아 두 칸에 인덱스를 둔다. DB 9부터.
+ */
+@Entity(tableName = "tb_goods", indices = [Index("goodsSeries"), Index("goodsUid")])
 data class GoodsEntity(
     @PrimaryKey(autoGenerate = true)
     val goodsId: Int = 0,

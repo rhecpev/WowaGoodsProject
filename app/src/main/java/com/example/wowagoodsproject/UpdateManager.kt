@@ -183,30 +183,50 @@ object UpdateManager {
         fun toTriple() = Triple(added.size, updated.size, deleted.size)
     }
 
-    suspend fun checkAppUpdate(): Pair<String, String>? {
+    /** 앱을 켤 때 MainActivity 와 마이페이지가 거의 함께 부른다. 한 번만 읽고 같은 결과를 나눠 쓴다. */
+    private val appUpdateLock = kotlinx.coroutines.sync.Mutex()
+    private var appUpdateResult: Pair<String, AppUpdater.Release?>? = null
+
+    suspend fun checkAppUpdate(): AppUpdater.Release? = appUpdateLock.withLock {
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
+        appUpdateResult?.takeIf { it.first == today }?.let { return@withLock it.second }
+        try {
+            // 읽기에 성공했을 때만 나눠 쓸 결과로 둔다. 실패(인터넷 끊김 등)는 다음 호출이 다시 확인한다.
+            checkAppUpdateOnce().also { appUpdateResult = today to it }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d("AppUpdate", "에러: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 지금 바로 다시 읽는다(마이페이지 '현재 버전', 새 버전 알림). 결과는 앱 시작 확인과 나눠 쓴다.
+     * 앱 시작 확인과 같이 돌면 하나가 끝난 뒤 다른 하나가 그 결과를 쓴다.
+     */
+    suspend fun refreshAppUpdate(): AppUpdater.Release = appUpdateLock.withLock {
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
+        val release = AppUpdater.fetchLatest()
+        App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE).edit()
+            .putString("last_app_update_check_date", today).apply()
+        appUpdateResult = today to release.takeIf { it.isNewer }
+        release
+    }
+
+    /** 실패하면 예외를 던진다 */
+    private suspend fun checkAppUpdateOnce(): AppUpdater.Release? {
         return withContext(Dispatchers.IO) {
-            try {
+            run {
                 val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
                 val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault()).format(java.util.Date())
                 val lastCheckDate = prefs.getString("last_app_update_check_date", "")
                 if (lastCheckDate == today) return@withContext null
 
-                val json = fetchJson("https://api.github.com/repos/rhecpev/WowaGoodsProject/releases/latest")
-                val jsonObj = org.json.JSONObject(json)
-                val latestTag = jsonObj.getString("tag_name")
-                val body = jsonObj.optString("body", "")
-
-                prefs.edit()
-                    .putString("last_app_update_check_date", today)
-                    .putString("cached_latest_version", latestTag)
-                    .apply()
-
-                if (isNewerVersion(latestTag, BuildConfig.VERSION_NAME)) {
-                    Pair(latestTag, body)
-                } else null
-            } catch (e: Exception) {
-                Log.d("AppUpdate", "에러: ${e.message}")
-                null
+                // APK 주소까지 한 번에 읽는다(GitHub API 는 로그인 없이 시간당 60번까지라 두 번 부르지 않는다).
+                val release = AppUpdater.fetchLatest()
+                prefs.edit().putString("last_app_update_check_date", today).apply()
+                release.takeIf { it.isNewer }
             }
         }
     }

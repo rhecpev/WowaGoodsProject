@@ -8,12 +8,20 @@ sealed interface OpenTarget {
     /** 굿즈 상세. 공식 굿즈면 해당 시리즈에서, 2차창작이면 2차창작 탭에서 연다. */
     data class Goods(val isFan: Boolean, val id: Int) : OpenTarget
 
+    /** 배신 굿즈 상세. 그 장르의 그 시리즈에서 연다. */
+    data class BetrayGoods(val id: Int) : OpenTarget
+
     /** 소식 화면 */
     data object News : OpenTarget
 
+    /** 새 버전 알림: 앱을 열고 바로 업데이트 확인 */
+    data object AppUpdate : OpenTarget
+
     fun putInto(intent: Intent): Intent = when (this) {
         is Goods -> intent.putExtra(EXTRA_KIND, KIND_GOODS).putExtra(EXTRA_IS_FAN, isFan).putExtra(EXTRA_ID, id)
+        is BetrayGoods -> intent.putExtra(EXTRA_KIND, KIND_BETRAY_GOODS).putExtra(EXTRA_ID, id)
         News -> intent.putExtra(EXTRA_KIND, KIND_NEWS)
+        AppUpdate -> intent.putExtra(EXTRA_KIND, KIND_APP_UPDATE)
     }
 
     companion object {
@@ -21,14 +29,18 @@ sealed interface OpenTarget {
         private const val EXTRA_IS_FAN = "open_goods_is_fan"
         private const val EXTRA_ID = "open_goods_id"
         private const val KIND_GOODS = "goods"
+        private const val KIND_BETRAY_GOODS = "betray_goods"
         private const val KIND_NEWS = "news"
+        private const val KIND_APP_UPDATE = "app_update"
 
         /** 인텐트에서 꺼낸 뒤 지워, 화면을 돌려 액티비티가 다시 만들어져도 또 열리지 않게 한다. */
         fun takeFrom(intent: Intent?): OpenTarget? {
             val kind = intent?.getStringExtra(EXTRA_KIND) ?: return null
             val target = when (kind) {
                 KIND_GOODS -> Goods(intent.getBooleanExtra(EXTRA_IS_FAN, false), intent.getIntExtra(EXTRA_ID, 0))
+                KIND_BETRAY_GOODS -> BetrayGoods(intent.getIntExtra(EXTRA_ID, 0))
                 KIND_NEWS -> News
+                KIND_APP_UPDATE -> AppUpdate
                 else -> null
             }
             intent.removeExtra(EXTRA_KIND)

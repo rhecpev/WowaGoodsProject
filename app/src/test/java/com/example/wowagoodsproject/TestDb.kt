@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.test.core.app.ApplicationProvider
+import com.example.wowagoodsproject.db.betray.BetrayDatabase
 import com.example.wowagoodsproject.db.changed.ChangedGoodsDatabase
 import com.example.wowagoodsproject.db.character.CharaDatabase
 import com.example.wowagoodsproject.db.fan.FanGoodsDatabase
@@ -30,13 +31,14 @@ object TestDb {
         App.patchNoteDatabase = build(PatchNoteDatabase::class.java)
         App.newsDatabase = build(NewsDatabase::class.java)
         App.changedGoodsDatabase = build(ChangedGoodsDatabase::class.java)
+        App.betrayDatabase = build(BetrayDatabase::class.java)
         context.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     fun tearDown() {
         listOf(
             App.database, App.fanDatabase, App.charaDatabase, App.seriesDatabase,
-            App.patchNoteDatabase, App.newsDatabase, App.changedGoodsDatabase
+            App.patchNoteDatabase, App.newsDatabase, App.changedGoodsDatabase, App.betrayDatabase
         ).forEach { it.close() }
     }
 

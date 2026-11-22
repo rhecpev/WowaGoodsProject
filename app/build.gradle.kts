@@ -19,8 +19,9 @@ android {
         applicationId = "com.example.wowagoodsproject"
         minSdk = 24
         targetSdk = 36
-        versionCode = 18
-        versionName = "3.0"
+        // 업데이트 테스트용 APK 는 명령줄로 버전을 올려 만든다: -PappVersionCode=19 -PappVersionName=3.0.1
+        versionCode = (project.findProperty("appVersionCode") as String?)?.toInt() ?: 19
+        versionName = (project.findProperty("appVersionName") as String?) ?: "3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

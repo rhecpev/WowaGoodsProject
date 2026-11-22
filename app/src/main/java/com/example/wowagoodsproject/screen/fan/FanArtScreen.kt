@@ -19,6 +19,18 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.CollectionsBookmark
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.component.EmptyState
+import com.example.wowagoodsproject.component.SeriesCard
+import com.example.wowagoodsproject.component.SeriesListPage
+import com.example.wowagoodsproject.component.seriesCards
+import com.example.wowagoodsproject.db.fan.saveSeries
+import com.example.wowagoodsproject.screen.betray.SeriesEditScreen
+import com.example.wowagoodsproject.screen.betray.SeriesEditViewModel
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
@@ -46,7 +58,8 @@ import com.example.wowagoodsproject.navigation.TopBarAction
 
 @Composable
 fun FanArtScreen(
-    onNavigateToAdd: () -> Unit,
+    /** 굿즈 등록 화면을 연다. 넘기는 값은 미리 채울 시리즈(없으면 "") */
+    onNavigateToAdd: (String) -> Unit,
     widthSizeClass: WindowWidthSizeClass,
     viewModel: FanArtViewModel = viewModel(),
     listModeViewModel: ListModeViewModel = viewModel(),
@@ -63,19 +76,56 @@ fun FanArtScreen(
     val selection = rememberGoodsSelection()
     BackHandler(enabled = selection.mode) { selection.exit() }
 
+    // ── 시리즈: 공식 굿즈처럼 시리즈 카드(사진) → 시리즈를 열면 그 굿즈 목록 ──
+    val registeredSeries by viewModel.series.collectAsState()
+    /** 연 시리즈. null 이면 시리즈 카드 */
+    // 하단 '비공식' 탭을 다시 누르면 시리즈 목록으로 돌아가도록 뷰모델에 둔다(MainScreen 의 resetTab).
+    val openSeries by viewModel.openSeries.collectAsState()
+    /** 시리즈 추가·편집. null 닫힘, "" 새 시리즈, 그 밖에는 고칠 시리즈 이름 */
+    var seriesEdit by rememberSaveable { mutableStateOf<String?>(null) }
+    val allCharasForSeries by viewModel.allCharaList.collectAsState()
+    val seriesCardList = remember(goodsList, registeredSeries, allCharasForSeries) {
+        val byName = allCharasForSeries.associateBy { it.charaNm }
+        seriesCards(
+            goods = goodsList,
+            seriesOf = { it.fanGoodsSeries },
+            statusOf = { it.status },
+            imageOf = { it.fanGoodsImgPath },
+            dateOf = { it.fanGoodsReleaseDate },
+            charaOf = { it.fanGoodsChara },
+            registered = registeredSeries.associate { it.seriesNm to it.seriesImgPath },
+            registeredDates = registeredSeries.associate { it.seriesNm to it.seriesDate },
+            charaInfo = { n -> byName[n]?.let { c -> c.charaUrl to (if (c.charaIsFavorite) c.charaFavoriteOrder else null) } ?: ("" to null) },
+            noSeriesName = NO_FAN_SERIES,
+            ignoreCase = true
+        )
+    }
+    // 연 시리즈의 굿즈만 아래 목록·필터에 쓴다.
+    val scopedGoods = remember(goodsList, openSeries) {
+        when (val open = openSeries) {
+            null -> goodsList
+            // 시리즈 카드와 같이 대소문자를 가리지 않는다.
+            else -> goodsList.filter { it.fanGoodsSeries.trim().ifEmpty { NO_FAN_SERIES }.equals(open, ignoreCase = true) }
+        }
+    }
+    BackHandler(enabled = openSeries != null && !selection.mode) {
+        viewModel.setOpenSeries(null)
+        filterViewModel.clearGoodsFilter()
+    }
+
     val selectedGoodsCharaFilter by filterViewModel.selectedCharaFilter.collectAsState()
     val selectedGoodsCategoryFilter by filterViewModel.selectedCategoryFilter.collectAsState()
     val selectedGoodsSeriesFilter by filterViewModel.selectedSeriesFilter.collectAsState()
 
     val filteredList = filterFanGoodsList(
-        list = filterViewModel.applyFilter(goodsList, filterType).second,
+        list = filterViewModel.applyFilter(scopedGoods, filterType).second,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter,
         seriesFilter = selectedGoodsSeriesFilter
     )
 
     val AllFilteredList = filterFanGoodsList(
-        list = filterViewModel.applyFilter(goodsList, filterType).first,
+        list = filterViewModel.applyFilter(scopedGoods, filterType).first,
         charaFilter = selectedGoodsCharaFilter,
         categoryFilter = selectedGoodsCategoryFilter,
         seriesFilter = selectedGoodsSeriesFilter
@@ -85,7 +135,7 @@ fun FanArtScreen(
     val isLandscape = widthSizeClass != WindowWidthSizeClass.Compact
     val allCharaList by viewModel.allCharaList.collectAsState()
 
-    val goodsCharaList = goodsList
+    val goodsCharaList = scopedGoods
         .flatMap { it.chara.split(",").map { c -> c.trim() } }
         .distinct()
         .filter { it.isNotEmpty() }
@@ -93,13 +143,13 @@ fun FanArtScreen(
             compareByDescending<String> { charaNm -> allCharaList.find { it.charaNm == charaNm }?.charaIsFavorite == true }
                 .thenBy { it }
         )
-    val goodsCategoryList = goodsList
+    val goodsCategoryList = scopedGoods
         .map { it.category }
         .distinct()
         .filter { it.isNotEmpty() }
         .sorted()
     // 2차창작은 시리즈를 비워 두기도 해서, 적어 둔 굿즈가 하나도 없으면 시리즈 탭이 안 보인다.
-    val goodsSeriesList = seriesOptions(goodsList)
+    val goodsSeriesList = seriesOptions(scopedGoods)
 
     LaunchedEffect(Unit) {
         viewModel.loadGoods()
@@ -112,6 +162,7 @@ fun FanArtScreen(
 
     displayedGoods?.let { fanGoods ->
         GoodsDetailDialog(
+            itemKey = com.example.wowagoodsproject.component.goodsIdentity(fanGoods),
             imgPath = fanGoods.imgPath,
             series = fanGoods.series,
             chara = fanGoods.chara,
@@ -127,13 +178,15 @@ fun FanArtScreen(
             quantity = fanGoods.quantity,
             onQuantityChange = { q -> viewModel.setQuantity(fanGoods, q) },
             onSavePendingInfo = { info -> viewModel.savePendingInfo(fanGoods, info) },
+            onEdit = fanGoods?.let { g -> { com.example.wowagoodsproject.screen.fan.FanEditRequest.open(g.fanGoodsId) } },
             onDelete = {
                 viewModel.delete(fanGoods)
                 detailViewModel.dismissDialog()
             },
+            // 2차창작 시리즈 이름을 누르면 이 탭의 그 시리즈로 간다.
             onSeriesClick = { seriesName ->
                 detailViewModel.dismissDialog()
-                onNavigateToSeries(seriesName)
+                viewModel.setOpenSeries(seriesName.trim().ifEmpty { NO_FAN_SERIES })
             }
         )
     }
@@ -152,14 +205,72 @@ fun FanArtScreen(
             seriesList = goodsSeriesList,
             selectedSeriesFilter = selectedGoodsSeriesFilter,
             onSeriesSelect = { filterViewModel.setSeriesFilter(it) },
-            scopeGoods = goodsList
+            scopeGoods = scopedGoods
         )
     }
+
+    // 시리즈 추가·편집 화면
+    val editingSeries = seriesEdit
+    if (editingSeries != null) {
+        val seriesVm: SeriesEditViewModel = viewModel(key = "fanSeriesEdit")
+        val reg = registeredSeries.firstOrNull { it.seriesNm == editingSeries }
+        val target = editingSeries.ifEmpty { null }
+        SeriesEditScreen(
+            key = "fanSeries:$editingSeries",
+            target = target,
+            imgPath = reg?.seriesImgPath.orEmpty(),
+            iconPath = reg?.seriesIconPath.orEmpty(),
+            date = reg?.seriesDate.orEmpty(),
+            subtitle = "비공식",
+            photoPrefix = "fan_series_",
+            viewModel = seriesVm,
+            persist = { n, b, i, d -> App.fanDatabase.fanGoodsDao().saveSeries(target, n, b, i, d) },
+            onSaved = { saved ->
+                if (openSeries != null && openSeries.equals(target, ignoreCase = true)) viewModel.setOpenSeries(saved)
+                seriesEdit = null
+            },
+            onClose = { seriesEdit = null },
+            onDelete = if (reg != null) ({ viewModel.deleteSeries(editingSeries); seriesEdit = null }) else null
+        )
+        return
+    }
+
+    // 시리즈 목록에서 '+' 를 누르면 [굿즈 · 시리즈] 메뉴.
+    // 시리즈 상세에서는 그 시리즈를 보고 있으므로 메뉴 없이 바로 굿즈 등록(그 시리즈를 미리 채움).
+    val addButton: @Composable RowScope.() -> Unit = {
+        val current = openSeries
+        if (current == null) {
+            com.example.wowagoodsproject.component.AddMenuButton(onGoods = { onNavigateToAdd("") }, onSeries = { seriesEdit = "" })
+        } else {
+            val prefill = if (current == NO_FAN_SERIES) "" else current
+            com.example.wowagoodsproject.component.AddMenuButton(onGoods = { onNavigateToAdd(prefill) }, onSeries = null)
+        }
+    }
+
+    // 시리즈 목록(첫 화면): 명조 공식 시리즈 목록과 같은 모양
+    if (openSeries == null) {
+        val inGoods = remember(goodsList) { goodsList.flatMap { it.chara.split(",").map { c -> c.trim() } }.filter { it.isNotEmpty() }.toSet() }
+        SeriesListPage(
+            title = "비공식",
+            cards = seriesCardList,
+            charaChoices = allCharasForSeries.filter { it.charaNm in inGoods }
+                .sortedWith(compareByDescending<com.example.wowagoodsproject.db.character.CharaEntity> { it.charaIsFavorite }.thenBy { it.charaNm }),
+            isLandscape = isLandscape,
+            onOpen = { viewModel.setOpenSeries(it) },
+            emptyTitle = "비공식 굿즈가 없습니다",
+            emptyMessage = "오른쪽 위 '+'로 굿즈나 시리즈를 추가하세요",
+            actions = { addButton() }
+        )
+        return
+    }
+    val openCard = seriesCardList.firstOrNull { it.name.equals(openSeries, ignoreCase = true) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             TopBar(
-                title = "2차창작",
+                title = openSeries.orEmpty(),
+                subtitle = "비공식",
+                onBack = { viewModel.setOpenSeries(null); filterViewModel.clearGoodsFilter() },
                 actions = {
                     TopBarAction(
                         icon = Icons.Default.FilterList,
@@ -173,17 +284,10 @@ fun FanArtScreen(
                         contentDescription = "보기 방식 전환",
                         onClick = { listModeViewModel.toggleGridMode() }
                     )
-                    // 등록 화면으로 가는 버튼은 헤더 맨 오른쪽에 둔다. 박스 없이 강조색 글자만.
-                    TextButton(
-                        onClick = onNavigateToAdd,
-                        shape = RectangleShape,
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("굿즈 등록", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    if (openCard != null && openCard.name != NO_FAN_SERIES) {
+                        TopBarAction(icon = Icons.Default.Edit, contentDescription = "시리즈 편집", onClick = { seriesEdit = openCard.name })
                     }
+                    addButton()
                 }
             )
 
@@ -235,7 +339,7 @@ fun FanArtScreen(
                         isGridMode = isGridMode,
                         gridColumns = gridColumns,
                         onGoodsClick = {
-                            if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                            if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.toggleGoods(it)
                         },
                         selectedIds = if (selection.mode) selection.ids else null,
                         contentPadding = PaddingValues(bottom = 16.dp)
@@ -245,3 +349,7 @@ fun FanArtScreen(
         }
     }
 }
+
+/** 시리즈를 비워 둔 2차창작 굿즈를 묶는 이름 */
+const val NO_FAN_SERIES = "미분류"
+

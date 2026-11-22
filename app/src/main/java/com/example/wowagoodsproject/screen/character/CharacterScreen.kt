@@ -101,7 +101,9 @@ fun CharacterScreen(
     detailViewModel: GoodsDetailViewModel = viewModel(),
     filterViewModel: FilterViewModel = viewModel(),
     listModeViewModel: ListModeViewModel = viewModel(),
-    onNavigateToSeries: (String) -> Unit = {}
+    onNavigateToSeries: (String) -> Unit = {},
+    /** 비공식 굿즈의 시리즈 이름을 누르면 비공식 탭의 그 시리즈로 간다 */
+    onNavigateToFanSeries: (String) -> Unit = {}
 ) {
     val charaList by viewModel.charaList.collectAsState()
     val selectedChara by viewModel.selectedChara.collectAsState()
@@ -290,6 +292,7 @@ fun CharacterScreen(
         val parentSet = officialGoods?.let { findSetGoods(it, allSeriesGoods) }
         val setComponents = parentSet?.let { getSetComponents(it, allSeriesGoods) } ?: emptyList()
         GoodsDetailDialog(
+            itemKey = com.example.wowagoodsproject.component.goodsIdentity(goods),
             imgPath = goods.imgPath,
             series = goods.series,
             chara = goods.chara,
@@ -326,11 +329,12 @@ fun CharacterScreen(
                 officialGoods?.let { viewModel.setOfficialPending(it) }
                 fanGoods?.let { viewModel.setFanPending(it) }
             },
+            onEdit = fanGoods?.let { g -> { com.example.wowagoodsproject.screen.fan.FanEditRequest.open(g.fanGoodsId) } },
             onDelete = {},
             showDelete = false,
             onSeriesClick = { seriesName ->
                 detailViewModel.dismissDialog()
-                onNavigateToSeries(seriesName)
+                if (fanGoods != null) onNavigateToFanSeries(seriesName) else onNavigateToSeries(seriesName)
             }
         )
     }
@@ -611,7 +615,7 @@ fun CharacterScreen(
                                     isGridMode = isGridMode,
                                     gridColumns = gridColumns,
                                     onGoodsClick = {
-                                        if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                                        if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.toggleGoods(it)
                                     },
                                     selectedIds = if (selection.mode) selection.ids else null
                                 )
@@ -623,7 +627,7 @@ fun CharacterScreen(
                                     isGridMode = isGridMode,
                                     gridColumns = gridColumns,
                                     onGoodsClick = {
-                                        if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                                        if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.toggleGoods(it)
                                     },
                                     selectedIds = if (selection.mode) selection.ids else null
                                 )

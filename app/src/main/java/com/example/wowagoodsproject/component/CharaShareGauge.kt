@@ -86,7 +86,12 @@ fun CharaShareGauge(
     colors: Map<String, Color>,
     modifier: Modifier = Modifier,
     /** 캐릭터 이름 → 사진 주소. 범례 칸에 사진을 둔다. */
-    avatars: Map<String, String> = emptyMap()
+    avatars: Map<String, String> = emptyMap(),
+    /**
+     * 캐릭터 이름 → (공식, 2차창작) 개수. 주면 범례가 "이름 · 공식 N · 2차창작 N · %" 로 나뉜다(배신 굿즈 마이페이지).
+     * null 이면 지금처럼 합계 하나만 보인다(명조 마이페이지).
+     */
+    breakdown: Map<String, Pair<Int, Int>>? = null
 ) {
     if (shares.total == 0) return
     // '기타'는 배경과 헷갈리지 않게 중간 회색. (구분선 색 outlineVariant 는 너무 옅어 빈 칸처럼 보였다)
@@ -119,8 +124,13 @@ fun CharaShareGauge(
         // 숫자가 칸 오른쪽 끝에 붙어 위아래 줄의 숫자 열이 맞는다. 칸 수는 폭에 맞춘다(세로 화면 2칸).
         // BoxWithConstraints 는 미리 재는 측정(IntrinsicSize)을 지원하지 않아, 가로 화면 마이페이지의
         // 높이 맞춤 줄(IntrinsicSize.Min) 안에서 앱이 꺼졌다. 그래서 직접 칸을 놓는 레이아웃을 쓴다.
+        // '기타' 칸의 공식/2차창작은 묶인 캐릭터들의 합
+        val othersBreakdown = breakdown?.let { b ->
+            shares.othersNames.fold(0 to 0) { acc, n -> b[n]?.let { (o, f) -> acc.first + o to acc.second + f } ?: acc }
+        }
         EqualWidthGrid(
-            minCellWidth = LEGEND_CELL_MIN_WIDTH,
+            // 공식/2차창작 두 열이 더 들어가므로 칸을 넓힌다(휴대폰 세로 1칸).
+            minCellWidth = if (breakdown != null) LEGEND_CELL_MIN_WIDTH_BREAKDOWN else LEGEND_CELL_MIN_WIDTH,
             maxColumns = 4,
             horizontalGap = 16.dp,
             verticalGap = 10.dp
@@ -131,7 +141,8 @@ fun CharaShareGauge(
                     countText = "$count",
                     percentText = "${percent(count)}%",
                     color = color,
-                    avatar = avatars[name]?.takeIf { it.isNotEmpty() }
+                    avatar = avatars[name]?.takeIf { it.isNotEmpty() },
+                    breakdown = breakdown?.let { b -> b[name] ?: if (name == shares.othersLabel) othersBreakdown else (0 to 0) }
                 )
             }
         }
@@ -179,6 +190,9 @@ private fun EqualWidthGrid(
  */
 private val LEGEND_CELL_MIN_WIDTH = 180.dp
 
+/** 공식/2차창작 열이 있는 범례 칸의 최소 너비 */
+private val LEGEND_CELL_MIN_WIDTH_BREAKDOWN = 280.dp
+
 @Composable
 private fun LegendCell(
     name: String,
@@ -186,7 +200,9 @@ private fun LegendCell(
     percentText: String,
     color: Color,
     avatar: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** (공식, 2차창작). 있으면 합계 열 대신 두 열로 보인다. */
+    breakdown: Pair<Int, Int>? = null
 ) {
     // 소식·세트 목록처럼 칸 왼쪽에 그 캐릭터 색의 세로선. 색 표시와 칸 경계를 함께 맡는다.
     Row(
@@ -232,17 +248,22 @@ private fun LegendCell(
         Spacer(modifier = Modifier.width(6.dp))
         // 개수·퍼센트를 각자 고정 너비의 오른쪽 정렬 열로 두고 숫자 폭을 같게(tabular) 해,
         // 위아래 칸의 자릿수가 달라도(1092 / 9, 50% / 1%) 끝자리가 한 줄로 맞는다.
-        Text(
-            text = countText,
-            style = NumberStyle,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            textAlign = TextAlign.End,
-            modifier = Modifier
-                .width(COUNT_COLUMN_WIDTH)
-                .padding(vertical = 4.dp)
-        )
+        if (breakdown != null) {
+            BreakdownNumber(label = "공식", value = breakdown.first, width = OFFICIAL_COLUMN_WIDTH)
+            BreakdownNumber(label = "2차창작", value = breakdown.second, width = FAN_COLUMN_WIDTH)
+        } else {
+            Text(
+                text = countText,
+                style = NumberStyle,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                textAlign = TextAlign.End,
+                modifier = Modifier
+                    .width(COUNT_COLUMN_WIDTH)
+                    .padding(vertical = 4.dp)
+            )
+        }
         Text(
             text = percentText,
             style = NumberStyle,
@@ -253,6 +274,31 @@ private fun LegendCell(
         )
     }
 }
+
+/** 범례의 "공식 12" / "2차창작 3" 한 열. 이름표는 옅게, 숫자는 굵게, 오른쪽 정렬 */
+@Composable
+private fun BreakdownNumber(label: String, value: Int, width: androidx.compose.ui.unit.Dp) {
+    Row(
+        modifier = Modifier.width(width).padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = AppStyles.textCardSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, softWrap = false)
+        Spacer(modifier = Modifier.width(3.dp))
+        Text(
+            "$value",
+            style = NumberStyle,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+/** 공식/2차창작 열 너비: 이름표 + 네 자리 숫자 */
+private val OFFICIAL_COLUMN_WIDTH = 64.dp
+private val FAN_COLUMN_WIDTH = 82.dp
 
 /** 숫자 열 너비: 개수는 네 자리(9999), 퍼센트는 '100%' 가 들어가는 폭 */
 private val COUNT_COLUMN_WIDTH = 36.dp
@@ -276,7 +322,7 @@ private fun LegendAvatar(url: String) {
 }
 
 /**
- * B안: 선호 캐릭터 수집률 목록. 캐릭터별 탭처럼 사진 + 이름 + 진행 막대 + 보유/전체 + 퍼센트.
+ * B안: 선호 캐릭터 수집 현황 목록. 캐릭터별 탭처럼 사진 + 이름 + 진행 막대 + 보유/전체 + 퍼센트.
  * 순서는 선호 우선순위. 퍼센트는 버림이라 다 모았을 때만 100%(초록).
  */
 @Composable
@@ -284,12 +330,14 @@ fun FavoriteCollectionList(
     favorites: List<CharaEntity>,
     collection: Map<String, Pair<Int, Int>>,
     colors: Map<String, Color>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 목록 제목. 명조는 공식 굿즈로만 세므로 '공식'을 붙인다. */
+    title: String = "선호 캐릭터 공식 수집현황"
 ) {
     if (favorites.isEmpty()) return
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = "선호 캐릭터 수집률",
+            text = title,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

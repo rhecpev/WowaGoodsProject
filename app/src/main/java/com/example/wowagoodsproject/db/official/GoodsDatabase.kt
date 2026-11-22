@@ -6,7 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.wowagoodsproject.db.convertIntegerColumnToText
 
-@Database(entities = [GoodsEntity::class], version = 8)
+@Database(entities = [GoodsEntity::class], version = 9)
 abstract class GoodsDatabase : RoomDatabase() {
     abstract fun goodsDao(): GoodsDao
 
@@ -58,6 +58,14 @@ abstract class GoodsDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tb_goods ADD COLUMN goodsUid INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** 9: 시리즈·굿즈 번호 인덱스(데이터는 그대로, 찾는 속도만) */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tb_goods_goodsSeries` ON `tb_goods` (`goodsSeries`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tb_goods_goodsUid` ON `tb_goods` (`goodsUid`)")
             }
         }
     }

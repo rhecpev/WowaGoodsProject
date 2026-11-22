@@ -3,6 +3,8 @@ package com.example.wowagoodsproject.component
 import androidx.compose.ui.graphics.RectangleShape
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,14 +73,26 @@ fun PurchaseInfoDialog(
     confirmText: String = "적용",
     targetCount: Int? = null,
     requireChange: Boolean = targetCount != null,
-    returnAll: Boolean = !requireChange
+    returnAll: Boolean = !requireChange,
+    /**
+     * 구매일이 비어 있으면 오늘 날짜를 미리 넣는다. 구매예정으로 '처음 바꿀 때'만 부르는 쪽이 켠다.
+     * 이미 구매예정인 굿즈의 정보 수정에서 켜면 '구매일 미정'이 열기만 해도 오늘로 바뀐다.
+     * 여러 개면 '고른 굿즈가 모두 구매일이 비었을 때'만 켠다(서로 다른 날짜를 오늘로 덮지 않게).
+     */
+    prefillToday: Boolean = false
 ) {
+    val prefillDate = prefillToday && initial.purchaseDate.isEmpty()
     var store by remember { mutableStateOf(initial.purchaseStore) }
     var receiveDate by remember { mutableStateOf(initial.receiveDate) }
-    var purchaseDate by remember { mutableStateOf(initial.purchaseDate) }
+    var purchaseDate by remember { mutableStateOf(if (prefillDate) todayDateString() else initial.purchaseDate) }
     var storeTouched by remember { mutableStateOf(false) }
     var receiveTouched by remember { mutableStateOf(false) }
-    var purchaseTouched by remember { mutableStateOf(false) }
+    // 오늘로 미리 넣은 구매일은 적용할 값이다.
+    var purchaseTouched by remember { mutableStateOf(prefillDate) }
+    // 구입처 추천(지금까지 적은 구입처)
+    val stores = rememberPurchaseStores()
+    var storeFocused by remember { mutableStateOf(false) }
+    var suggestOpen by remember { mutableStateOf(true) }
     val anyTouched = storeTouched || receiveTouched || purchaseTouched
 
     val countNote: @Composable () -> Unit = {
@@ -91,15 +105,24 @@ fun PurchaseInfoDialog(
         }
     }
     val fields: @Composable () -> Unit = {
-        OutlinedTextField(
-            value = store,
-            onValueChange = { store = it; storeTouched = true },
-            label = { Text("구입처") },
-            placeholder = { Text("예: 알리익스프레스, 홍대 팝업") },
-            leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // 입력 칸 바로 아래에 지금까지 적은 구입처(입력할 때마다 걸러지고 겹치는 글자는 강조). 고르면 채우고 닫는다.
+        StoreSuggestBox(
+            expanded = storeFocused && suggestOpen,
+            query = store,
+            stores = stores,
+            onPick = { store = it; storeTouched = true; suggestOpen = false },
+            onDismiss = { suggestOpen = false }
+        ) {
+            com.example.wowagoodsproject.component.UnderlineTextField(
+                value = store,
+                onValueChange = { store = it; storeTouched = true; suggestOpen = true },
+                label = { Text("구입처") },
+                placeholder = { Text("구입처 입력") },
+                leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().onFocusChanged { storeFocused = it.isFocused }
+            )
+        }
         DatePickField(
             label = "구매일",
             icon = Icons.Default.CalendarMonth,
@@ -229,11 +252,13 @@ private const val DATE_PICKER_FULL_HEIGHT_DP = 640
 /** 달력으로만 고르는 값이라 입력창 대신 누를 수 있는 줄로 보여준다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DatePickField(
+internal fun DatePickField(
     label: String,
     icon: ImageVector,
     date: String,
-    onDateChange: (String) -> Unit
+    onDateChange: (String) -> Unit,
+    /** true 면 다른 입력 칸처럼 왼쪽에 아이콘 + 그 아래 제목, 오른쪽에 날짜와 밑줄(굿즈 등록·시리즈 편집) */
+    labelUnderIcon: Boolean = false
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -277,12 +302,32 @@ private fun DatePickField(
         }
     }
 
-    Surface(
-        onClick = { showDatePicker = true },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest
-    ) {
+    if (labelUnderIcon) {
+        Box(modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }) {
+            FieldWithIcon({ Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp)) }, label = label) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = date.ifEmpty { "날짜 선택" },
+                            style = MaterialTheme.typography.titleLarge,
+                            color = if (date.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f).padding(vertical = 8.dp)
+                        )
+                        if (date.isNotEmpty()) {
+                            IconButton(onClick = { onDateChange("") }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Clear, contentDescription = "$label 지우기")
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        }
+        return
+    }
+    // 다른 입력 칸과 같은 모양: 상자 없이 밑줄 하나. 누르면 달력.
+    Column(modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -313,5 +358,6 @@ private fun DatePickField(
                 }
             }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
     }
 }

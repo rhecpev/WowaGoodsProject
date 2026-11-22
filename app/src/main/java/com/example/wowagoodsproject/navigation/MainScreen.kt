@@ -8,11 +8,13 @@ import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +44,7 @@ import com.example.wowagoodsproject.screen.search.SearchScreen
 import com.example.wowagoodsproject.screen.search.SearchViewModel
 import com.example.wowagoodsproject.screen.series.SeriesScreen
 import com.example.wowagoodsproject.screen.series.GoodsFocus
+import com.example.wowagoodsproject.screen.betray.BetrayRoot
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -51,11 +54,20 @@ fun MainScreen(
     onOpenTargetHandled: () -> Unit = {}
 ) {
     val navController = rememberNavController()
+    // 데이터 입력·복구가 끝나면 어느 화면에서든 결과 창을 띄운다.
+    com.example.wowagoodsproject.screen.mypage.ImportResultHost()
+    // 비공식 굿즈 상세의 '이 굿즈 수정' → 수정 화면
+    val fanEditId by com.example.wowagoodsproject.screen.fan.FanEditRequest.goodsId.collectAsState()
+    LaunchedEffect(fanEditId) {
+        val id = fanEditId ?: return@LaunchedEffect
+        com.example.wowagoodsproject.screen.fan.FanEditRequest.goodsId.value = null
+        navController.navigate("fan_edit/$id")
+    }
     val items = listOf(
         BottomNavItem.Series,
-        BottomNavItem.Character,
         BottomNavItem.FanArt,
         BottomNavItem.Search,
+        BottomNavItem.Character,
         BottomNavItem.MyPage
     )
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -80,9 +92,12 @@ fun MainScreen(
     val unreadNewsCount by myPageViewModel.unreadNewsCount.collectAsState()
     // 하단(가로 화면은 왼쪽) 메뉴를 숨기는 화면들. 캐릭터의 굿즈 화면에서는 공식 시리즈 화면처럼 메뉴를 남겨 둔다.
     val isInSubScreen = myPageCurrentSection != null ||
-            currentRoute == "fan_add" ||
+            currentRoute?.startsWith("fan_add") == true ||
+            currentRoute?.startsWith("fan_edit") == true ||
             currentRoute == "patch_notes" ||
-            currentRoute == "news"
+            currentRoute == "release_notes" ||
+            currentRoute == "news" ||
+            currentRoute == "betray"
     val navBackground = MaterialTheme.colorScheme.surface
     val navSelected = MaterialTheme.colorScheme.primary
     val navUnselected = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
@@ -118,7 +133,10 @@ fun MainScreen(
                 characterFilterViewModel.setFilter(FilterType.ALL)
                 characterFilterViewModel.clearGoodsFilter()
             }
-            BottomNavItem.FanArt.route -> {}
+            BottomNavItem.FanArt.route -> {
+                fanArtViewModel.setOpenSeries(null)
+                fanFilterViewModel.clearGoodsFilter()
+            }
             BottomNavItem.Search.route -> searchViewModel.clearFilters()
             BottomNavItem.MyPage.route -> {
                 myPageViewModel.setSection(null)
@@ -154,6 +172,13 @@ fun MainScreen(
             launchSingleTop = true
             restoreState = true
         }
+    }
+
+    /** 비공식 탭의 [seriesName] 시리즈를 연다(다른 탭에서 비공식 굿즈의 시리즈 이름을 눌렀을 때). */
+    fun navigateToFanSeries(seriesName: String) {
+        fanArtViewModel.setOpenSeries(seriesName.trim().ifEmpty { com.example.wowagoodsproject.screen.fan.NO_FAN_SERIES })
+        fanFilterViewModel.clearGoodsFilter()
+        navigateToTab(BottomNavItem.FanArt.route)
     }
 
     // 소식·변경된 굿즈에서 시리즈로 이동했으면, 그 시리즈를 뒤로가기로 닫을 때 그 화면으로 돌아간다.
@@ -203,8 +228,21 @@ fun MainScreen(
         val target = openTarget ?: return@LaunchedEffect
         if (target is OpenTarget.News) {
             if (navController.currentDestination?.route != "news") openNews()
+        } else if (target is OpenTarget.BetrayGoods) {
+            // 배신 굿즈: 배신 굿즈 화면을 열고, 그 장르 → 시리즈 → 상세 순으로 화면이 받아 연다.
+            val goods = App.betrayDatabase.betrayDao().goodsById(target.id)
+            if (goods != null) {
+                com.example.wowagoodsproject.screen.betray.BetrayOpenRequest.goods.value = goods
+                if (navController.currentDestination?.route != "betray") navController.navigate("betray") { launchSingleTop = true }
+            }
         } else if (target is OpenTarget.Goods && target.isFan) {
             val goods = App.fanDatabase.fanGoodsDao().getById(target.id)
+            // 상세를 닫아도 그 굿즈가 든 시리즈 목록이 보이게 시리즈를 열어 둔다.
+            goods?.let {
+                fanArtViewModel.setOpenSeries(it.fanGoodsSeries.trim().ifEmpty { com.example.wowagoodsproject.screen.fan.NO_FAN_SERIES })
+                // 예전에 걸어 둔 필터 때문에 그 굿즈가 목록에서 안 보이지 않게 푼다.
+                fanFilterViewModel.clearGoodsFilter()
+            }
             navigateToTab(BottomNavItem.FanArt.route)
             goods?.let { fanDetailViewModel.selectGoods(it) }
         } else if (target is OpenTarget.Goods) {
@@ -248,12 +286,13 @@ fun MainScreen(
                         filterViewModel = characterFilterViewModel,
                         listModeViewModel = characterListModeViewModel,
                         detailViewModel = characterDetailViewModel,
-                        onNavigateToSeries = { navigateToSeries(it) }
+                        onNavigateToSeries = { navigateToSeries(it) },
+                        onNavigateToFanSeries = { navigateToFanSeries(it) }
                     )
                 }
                 composable(BottomNavItem.FanArt.route) {
                     FanArtScreen(
-                        onNavigateToAdd = { navController.navigate("fan_add") },
+                        onNavigateToAdd = { series -> navController.navigate("fan_add?series=${android.net.Uri.encode(series)}") },
                         widthSizeClass = widthSizeClass,
                         viewModel = fanArtViewModel,
                         filterViewModel = fanFilterViewModel,
@@ -268,7 +307,8 @@ fun MainScreen(
                         viewModel = searchViewModel,
                         detailViewModel = searchDetailViewModel,
                         listModeViewModel = searchListModeViewModel,
-                        onNavigateToSeries = { navigateToSeries(it) }
+                        onNavigateToSeries = { navigateToSeries(it) },
+                        onNavigateToFanSeries = { navigateToFanSeries(it) }
                     )
                 }
                 composable(BottomNavItem.MyPage.route) {
@@ -279,6 +319,7 @@ fun MainScreen(
                         pendingListModeViewModel = pendingListModeViewModel,
                         onThemeChange = { currentOnThemeChange(it) },
                         onNavigateToPatchNotes = { navController.navigate("patch_notes") },
+                        onNavigateToReleaseNotes = { navController.navigate("release_notes") },
                         onNavigateToChangedGoods = {
                             // 새로 열 때마다 미처리만 보이는 처음 상태로 연다.
                             changedGoodsViewModel.setProcessFilter(ProcessFilter.TODO)
@@ -286,11 +327,35 @@ fun MainScreen(
                             navController.navigate("changed_goods") { launchSingleTop = true }
                         },
                         onNavigateToNews = { openNews() },
-                        onNavigateToSeries = { navigateToSeries(it) }
+                        onNavigateToSeries = { navigateToSeries(it) },
+                        onNavigateToFanSeries = { navigateToFanSeries(it) },
+                        onNavigateToBetray = { navController.navigate("betray") { launchSingleTop = true } }
                     )
                 }
-                composable("fan_add") {
-                    FanAddScreen(onNavigateBack = { navController.popBackStack() })
+                // 배신 굿즈: 자체 하단 메뉴를 가진 앱 속 앱. 명조 쪽 하단 메뉴는 숨긴다.
+                composable("betray") {
+                    BetrayRoot(widthSizeClass = widthSizeClass, onExit = { navController.popBackStack() })
+                }
+                composable(
+                    "fan_edit/{id}",
+                    arguments = listOf(androidx.navigation.navArgument("id") { type = androidx.navigation.NavType.IntType })
+                ) { entry ->
+                    FanAddScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        editGoodsId = entry.arguments?.getInt("id")
+                    )
+                }
+                composable(
+                    "fan_add?series={series}",
+                    arguments = listOf(androidx.navigation.navArgument("series") { defaultValue = "" })
+                ) { entry ->
+                    FanAddScreen(
+                        onNavigateBack = { navController.popBackStack() },
+                        initialSeries = entry.arguments?.getString("series").orEmpty()
+                    )
+                }
+                composable("release_notes") {
+                    com.example.wowagoodsproject.screen.mypage.ReleaseNotesScreen(onNavigateBack = { navController.popBackStack() })
                 }
                 composable("patch_notes") {
                     PatchNotesScreen(onNavigateBack = { navController.popBackStack() })
@@ -326,10 +391,15 @@ fun MainScreen(
         }
     }
 
+    // 가로 2번 모드(8인치 이상 태블릿): 굿즈 상세·필터·고르기 창을 열면 오른쪽 절반 칸이 밀고 들어와 거기에 연다.
+    // 8인치 미만은 1번 모드: 창이 오른쪽에서 덮어서 나온다(AdaptiveSheet 가 알아서 한다).
+    val fixedPane = isLandscape && com.example.wowagoodsproject.component.useFixedSidePane()
+    val sidePane = com.example.wowagoodsproject.component.rememberSidePaneState()
     if (isLandscape) CompositionLocalProvider(
         // 세로 모드의 Scaffold 는 기본 글자/아이콘 색을 onBackground 로 깔아 준다.
         // 가로 모드는 Row 만 써서 이 값이 빠지므로, 색을 따로 안 준 글자가 세로와 달라지지 않게 같은 값을 준다.
-        LocalContentColor provides MaterialTheme.colorScheme.onBackground
+        LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+        com.example.wowagoodsproject.component.LocalSidePane provides if (fixedPane) sidePane else null
     ) {
         Row(
             modifier = Modifier
@@ -348,6 +418,8 @@ fun MainScreen(
                         NavigationRailItem(
                             selected = currentRoute == item.route,
                             onClick = {
+                                // 2번 모드에서 상세 칸이 열려 있으면 탭을 옮기는 것과 동시에 칸을 바로 없앤다.
+                                sidePane.closeAllNow()
                                 if (currentRoute == item.route) {
                                     resetTab(item.route)
                                 } else {
@@ -372,10 +444,7 @@ fun MainScreen(
                                         }
                                     }
                                 ) {
-                                    Icon(
-                                        imageVector = if (currentRoute == item.route) item.selectedIcon else item.unselectedIcon,
-                                        contentDescription = null
-                                    )
+                                    TabIcon(selected = currentRoute == item.route, selectedIcon = item.selectedIcon, unselectedIcon = item.unselectedIcon, iconRes = item.iconRes)
                                 }
                             },
                             colors = NavigationRailItemDefaults.colors(
@@ -390,7 +459,38 @@ fun MainScreen(
                     }
                 }
             }
-            navHost(Modifier, widthSizeClass)
+            if (fixedPane) {
+                // 아무것도 안 열었으면 왼쪽 화면이 전체 폭을 쓴다.
+                // 굿즈 등을 누르면 오른쪽 칸이 옆에서 밀고 들어와 [왼쪽 화면 | 오른쪽 칸] 반반이 되고, 닫으면 밀려 나가며 접힌다(탭 이동은 바로 사라짐).
+                BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    val leftClass = widthSizeClassOf(if (sidePane.isOpen) maxWidth / 2 else maxWidth)
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        navHost(Modifier.weight(1f).fillMaxHeight(), leftClass)
+                        val paneAnim = com.example.wowagoodsproject.component.SIDE_PANE_ANIM_MS
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = sidePane.isOpen,
+                            enter = androidx.compose.animation.expandHorizontally(
+                                androidx.compose.animation.core.tween(paneAnim), expandFrom = androidx.compose.ui.Alignment.Start
+                            ) + androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(paneAnim)) { it / 2 },
+                            // 닫을 때(같은 굿즈 다시 누르기·닫기·뒤로)는 나올 때 거꾸로 밀려 나가며 접히고, 탭을 옮길 때는 바로 사라진다
+                            exit = if (sidePane.closeInstantly) androidx.compose.animation.ExitTransition.None else {
+                                androidx.compose.animation.shrinkHorizontally(
+                                    androidx.compose.animation.core.tween(paneAnim), shrinkTowards = androidx.compose.ui.Alignment.Start
+                                ) + androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(paneAnim)) { it / 2 }
+                            },
+                            modifier = Modifier.fillMaxHeight()
+                        ) {
+                            // 폭은 안쪽에서 정해야 펼쳐지는 애니메이션이 0 → 절반으로 자란다
+                            Row(modifier = Modifier.fillMaxWidth(0.5f).fillMaxHeight()) {
+                                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                com.example.wowagoodsproject.component.SidePaneHost(sidePane, Modifier.weight(1f).fillMaxHeight())
+                            }
+                        }
+                    }
+                }
+            } else {
+                navHost(Modifier, widthSizeClass)
+            }
         }
     } else {
         Scaffold(
@@ -428,10 +528,7 @@ fun MainScreen(
                                             }
                                         }
                                     ) {
-                                        Icon(
-                                            imageVector = if (currentRoute == item.route) item.selectedIcon else item.unselectedIcon,
-                                            contentDescription = null
-                                        )
+                                        TabIcon(selected = currentRoute == item.route, selectedIcon = item.selectedIcon, unselectedIcon = item.unselectedIcon, iconRes = item.iconRes)
                                     }
                                 },
                                 colors = NavigationBarItemDefaults.colors(
@@ -450,4 +547,11 @@ fun MainScreen(
             navHost(Modifier.padding(innerPadding), widthSizeClass)
         }
     }
+}
+
+/** 폭(dp)으로 화면 크기 구분을 정한다(창 크기 구분과 같은 기준: 600 · 840) */
+private fun widthSizeClassOf(width: androidx.compose.ui.unit.Dp): WindowWidthSizeClass = when {
+    width < 600.dp -> WindowWidthSizeClass.Compact
+    width < 840.dp -> WindowWidthSizeClass.Medium
+    else -> WindowWidthSizeClass.Expanded
 }

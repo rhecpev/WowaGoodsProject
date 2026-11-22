@@ -6,7 +6,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.wowagoodsproject.db.convertIntegerColumnToText
 
-@Database(entities = [FanGoodsEntity::class], version = 7)
+@Database(entities = [FanGoodsEntity::class, FanSeriesEntity::class], version = 9)
 abstract class FanGoodsDatabase : RoomDatabase() {
     abstract fun fanGoodsDao(): FanGoodsDao
 
@@ -44,6 +44,23 @@ abstract class FanGoodsDatabase : RoomDatabase() {
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tb_fan_goods ADD COLUMN fanGoodsQuantity INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
+        /** 시리즈 날짜(만들 때 입력). 예전 시리즈는 빈 값이라 굿즈 최근 등록일을 계속 보인다 */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `tb_fan_series` ADD COLUMN `seriesDate` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** 사용자가 등록한 2차창작 시리즈(이름·배경·아이콘) */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `tb_fan_series` (`seriesNm` TEXT NOT NULL, `seriesImgPath` TEXT NOT NULL, " +
+                        "`seriesIconPath` TEXT NOT NULL, PRIMARY KEY(`seriesNm`))"
+                )
             }
         }
 

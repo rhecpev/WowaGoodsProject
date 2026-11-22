@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -110,6 +111,7 @@ fun SetGoodsDetailDialog(
                 initial = comp.purchaseInfo,
                 title = if (comp.status == GoodsStatus.PENDING) "구매 정보 수정" else "구매예정으로 표시",
                 confirmText = if (comp.status == GoodsStatus.PENDING) "저장" else "구매예정으로",
+                prefillToday = comp.status != GoodsStatus.PENDING,
                 onDismiss = { pendingTarget = null },
                 onConfirm = { edit ->
                     pendingTarget = null
@@ -135,6 +137,8 @@ fun SetGoodsDetailDialog(
             initial = common,
             title = "구성품 ${components.size}개 구매예정",
             confirmText = "구매예정으로",
+            // 구성품마다 다른 구매일을 오늘로 덮지 않게, 모두 비었고 아직 구매예정이 아닐 때만 오늘을 넣는다.
+            prefillToday = components.all { it.purchaseDate.isEmpty() && it.status != GoodsStatus.PENDING },
             onDismiss = { bulkPending = false },
             onConfirm = { edit ->
                 bulkPending = false
@@ -492,7 +496,11 @@ private fun ComponentPurchaseInfo(comp: GoodsEntity, onEdit: (() -> Unit)?) {
                 modifier = Modifier.weight(1f)
             )
             if (onEdit != null) {
-                TextButton(onClick = onEdit, shape = RectangleShape) { Text("수정") }
+                TextButton(onClick = onEdit, shape = RectangleShape) {
+                    Text("수정")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
             }
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

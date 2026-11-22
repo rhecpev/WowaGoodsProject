@@ -42,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ChangeCircle
+import androidx.compose.material.icons.filled.Diversity3
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.CleaningServices
@@ -120,21 +121,16 @@ fun MyPageScreen(
     detailViewModel: GoodsDetailViewModel = viewModel(),
     onThemeChange: (Int) -> Unit = {},
     onNavigateToPatchNotes: () -> Unit = {},
+    /** 버전별 변경점 화면 */
+    onNavigateToReleaseNotes: () -> Unit = {},
     onNavigateToChangedGoods: () -> Unit = {},
     onNavigateToNews: () -> Unit = {},
-    onNavigateToSeries: (String) -> Unit = {}
+    onNavigateToSeries: (String) -> Unit = {},
+    /** 비공식 굿즈의 시리즈 이름을 누르면 비공식 탭의 그 시리즈로 간다 */
+    onNavigateToFanSeries: (String) -> Unit = {},
+    onNavigateToBetray: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var showReleaseNotes by remember { mutableStateOf(false) }
-    if (showReleaseNotes) {
-        ReleaseNotes.forCurrentVersion()?.let { sections ->
-            WhatsNewDialog(
-                version = ReleaseNotes.currentVersion,
-                sections = sections,
-                onDismiss = { showReleaseNotes = false }
-            )
-        }
-    }
     val charaList by viewModel.charaList.collectAsState()
     val charaCollection by viewModel.charaCollection.collectAsState()
     val officialGottenGoods by viewModel.officialGottenGoods.collectAsState()
@@ -156,6 +152,8 @@ fun MyPageScreen(
     val storageItems by viewModel.storageItems.collectAsState()
     val isCleaning by viewModel.isCleaning.collectAsState()
     var showStorageSheet by remember { mutableStateOf(false) }
+    val exportPreview by viewModel.exportPreview.collectAsState()
+    var showExportPreview by remember { mutableStateOf(false) }
     // 마이페이지 첫 화면에 올 때마다 정리할 수 있는 크기를 다시 잰다('용량 정리' 옆 표시).
     LaunchedEffect(currentSection) { if (currentSection == null) viewModel.refreshStorage(context) }
     val exportProgress by viewModel.exportProgress.collectAsState()
@@ -264,7 +262,8 @@ fun MyPageScreen(
     val fileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        uri?.let { viewModel.importData(context, it) }
+        // 바로 불러오지 않고, 지금 데이터와 무엇이 다른지 항목별로 보여 준 뒤 고른 것만 불러온다.
+        uri?.let { viewModel.inspectImport(context, it) }
     }
 
     val selection = rememberGoodsSelection()
@@ -392,6 +391,7 @@ fun MyPageScreen(
         val parentSet = officialGoods?.let { findSetGoods(it, allSeriesGoods) }
         val setComponents = parentSet?.let { getSetComponents(it, allSeriesGoods) } ?: emptyList()
         GoodsDetailDialog(
+            itemKey = com.example.wowagoodsproject.component.goodsIdentity(goods),
             imgPath = goods.imgPath,
             series = goods.series,
             chara = goods.chara,
@@ -437,11 +437,12 @@ fun MyPageScreen(
                 fanGoods?.let { viewModel.saveFanPendingInfo(it, info) }
                 detailViewModel.dismissDialog()
             },
+            onEdit = fanGoods?.let { g -> { com.example.wowagoodsproject.screen.fan.FanEditRequest.open(g.fanGoodsId) } },
             onDelete = {},
             showDelete = false,
             onSeriesClick = { seriesName ->
                 detailViewModel.dismissDialog()
-                onNavigateToSeries(seriesName)
+                if (fanGoods != null) onNavigateToFanSeries(seriesName) else onNavigateToSeries(seriesName)
             }
         )
     }
@@ -493,13 +494,6 @@ fun MyPageScreen(
         )
     }
 
-    if (isImporting) {
-        ProgressDialog(
-            title = "데이터 입력 중",
-            fraction = importProgress,
-            icon = Icons.Default.FileUpload
-        )
-    }
 
     if (showStorageSheet) {
         StorageCleanSheet(
@@ -510,13 +504,33 @@ fun MyPageScreen(
         )
     }
 
-    if (isExporting) {
-        ProgressDialog(
-            title = "데이터 추출 중",
-            fraction = exportProgress,
-            icon = Icons.Default.FileDownload
-        )
-    }
+    // 데이터 입력·추출은 배신 굿즈 장르 마이페이지와 같은 화면 묶음을 쓴다(BackupFlows.kt).
+    val importPlan by viewModel.importPlan.collectAsState()
+    val inspectProgress by viewModel.inspectProgress.collectAsState()
+    ImportFlow(
+        inspectProgress = inspectProgress,
+        plan = importPlan,
+        isImporting = isImporting,
+        importProgress = importProgress,
+        onImport = { uri, selected -> viewModel.importData(context, uri, RestoreParts.of(selected)) },
+        onDismiss = { viewModel.dismissImportPlan() }
+    )
+    val exportGenres by viewModel.exportGenres.collectAsState()
+    val exportSelection by viewModel.exportSelection.collectAsState()
+    ExportFlow(
+        show = showExportPreview,
+        preview = exportPreview,
+        selection = exportSelection,
+        genres = exportGenres,
+        onSelectionChange = { viewModel.setExportSelection(it) },
+        isExporting = isExporting,
+        exportProgress = exportProgress,
+        onExport = {
+            showExportPreview = false
+            viewModel.exportData(context)
+        },
+        onDismiss = { showExportPreview = false }
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         val closeSection: () -> Unit = {
@@ -652,13 +666,25 @@ fun MyPageScreen(
                     onClick = onNavigateToChangedGoods
                 )
             }
+            val betrayRow: @Composable () -> Unit = {
+                SettingsRow(
+                    icon = Icons.Default.Diversity3,
+                    title = "배신 굿즈",
+                    subtitle = "다른 장르의 굿즈를 장르별로 따로 모아 두기",
+                    onClick = onNavigateToBetray
+                )
+            }
             val exportRow: @Composable () -> Unit = {
                 SettingsRow(
                     icon = Icons.Default.FileDownload,
                     title = "데이터 추출",
                     subtitle = "보유 현황·2차창작·선호 캐릭터를 백업 파일로 저장",
                     showChevron = false,
-                    onClick = { viewModel.exportData(context) }
+                    // 바로 추출하지 않고 담길 내용을 먼저 보여 준다. 빈 백업을 모르고 넘기지 않게.
+                    onClick = {
+                        viewModel.loadExportPreview()
+                        showExportPreview = true
+                    }
                 )
             }
             val importRow: @Composable () -> Unit = {
@@ -737,7 +763,7 @@ fun MyPageScreen(
                     title = "현재 버전 v${BuildConfig.VERSION_NAME}",
                     subtitle = when {
                         latest == null -> "최신 버전 확인 중..."
-                        hasNewVersion -> "새 버전 v$latest 이 나왔습니다"
+                        hasNewVersion -> "새 버전 v${latest.trim().removePrefix("v").removePrefix("V")} 이 나왔습니다"
                         else -> "최신 버전입니다"
                     },
                     subtitleColor = if (hasNewVersion) MaterialTheme.colorScheme.error
@@ -745,23 +771,21 @@ fun MyPageScreen(
                     trailing = if (hasNewVersion) {
                         { StatusPill(text = "업데이트", color = MaterialTheme.colorScheme.error) }
                     } else null,
+                    // 누르면 바로 확인: 최신이면 토스트, 새 버전이면 받아서 설치 화면까지(AppUpdater)
                     onClick = {
-                        val intent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
-                        )
-                        context.startActivity(intent)
+                        com.example.wowagoodsproject.AppUpdater.checkNow(context, toastIfLatest = true) { tag -> viewModel.setLatestVersion(tag) }
                     }
                 )
             }
-            // 지금 버전의 변경점을 다시 본다. 변경점이 없는 버전에서는 줄을 두지 않는다.
-            val hasReleaseNotes = ReleaseNotes.forCurrentVersion() != null
+            // 버전별 변경점 화면(지금 버전은 펼쳐서, 지난 버전도 볼 수 있다). 적어 둔 변경점이 하나도 없으면 줄을 두지 않는다.
+            val hasReleaseNotes = ReleaseNotes.allVersions().isNotEmpty()
             val releaseNotesRow: @Composable () -> Unit = {
                 SettingsRow(
                     icon = Icons.Default.NewReleases,
                     title = "변경점",
-                    subtitle = "v${ReleaseNotes.currentVersion}에서 달라진 점",
-                    onClick = { showReleaseNotes = true }
+                    subtitle = if (ReleaseNotes.forCurrentVersion() != null) "v${ReleaseNotes.currentVersion}에서 달라진 점 · 지난 버전"
+                    else "버전별로 달라진 점",
+                    onClick = onNavigateToReleaseNotes
                 )
             }
             val themeBlock: @Composable () -> Unit = {
@@ -828,6 +852,7 @@ fun MyPageScreen(
                         left = { SettingsCard(fillHeight = true, content = pendingRow) },
                         right = { SettingsCard(fillHeight = true, content = changedRow) }
                     )
+                    SettingsCard(content = betrayRow)
                     SettingsPairRow(
                         left = { SettingsCard(fillHeight = true, content = exportRow) },
                         right = { SettingsCard(fillHeight = true, content = importRow) }
@@ -863,6 +888,8 @@ fun MyPageScreen(
                         pendingRow()
                         SettingsDivider()
                         changedRow()
+                        SettingsDivider()
+                        betrayRow()
                     }
                     SettingsGroup(title = "유저 데이터") {
                         exportRow()
@@ -952,7 +979,7 @@ fun MyPageScreen(
                         bulk = pendingBulk,
                         // 가로 화면에서는 버튼도 왼쪽 필터 줄 안에 있다.
                         showBulkButtons = !isLandscape,
-                        onOpenGoods = { detailViewModel.selectGoods(it) },
+                        onOpenGoods = { detailViewModel.toggleGoods(it) },
                         onToggleShipping = { goods ->
                             val today = SimpleDateFormat("yyyy-MM-dd", Locale.KOREA).format(Date())
                             val date = if (goods.shippingDate.isEmpty()) today else ""
@@ -1081,7 +1108,7 @@ fun MyPageScreen(
                                         isGridMode = isGridMode,
                                         gridColumns = gridColumns,
                                         onGoodsClick = {
-                                            if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.selectGoods(it)
+                                            if (selection.mode) selection.toggle(it.goodsId) else detailViewModel.toggleGoods(it)
                                         },
                                         selectedIds = if (selection.mode) selection.ids else null
                                     )
@@ -1093,7 +1120,7 @@ fun MyPageScreen(
                                         isGridMode = isGridMode,
                                         gridColumns = gridColumns,
                                         onGoodsClick = {
-                                            if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.selectGoods(it)
+                                            if (selection.mode) selection.toggle(it.fanGoodsId) else detailViewModel.toggleGoods(it)
                                         },
                                         selectedIds = if (selection.mode) selection.ids else null
                                     )
@@ -1229,7 +1256,7 @@ private fun SettingsPairRow(
 
 /** 아이콘 + 제목/부제 + 오른쪽 표시(배지나 화살표)로 이루어진 설정 한 줄 */
 @Composable
-private fun SettingsRow(
+internal fun SettingsRow(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,

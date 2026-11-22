@@ -141,11 +141,14 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
+    /** '현재 버전'을 눌러 확인한 최신 버전 */
+    fun setLatestVersion(tag: String) { _latestVersion.value = tag }
+
     private fun checkLatestVersion() {
         viewModelScope.launch {
             val result = UpdateManager.checkAppUpdate()
             if (result != null) {
-                _latestVersion.value = result.first
+                _latestVersion.value = result.tag
             } else {
                 // 하루 안 지났으면 SharedPreferences에서 캐시된 값 읽기
                 val prefs = App.appContext.getSharedPreferences("wowa_prefs", Context.MODE_PRIVATE)
@@ -285,8 +288,8 @@ class MyPageViewModel : ViewModel() {
 
 
     /** 백업 zip 을 [zipFile] 에 만든다. 추출과 테스트가 함께 쓴다. */
-    internal suspend fun writeBackupZip(zipFile: File, onProgress: (Float) -> Unit = {}) =
-        BackupZip.write(zipFile, onProgress)
+    internal suspend fun writeBackupZip(zipFile: File, onProgress: (Float) -> Unit = {}, selection: ExportSelection = ExportSelection.ALL) =
+        BackupZip.write(zipFile, onProgress, selection)
 
     // ── 용량 정리 ──
     private val _storageItems = MutableStateFlow<List<CleanItem>?>(null)
@@ -321,6 +324,46 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
+    private val _exportPreview = MutableStateFlow<ExportPreview?>(null)
+    /** 추출 전 확인 시트에 보여 줄 내용. null 이면 세는 중. */
+    val exportPreview: StateFlow<ExportPreview?> = _exportPreview
+
+    /** 추출 확인 시트에서 고를 수 있는 배신 굿즈 장르(번호, 이름, 굿즈 수) */
+    data class ExportGenre(val genreId: Int, val name: String, val goods: Int)
+
+    private val _exportGenres = MutableStateFlow<List<ExportGenre>>(emptyList())
+    val exportGenres: StateFlow<List<ExportGenre>> = _exportGenres
+
+    private val _exportSelection = MutableStateFlow(ExportSelection.ALL)
+    /** 추출 범위. 전체 추출(명조 + 모든 장르) 또는 장르 선택(명조 체크 여부 + 고른 장르) */
+    val exportSelection: StateFlow<ExportSelection> = _exportSelection
+
+    /** 확인 시트를 열 때마다 지금 DB 로 다시 센다. 범위는 전체로 되돌린다. */
+    fun loadExportPreview() {
+        _exportSelection.value = ExportSelection.ALL
+        _exportPreview.value = null
+        viewModelScope.launch {
+            val dao = App.betrayDatabase.betrayDao()
+            val goodsByGenre = dao.allGoods().groupingBy { it.genreId }.eachCount()
+            _exportGenres.value = dao.genres().map { ExportGenre(it.genreId, it.genreNm, goodsByGenre[it.genreId] ?: 0) }
+            val preview = ExportPreview.load(ExportSelection.ALL)
+            // 세는 동안 범위를 바꿨으면 늦게 끝난 전체 결과로 덮지 않는다.
+            if (_exportSelection.value == ExportSelection.ALL) _exportPreview.value = preview
+        }
+    }
+
+    /** 추출 범위를 바꾸고 다시 센다. */
+    fun setExportSelection(selection: ExportSelection) {
+        _exportSelection.value = selection
+        // 다 셀 때까지 앞 범위의 숫자·확인 단계가 보이지 않게 비워 '세는 중'으로 둔다.
+        _exportPreview.value = null
+        viewModelScope.launch {
+            val preview = ExportPreview.load(selection)
+            // 세는 동안 범위가 또 바뀌었으면 늦게 끝난 결과는 버린다.
+            if (_exportSelection.value == selection) _exportPreview.value = preview
+        }
+    }
+
     private val _isExporting = MutableStateFlow(false)
     /** 추출 중에는 진행 팝업을 띄우고, 두 번 눌러도 한 번만 추출한다. */
     val isExporting: StateFlow<Boolean> = _isExporting
@@ -328,62 +371,15 @@ class MyPageViewModel : ViewModel() {
     private val _exportProgress = MutableStateFlow(0f)
     val exportProgress: StateFlow<Float> = _exportProgress
 
-    fun exportData(context: Context) {
+    fun exportData(context: Context, selection: ExportSelection = _exportSelection.value) {
         if (_isExporting.value) return
         _isExporting.value = true
         _exportProgress.value = 0f
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) {
-                    val zipFile = File(context.filesDir, "wowa_backup.zip")
-                    // zip 만들기가 대부분이라 0.9 까지, 다운로드 폴더로 옮기기가 나머지.
-                    writeBackupZip(zipFile) { _exportProgress.value = (it * 0.9f).coerceIn(0f, 1f) }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        val contentValues = android.content.ContentValues().apply {
-                            put(
-                                android.provider.MediaStore.Downloads.DISPLAY_NAME,
-                                "wowa_backup.zip"
-                            )
-                            put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/zip")
-                        }
-                        val resolver = context.contentResolver
-                        val downloadUri = resolver.insert(
-                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                            contentValues
-                        ) ?: throw IllegalStateException("다운로드 폴더에 파일을 만들지 못했습니다")
-                        try {
-                            val output = resolver.openOutputStream(downloadUri)
-                                ?: throw IllegalStateException("다운로드 폴더에 쓰지 못했습니다")
-                            output.use { FileInputStream(zipFile).use { input -> input.copyTo(it) } }
-                        } catch (e: Exception) {
-                            // 반쯤 쓴 파일이 다운로드 폴더에 남으면 나중에 백업으로 착각해 불러올 수 있다.
-                            resolver.delete(downloadUri, null, null)
-                            throw e
-                        }
-                        // 다운로드 폴더로 옮겼으니 앱 안의 임시 파일은 지운다.
-                        zipFile.delete()
-                        _exportProgress.value = 1f
-                    } else {
-                        // 공유받는 앱이 나중에 이 파일을 읽으므로 여기서 지우지 않는다.
-                        // 다음 추출 때 같은 이름으로 덮어쓴다.
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.provider",
-                            zipFile
-                        )
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "application/zip"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(Intent.createChooser(intent, "백업 파일 내보내기").apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        })
-                    }
-                }
+                val written = BackupExport.export(context, selection) { _exportProgress.value = it }
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, "추출 완료!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(App.appContext, exportDoneMessage(written), Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -395,7 +391,38 @@ class MyPageViewModel : ViewModel() {
         }
     }
 
-    fun importData(context: Context, uri: Uri) {
+    /** 불러오기 전 확인: 고른 파일과 항목별 비교. null 이면 확인 창 닫힘 */
+    private val _importPlan = MutableStateFlow<Pair<Uri, ImportPlan>?>(null)
+    val importPlan: StateFlow<Pair<Uri, ImportPlan>?> = _importPlan
+
+    /** 파일을 골랐다: 바로 불러오지 않고 지금 데이터와 견줘 확인 창을 띄운다. */
+    /** 고른 파일을 읽는 중이면 0~1, 아니면 null */
+    private val _inspectProgress = MutableStateFlow<Float?>(null)
+    val inspectProgress: StateFlow<Float?> = _inspectProgress
+
+    fun inspectImport(context: Context, uri: Uri) {
+        if (_inspectProgress.value != null) return
+        _inspectProgress.value = 0f
+        viewModelScope.launch {
+            try {
+                val plan = withContext(Dispatchers.IO) {
+                    val size = fileSizeOf(context, uri)
+                    val input = context.contentResolver.openInputStream(uri) ?: throw IllegalStateException("파일을 열 수 없습니다")
+                    input.use { ImportPreviewer.inspect(it, totalBytes = size) { f -> _inspectProgress.value = f } }
+                }
+                _importPlan.value = uri to plan
+            } catch (e: Exception) {
+                Toast.makeText(App.appContext, "입력 실패: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                _inspectProgress.value = null
+            }
+        }
+    }
+
+    fun dismissImportPlan() { _importPlan.value = null }
+
+    fun importData(context: Context, uri: Uri, parts: RestoreParts = RestoreParts.ALL) {
+        _importPlan.value = null
         viewModelScope.launch {
             _isImporting.value = true
             _importProgress.value = 0f
@@ -403,11 +430,10 @@ class MyPageViewModel : ViewModel() {
                 val report = withContext(Dispatchers.IO) {
                     val input = context.contentResolver.openInputStream(uri)
                         ?: throw IllegalStateException("파일을 열 수 없습니다")
-                    input.use { BackupZip.restore(it, context.filesDir) { p -> reportImport(p) } }
+                    input.use { BackupZip.restore(it, context.filesDir, parts) { p -> reportImport(p) } }
                 }
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(App.appContext, report.message(), Toast.LENGTH_LONG).show()
-                }
+                // 토스트 대신 결과 창을 띄운다.
+                ImportResultBus.show(report)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(App.appContext, "입력 실패: ${e.message}", Toast.LENGTH_LONG).show()

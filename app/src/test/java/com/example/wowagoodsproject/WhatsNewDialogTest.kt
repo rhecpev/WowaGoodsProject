@@ -53,7 +53,8 @@ class WhatsNewDialogTest {
 
     @Test
     fun 사진이_있는_섹션이_있다() {
-        val sections = ReleaseNotes.forCurrentVersion()!!
+        // 3.0 변경점의 비포·애프터 사진(변경점 화면에서 지난 버전으로 계속 보인다)
+        val sections = ReleaseNotes.allVersions().first { it.first == "3.0" }.second
         assertEquals(5, sections.count { it.beforeImage != null || it.afterImage != null })
     }
 }

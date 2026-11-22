@@ -59,7 +59,8 @@ class ChangedGoodsViewModel : ViewModel() {
     val openedGoodsId: StateFlow<Int?> = _openedGoodsId
 
     fun openGoods(goods: GoodsEntity) {
-        _openedGoodsId.value = goods.goodsId
+        // 상세에 떠 있는 굿즈를 다시 누르면 닫는다
+        _openedGoodsId.value = if (_openedGoodsId.value == goods.goodsId) null else goods.goodsId
     }
 
     fun dismissGoods() {

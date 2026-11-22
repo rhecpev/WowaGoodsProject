@@ -32,7 +32,10 @@ object NewsNotifier {
 
     // 채널 id 는 예전(신규 굿즈만 알리던) 것을 그대로 써서 사용자가 바꾼 채널 설정을 유지한다.
     private const val CHANNEL_ID = "new_goods"
-    private const val NOTIFICATION_ID = 3_000_001
+    // 굿즈 알림(0~7,000,000 대)·업데이트 알림(Int.MAX_VALUE - 1)과 겹치지 않는 번호. PendingIntent 요청 코드로도 쓴다.
+    private const val NOTIFICATION_ID = Int.MAX_VALUE - 2
+    /** 3.0 까지 쓰던 번호 */
+    private const val LEGACY_NOTIFICATION_ID = 3_000_001
 
     /** 알림 하나에 펼쳐 보여 줄 최대 굿즈 줄 수 */
     private const val MAX_LINES = 5
@@ -59,6 +62,13 @@ object NewsNotifier {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val manager = NotificationManagerCompat.from(context)
+        // 예전 번호(3_000_001)로 띄운 소식 알림이 남아 있으면 새 알림과 겹쳐 두 개로 보이지 않게 지운다.
+        // 소식 알림만 태그(캐릭터 이름)를 붙이므로, 태그 없는 굿즈 알림은 건드리지 않는다.
+        runCatching {
+            context.getSystemService(android.app.NotificationManager::class.java)?.activeNotifications
+                ?.filter { it.id == LEGACY_NOTIFICATION_ID && it.tag != null }
+                ?.forEach { manager.cancel(it.tag, it.id) }
+        }
         val me = Person.Builder().setName("나").build()
         val shortcutIds = mutableListOf<String>()
         var shown = false

@@ -133,9 +133,8 @@ class CharacterViewModel : ViewModel() {
             val charaGoods = App.database.goodsDao().getByChara(chara.charaNm).filter { hasChara(it.goodsChara, chara.charaNm) }
             _officialGoods.value = charaGoods
             val seriesList = charaGoods.map { it.goodsSeries }.distinct()
-            _allSeriesGoods.value = seriesList.flatMap {
-                App.database.goodsDao().getBySeries(it)
-            }
+            // 시리즈마다 따로 읽으면 시리즈 수만큼 표를 훑는다. 한 번에(999개씩 나눠) 읽는다.
+            _allSeriesGoods.value = seriesList.chunked(900).flatMap { App.database.goodsDao().getBySeriesIn(it) }
             _fanGoods.value = App.fanDatabase.fanGoodsDao().getByChara(chara.charaNm).filter { hasChara(it.fanGoodsChara, chara.charaNm) }
         }
     }

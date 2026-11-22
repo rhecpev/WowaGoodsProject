@@ -190,6 +190,14 @@ class ScheduledUpdateWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = try {
         UpdateManager.runFullUpdate(showProgress = false)
+        // 새 앱 버전이 나왔으면 알린다(같은 버전은 한 번만). 실패해도 데이터 업데이트는 성공으로 둔다.
+        try {
+            AppUpdater.notifyIfNew(applicationContext)
+        } catch (e: CancellationException) {
+            throw e // 작업이 멈추는 중이면 성공으로 넘기지 않는다
+        } catch (e: Exception) {
+            android.util.Log.w("ScheduledUpdate", "새 버전 알림 실패: ${e.message}")
+        }
         // 성공했으니 1시간 재시도를 끝내고 알람을 다음 오전 5시로 돌려놓는다.
         DailySchedule.schedule(applicationContext)
         Result.success()

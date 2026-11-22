@@ -86,6 +86,8 @@ fun BulkStatusBar(
             targetCount = count,
             requireChange = false,
             returnAll = false,
+            // 이미 구매예정인 굿즈가 섞여 있으면 그 굿즈의 '구매일 미정'을 오늘로 바꾸지 않게 미리 넣지 않는다.
+            prefillToday = selectedItems.all { it.purchaseDate.isEmpty() && it.status != GoodsStatus.PENDING },
             onDismiss = { showPurchaseDialog = false },
             onConfirm = { edit ->
                 showPurchaseDialog = false

@@ -1,5 +1,11 @@
 package com.example.wowagoodsproject.screen.fan
 
+import com.example.wowagoodsproject.component.PickerSplitBody
+import com.example.wowagoodsproject.component.sameContentAs
+import kotlinx.coroutines.launch
+import com.example.wowagoodsproject.App
+import com.example.wowagoodsproject.db.fan.saveSeries
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -19,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -58,17 +65,43 @@ import com.example.wowagoodsproject.navigation.TopBar
 import java.io.File
 
 /**
- * 2차창작 굿즈 등록.
- * 위에서부터 사진 → 기본 정보(시리즈/가격/카테고리) → 캐릭터 → 보유 상태(+수량) → 메모 순으로 채우고,
- * 헤더 오른쪽 위 등록 버튼으로 저장한다. 가로 모드에서는 사진을 왼쪽, 입력란을 오른쪽에 둔다.
+ * 2차창작 굿즈 등록. 한 칸씩 차례로 연다: 시리즈 → 카테고리 → 가격 → 캐릭터 → 메모 → 보유 여부(개수).
+ * 다 채우면 요약과 맨 위 사진 넣기가 나오고, 헤더 오른쪽 위 '저장'으로 저장한다([StepGoodsForm]).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FanAddScreen(
     onNavigateBack: () -> Unit,
+    /** 시리즈 상세에서 '+'로 왔으면 그 시리즈를 미리 채운다. */
+    initialSeries: String = "",
+    /** 있으면 그 굿즈를 고친다: 등록과 같은 화면을 마지막 요약(사진 + 내용)부터 연다 */
+    editGoodsId: Int? = null,
     viewModel: FanAddViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val editing by viewModel.editing.collectAsState()
+    if (editGoodsId != null) {
+        LaunchedEffect(editGoodsId) { viewModel.loadForEdit(editGoodsId) }
+        val editMissing by viewModel.editMissing.collectAsState()
+        LaunchedEffect(editMissing) {
+            if (editMissing) {
+                android.widget.Toast.makeText(context, "지워진 굿즈라 고칠 수 없습니다", android.widget.Toast.LENGTH_SHORT).show()
+                onNavigateBack()
+            }
+        }
+        // 불러오기 전에는 빈 요약이 잠깐 보이지 않게 기다린다.
+        if (editing?.fanGoodsId != editGoodsId) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            return
+        }
+    }
+    // 화면을 돌려도 사용자가 바꾼 값을 덮지 않도록 처음 한 번만 채운다.
+    var seriesPrefilled by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!seriesPrefilled) {
+            if (initialSeries.isNotEmpty()) viewModel.onSeriesChange(initialSeries)
+            seriesPrefilled = true
+        }
+    }
     val price by viewModel.price.collectAsState()
     val series by viewModel.series.collectAsState()
     val selectedCharas by viewModel.selectedCharas.collectAsState()
@@ -76,71 +109,34 @@ fun FanAddScreen(
     val imageUri by viewModel.imageUri.collectAsState()
     val charaList by viewModel.charaList.collectAsState()
     val categoryList by viewModel.categoryList.collectAsState()
-    val isGotten by viewModel.isGotten.collectAsState()
+    val status by viewModel.status.collectAsState()
+    val purchaseStore by viewModel.purchaseStore.collectAsState()
+    val purchaseDate by viewModel.purchaseDate.collectAsState()
+    val receiveDate by viewModel.receiveDate.collectAsState()
     val memo by viewModel.memo.collectAsState()
     val quantity by viewModel.quantity.collectAsState()
     val isSaving by viewModel.isSaving.collectAsState()
+    val seriesOptions by viewModel.seriesOptions.collectAsState()
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // 저장 전에 같은 굿즈(시리즈·캐릭터·카테고리·가격·메모가 모두 같은 비공식 굿즈)가 있으면 보여 주고 묻는다.
+    val saveScope = androidx.compose.runtime.rememberCoroutineScope()
+    var duplicates by remember { mutableStateOf<List<com.example.wowagoodsproject.component.GoodsItem>?>(null) }
+    // 겹침을 확인하는 중. 이때도 저장 버튼을 막아, 빠르게 두 번 누르면 같은 굿즈가 두 개 저장되지 않게 한다.
+    var checkingDuplicates by remember { mutableStateOf(false) }
+    val save = { viewModel.insert(context = context, onSuccess = onNavigateBack) }
+    duplicates?.let { list ->
+        com.example.wowagoodsproject.component.DuplicateGoodsDialog(
+            duplicates = list,
+            onAddAnyway = { duplicates = null; save() },
+            confirmText = if (editGoodsId != null) "그래도 저장" else "그래도 추가",
+            onDismiss = { duplicates = null }
+        )
+    }
 
     var showCharaDialog by remember { mutableStateOf(false) }
-    var showCategoryDialog by remember { mutableStateOf(false) }
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success) {
-            cameraUri?.let { viewModel.onImageSelected(it) }
-        }
-    }
-
-    // 갤러리에서 고르지 않고 돌아오면 이미 고른 사진을 그대로 둔다.
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { viewModel.onImageSelected(it) } }
-
-    fun launchCamera() {
-        val tempFile = File(context.cacheDir, "camera_temp_${System.currentTimeMillis()}.jpg")
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.provider",
-            tempFile
-        )
-        cameraUri = uri
-        cameraLauncher.launch(uri)
-    }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            launchCamera()
-        } else {
-            Toast.makeText(context, "카메라 권한이 필요합니다", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val onCameraClick: () -> Unit = {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            launchCamera()
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-    val onGalleryClick: () -> Unit = { galleryLauncher.launch("image/*") }
-
-    if (showCategoryDialog) {
-        CategoryPickerDialog(
-            categories = categoryList,
-            selected = category,
-            onSelect = { viewModel.onCategoryChange(it); showCategoryDialog = false },
-            onDismiss = { showCategoryDialog = false }
-        )
-    }
+    // 시리즈 고르기 안의 '시리즈 추가'. null 이면 닫힘, 아니면 이름 칸에 미리 채울 값
+    var addSeriesPrefill by remember { mutableStateOf<String?>(null) }
+    val photoLaunch = com.example.wowagoodsproject.screen.betray.rememberPhotoLaunch { viewModel.onImageSelected(it) }
 
     if (showCharaDialog) {
         CharaPickerDialog(
@@ -150,156 +146,103 @@ fun FanAddScreen(
             onDismiss = { showCharaDialog = false }
         )
     }
-
-    val photo: @Composable (Modifier) -> Unit = { modifier ->
-        PhotoPicker(
-            imageUri = imageUri,
-            onCamera = onCameraClick,
-            onGallery = onGalleryClick,
-            onRemove = { viewModel.onImageSelected(null) },
-            modifier = modifier
-        )
-    }
-
-    val form: @Composable () -> Unit = {
-        FormSection(title = "기본 정보") {
-            OutlinedTextField(
-                value = series,
-                onValueChange = { viewModel.onSeriesChange(it) },
-                label = { Text("시리즈") },
-                placeholder = { Text("예: 행사명, 작가명") },
-                leadingIcon = { Icon(Icons.Default.Collections, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = price,
-                onValueChange = { viewModel.onPriceChange(it) },
-                label = { Text("가격") },
-                placeholder = { Text("예: 5,000원") },
-                leadingIcon = { Icon(Icons.Default.Sell, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            PickerField(
-                value = category,
-                label = "카테고리",
-                placeholder = "카테고리 선택",
-                icon = Icons.Default.Category,
-                onClick = { showCategoryDialog = true }
-            )
-        }
-
-        FormSection(title = "캐릭터", count = selectedCharas.size.takeIf { it > 0 }) {
-            SelectedCharaChips(
-                selected = selectedCharas,
-                charaList = charaList,
-                onRemove = { viewModel.toggleChara(it) },
-                onAdd = { showCharaDialog = true }
-            )
-        }
-
-        FormSection(title = "보유 상태") {
-            StatusSegmentedButtons(
-                current = if (isGotten) GoodsStatus.GOTTEN else GoodsStatus.NOT_GOTTEN,
-                onSelect = { viewModel.onIsGottenChange(it == GoodsStatus.GOTTEN) },
-                showPending = false
-            )
-            // 수량은 가지고 있는 굿즈에만 의미가 있다.
-            if (isGotten) {
-                Spacer(modifier = Modifier.height(12.dp))
-                QuantityStepper(quantity = quantity, onChange = { viewModel.onQuantityChange(it) })
+    addSeriesPrefill?.let { prefill ->
+        // 2차창작 탭의 '시리즈 추가'와 같은 화면을 다이얼로그로 띄운다. 저장하면 그 시리즈를 고른다.
+        val seriesVm: com.example.wowagoodsproject.screen.betray.SeriesEditViewModel = viewModel(key = "fanSeriesAddFromGoods")
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { seriesVm.close(); addSeriesPrefill = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                com.example.wowagoodsproject.screen.betray.SeriesEditScreen(
+                    key = "fanSeriesFromGoods:$prefill",
+                    target = null,
+                    prefill = prefill,
+                    subtitle = "비공식",
+                    photoPrefix = "fan_series_",
+                    viewModel = seriesVm,
+                    persist = { n, b, i, d -> App.fanDatabase.fanGoodsDao().saveSeries(null, n, b, i, d) },
+                    onSaved = { saved -> viewModel.onSeriesChange(saved); addSeriesPrefill = null },
+                    onClose = { addSeriesPrefill = null }
+                )
             }
         }
-
-        FormSection(title = "메모") {
-            OutlinedTextField(
-                value = memo,
-                onValueChange = { viewModel.onMemoChange(it) },
-                placeholder = { Text("구매처, 구성 등 자유롭게 적어 두세요") },
-                minLines = 2,
-                maxLines = 4,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // 등록 버튼은 헤더 오른쪽 위에 둔다. 스크롤과 상관없이 언제든 누를 수 있다.
-        TopBar(
-            title = "2차창작 굿즈 등록",
-            onBack = onNavigateBack,
-            // 헤더에 등록 버튼이 있어 입력 중에도 숨기지 않는다.
-            hideWhileTyping = false,
-            actions = {
-                // 박스 없이 강조색 글자만 둔다(2차창작 탭의 '굿즈 등록'과 같은 모양).
-                TextButton(
-                    onClick = { viewModel.insert(context = context, onSuccess = onNavigateBack) },
-                    enabled = !isSaving,
-                    shape = RectangleShape,
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    modifier = Modifier.height(48.dp)
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("등록", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    StepGoodsForm(
+        title = if (editGoodsId != null) "비공식 굿즈 수정" else "비공식 굿즈 등록",
+        startAtSummary = editGoodsId != null,
+        hasChanges = if (editGoodsId != null) viewModel.hasEditChanges() else null,
+        onLeave = onNavigateBack,
+        series = series,
+        onSeries = { viewModel.onSeriesChange(it) },
+        seriesOptions = seriesOptions,
+        onAddSeries = { addSeriesPrefill = it },
+        category = category,
+        categories = categoryList,
+        onCategory = { viewModel.onCategoryChange(it) },
+        price = price,
+        onPrice = { viewModel.onPriceChange(it) },
+        charas = selectedCharas,
+        charaAvatar = { n -> charaList.find { it.charaNm == n }?.charaUrl.orEmpty() },
+        onRemoveChara = { viewModel.toggleChara(it) },
+        onPickChara = { showCharaDialog = true },
+        charaPickerOpen = showCharaDialog,
+        memo = memo,
+        onMemo = { viewModel.onMemoChange(it) },
+        status = status,
+        onStatus = { viewModel.onStatusChange(it) },
+        purchaseStore = purchaseStore, onPurchaseStore = { viewModel.purchaseStore.value = it },
+        purchaseDate = purchaseDate, onPurchaseDate = { viewModel.purchaseDate.value = it },
+        receiveDate = receiveDate, onReceiveDate = { viewModel.receiveDate.value = it },
+        showPending = true,
+        quantity = quantity,
+        onQuantity = { viewModel.onQuantityChange(it) },
+        imageUri = imageUri,
+        onCamera = photoLaunch.camera,
+        onGallery = photoLaunch.gallery,
+        onUrl = photoLaunch.url,
+        onRemoveImage = { viewModel.onImageSelected(null) },
+        isSaving = isSaving || checkingDuplicates,
+        onSave = save@{
+            if (isSaving || checkingDuplicates || duplicates != null) return@save
+            // '미분류'라고 적으면 저장할 때 시리즈를 비우므로(savedSeries), 비교할 때도 똑같이 비운다.
+            val keySeries = series.takeUnless { it.trim().equals(NO_FAN_SERIES, ignoreCase = true) } ?: ""
+            val key = com.example.wowagoodsproject.component.goodsContentKey(keySeries, selectedCharas.joinToString(","), category, price, memo)
+            // 고치는 중에 내용(시리즈·캐릭터·카테고리·가격·메모)은 그대로면 겹침을 다시 묻지 않는다(상태만 바꾼 경우 등).
+            val original = editing?.let { g ->
+                com.example.wowagoodsproject.component.goodsContentKey(
+                    g.fanGoodsSeries, com.example.wowagoodsproject.db.betray.charaNames(g.fanGoodsChara).joinToString(","),
+                    g.fanGoodsCategory, g.fanGoodsPrice, g.fanGoodsMemo
+                )
+            }
+            if (editGoodsId != null && original == key) save()
+            else {
+                checkingDuplicates = true
+                saveScope.launch {
+                    try {
+                        val same = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            // 고치는 중이면 자기 자신은 빼고 견준다.
+                            App.fanDatabase.fanGoodsDao().getAll().filter { it.fanGoodsId != editGoodsId }.sameContentAs(key)
+                        }
+                        // save() 가 저장 중 표시를 먼저 켠 뒤에 확인 중 표시를 끈다(버튼이 잠깐 풀리는 틈이 없게).
+                        if (same.isEmpty()) save() else duplicates = same
+                    } finally {
+                        checkingDuplicates = false
                     }
                 }
             }
-        )
-
-        if (isLandscape) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                photo(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .padding(vertical = 8.dp)
-                )
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .imePadding()
-                        .verticalScroll(rememberScrollState())
-                        .padding(bottom = 16.dp)
-                ) { form() }
-            }
-        } else {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)
-            ) {
-                photo(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(240.dp)
-                )
-                form()
-            }
         }
-    }
+    )
 }
 
 /** 사진 칸. 비어 있으면 카메라/갤러리 버튼을, 사진이 있으면 오른쪽 위에 다시 고르기/지우기 버튼을 둔다. */
 @Composable
-private fun PhotoPicker(
+internal fun PhotoPicker(
     imageUri: Uri?,
     onCamera: () -> Unit,
     onGallery: () -> Unit,
+    onUrl: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -328,6 +271,7 @@ private fun PhotoPicker(
                 ) {
                     PhotoActionButton(Icons.Default.PhotoCamera, "카메라로 다시 찍기", onCamera)
                     PhotoActionButton(Icons.Default.PhotoLibrary, "갤러리에서 다시 고르기", onGallery)
+                    PhotoActionButton(Icons.Default.Link, "URL 로 다시 넣기", onUrl)
                     PhotoActionButton(Icons.Default.Close, "사진 지우기", onRemove)
                 }
             }
@@ -371,6 +315,11 @@ private fun PhotoPicker(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("갤러리")
                     }
+                    FilledTonalButton(onClick = onUrl) {
+                        Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("URL")
+                    }
                 }
             }
         }
@@ -392,7 +341,7 @@ private fun PhotoActionButton(icon: ImageVector, description: String, onClick: (
 
 /** 제목(+개수) 아래에 입력란을 모아 두는 구역. 굿즈 상세 팝업의 구역 제목과 같은 모양이다. */
 @Composable
-private fun FormSection(
+internal fun FormSection(
     title: String,
     count: Int? = null,
     content: @Composable ColumnScope.() -> Unit
@@ -420,7 +369,7 @@ private fun FormSection(
 
 /** 입력란처럼 생겼지만 누르면 선택 팝업을 여는 칸 */
 @Composable
-private fun PickerField(
+internal fun PickerField(
     value: String,
     label: String,
     placeholder: String,
@@ -440,7 +389,7 @@ private fun PickerField(
             }
         }
     }
-    OutlinedTextField(
+    com.example.wowagoodsproject.component.UnderlineTextField(
         value = value,
         onValueChange = {},
         readOnly = true,
@@ -503,13 +452,18 @@ private fun SelectedCharaChips(
     }
 }
 
-/** 카테고리 고르기. 목록에 없는 이름을 치면 맨 위에 '새로 추가' 줄이 생긴다. */
+/**
+ * 카테고리 고르기. 필터의 카테고리처럼 대표 사진 그리드로 고른다([CategoryChoiceGrid]).
+ * 목록에 없는 이름을 치면 맨 위에 '새로 추가' 줄이 생긴다.
+ * @param scopeGoods 대표 사진을 고를 굿즈. null 이면 명조 공식·2차창작 전체
+ */
 @Composable
-private fun CategoryPickerDialog(
+internal fun CategoryPickerDialog(
     categories: List<String>,
     selected: String,
     onSelect: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    scopeGoods: List<com.example.wowagoodsproject.component.GoodsItem>? = null
 ) {
     var search by remember { mutableStateOf("") }
     val query = search.trim()
@@ -550,13 +504,14 @@ private fun CategoryPickerDialog(
             }
             Spacer(modifier = Modifier.height(4.dp))
         }
-        CategoryChoiceList(
+        com.example.wowagoodsproject.component.CategoryChoiceGrid(
             categories = filtered,
             selected = selected.ifEmpty { null },
             onSelect = onSelect,
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            scopeGoods = scopeGoods
         )
     }
 }
@@ -579,22 +534,30 @@ private fun CharaPickerDialog(
         onDismiss = onDismiss,
         onClear = null
     ) {
+      // 세로: 위 조작 → 목록 → 완료. 낮은 가로 화면: 조작은 왼쪽, 목록은 오른쪽(목록이 0 높이로 사라지지 않게)
+      PickerSplitBody(top = {
         SearchField(
             query = search,
             onQueryChange = { search = it },
             placeholder = "캐릭터 이름 검색"
         )
+        // 고른 캐릭터를 검색창 아래 한 줄로(넘치면 옆으로 스크롤)
+        com.example.wowagoodsproject.component.SelectedCharaStrip(
+            items = selected.map { n -> n to (charas.find { it.charaNm == n }?.charaUrl.orEmpty()) },
+            onRemove = onToggle,
+            modifier = Modifier.padding(top = 8.dp)
+        )
         Spacer(modifier = Modifier.height(12.dp))
+      }, list = { m ->
         CharaChoiceGrid(
             charas = filtered,
             selectedName = null,
             selectedNames = selected,
             onSelect = { onToggle(it.charaNm) },
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
+            modifier = m
         )
-        Spacer(modifier = Modifier.height(12.dp))
+      }, bottom = {
         Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("완료") }
+      })
     }
 }

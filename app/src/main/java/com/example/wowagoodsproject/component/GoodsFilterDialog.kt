@@ -68,7 +68,9 @@ fun GoodsFilterDialog(
      * 지금 화면이 보여 주는 굿즈(공식 먼저, 2차창작 뒤). 넘기면 카테고리·시리즈 칸의 대표 사진을 이 안에서만 고른다.
      * null 이면 DB 의 모든 굿즈에서 고른다(굿즈 목록이 아닌 화면).
      */
-    scopeGoods: List<GoodsItem>? = null
+    scopeGoods: List<GoodsItem>? = null,
+    /** false 면 시리즈 칸에 명조 시리즈 DB 그림·출시일을 쓰지 않는다(배신 굿즈처럼 다른 장르의 시리즈). */
+    useSeriesDb: Boolean = true
 ) {
     // 대표 사진은 '그 칸을 고르면 실제로 목록에 나올 굿즈' 에서 고른다.
     // 그래서 다른 탭에 걸어 둔 필터(시리즈·캐릭터·카테고리)도 먼저 적용한다.
@@ -157,6 +159,7 @@ fun GoodsFilterDialog(
                 FilterTab.SERIES -> SeriesChoiceGrid(
                     seriesNames = filteredSeriesList,
                     scopeGoods = seriesScope,
+                    useSeriesDb = useSeriesDb,
                     selected = selectedSeriesFilter,
                     onSelect = { s ->
                         onSeriesSelect?.invoke(if (selectedSeriesFilter == s) null else s)
@@ -200,12 +203,11 @@ fun FilterDialogFrame(
     // 가로 화면에서 검색어를 치는 동안은 손잡이·제목·필터 해제를 접어, 남은 낮은 높이에 검색창과 목록이 들어가게 한다.
     val typing = isTypingInLandscape()
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
+    // 세로: 아래에서 올라오는 시트(손잡이가 시트임을 알려 준다), 가로: 오른쪽 절반 패널
+    AdaptiveSheet(
+        onDismiss = onDismiss,
         sheetState = sheetState,
         dragHandle = if (typing) null else ({ BottomSheetDefaults.DragHandle() }),
-        // 앱 전체에서 둥근 박스를 걷어내는 흐름에 맞춰 시트 위 모서리도 각지게 둔다. 손잡이가 시트임을 알려 준다.
-        shape = RectangleShape,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
@@ -365,11 +367,14 @@ private fun SeriesChoiceGrid(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
     /** 대표 사진 후보 굿즈. null 이면 DB 전체. */
-    scopeGoods: List<GoodsItem>? = null
+    scopeGoods: List<GoodsItem>? = null,
+    useSeriesDb: Boolean = true
 ) {
     val allSeries by remember { App.seriesDatabase.seriesDao().getAllFlow() }
         .collectAsState(initial = emptyList())
-    val seriesByName = remember(allSeries) { allSeries.associateBy { it.seriesNm.trim() } }
+    val seriesByName = remember(allSeries, useSeriesDb) {
+        if (useSeriesDb) allSeries.associateBy { it.seriesNm.trim() } else emptyMap()
+    }
     // 시리즈 DB에 그림이 없는 시리즈는 그 시리즈로 등록된 굿즈 사진(선호 우선순위)으로 채운다.
     val goodsCovers by rememberCoverImages(seriesNames, scopeGoods, ::seriesCoverImages)
     val ordered = remember(seriesNames, seriesByName) {

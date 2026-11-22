@@ -1,0 +1,193 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "3ea2253f49b4152e88b10cfcdbf3937b",
+    "entities": [
+      {
+        "tableName": "tb_betray_genre",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`genreId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `genreNm` TEXT NOT NULL, `genreOrder` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "genreId",
+            "columnName": "genreId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "genreNm",
+            "columnName": "genreNm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "genreOrder",
+            "columnName": "genreOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "genreId"
+          ]
+        }
+      },
+      {
+        "tableName": "tb_betray_goods",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`goodsId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `genreId` INTEGER NOT NULL, `goodsKind` TEXT NOT NULL, `goodsRegDate` TEXT NOT NULL, `goodsSeries` TEXT NOT NULL, `goodsPrice` TEXT NOT NULL, `goodsChara` TEXT NOT NULL, `goodsCategory` TEXT NOT NULL, `goodsImgPath` TEXT NOT NULL, `goodsStatus` TEXT NOT NULL, `goodsMemo` TEXT NOT NULL, `goodsPurchaseDate` TEXT NOT NULL, `goodsPurchaseStore` TEXT NOT NULL, `goodsReceiveDate` TEXT NOT NULL, `goodsQuantity` INTEGER NOT NULL, `goodsShippingDate` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "goodsId",
+            "columnName": "goodsId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "genreId",
+            "columnName": "genreId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsKind",
+            "columnName": "goodsKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsRegDate",
+            "columnName": "goodsRegDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsSeries",
+            "columnName": "goodsSeries",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsPrice",
+            "columnName": "goodsPrice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsChara",
+            "columnName": "goodsChara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsCategory",
+            "columnName": "goodsCategory",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsImgPath",
+            "columnName": "goodsImgPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsStatus",
+            "columnName": "goodsStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsMemo",
+            "columnName": "goodsMemo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsPurchaseDate",
+            "columnName": "goodsPurchaseDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsPurchaseStore",
+            "columnName": "goodsPurchaseStore",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsReceiveDate",
+            "columnName": "goodsReceiveDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsQuantity",
+            "columnName": "goodsQuantity",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goodsShippingDate",
+            "columnName": "goodsShippingDate",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "goodsId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tb_betray_goods_genreId",
+            "unique": false,
+            "columnNames": [
+              "genreId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tb_betray_goods_genreId` ON `${TABLE_NAME}` (`genreId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "tb_betray_favorite",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`genreId` INTEGER NOT NULL, `charaNm` TEXT NOT NULL, `favoriteOrder` INTEGER NOT NULL, PRIMARY KEY(`genreId`, `charaNm`))",
+        "fields": [
+          {
+            "fieldPath": "genreId",
+            "columnName": "genreId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "charaNm",
+            "columnName": "charaNm",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "favoriteOrder",
+            "columnName": "favoriteOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "genreId",
+            "charaNm"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3ea2253f49b4152e88b10cfcdbf3937b')"
+    ]
+  }
+}

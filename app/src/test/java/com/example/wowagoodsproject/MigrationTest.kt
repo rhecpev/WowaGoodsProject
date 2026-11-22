@@ -14,6 +14,7 @@ import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -32,11 +33,13 @@ class MigrationTest {
 
     private val goodsMigrations = arrayOf(
         GoodsDatabase.MIGRATION_1_2, GoodsDatabase.MIGRATION_2_3, GoodsDatabase.MIGRATION_3_4, GoodsDatabase.MIGRATION_4_5,
-        GoodsDatabase.MIGRATION_5_6, GoodsDatabase.MIGRATION_6_7, GoodsDatabase.MIGRATION_7_8
+        GoodsDatabase.MIGRATION_5_6, GoodsDatabase.MIGRATION_6_7, GoodsDatabase.MIGRATION_7_8,
+        GoodsDatabase.MIGRATION_8_9
     )
     private val fanMigrations = arrayOf(
         FanGoodsDatabase.MIGRATION_1_2, FanGoodsDatabase.MIGRATION_2_3, FanGoodsDatabase.MIGRATION_3_4, FanGoodsDatabase.MIGRATION_4_5,
-        FanGoodsDatabase.MIGRATION_5_6, FanGoodsDatabase.MIGRATION_6_7
+        FanGoodsDatabase.MIGRATION_5_6, FanGoodsDatabase.MIGRATION_6_7, FanGoodsDatabase.MIGRATION_7_8,
+        FanGoodsDatabase.MIGRATION_8_9
     )
 
     /** 내보낸 스키마 파일(schemas/)대로 그 버전의 DB 파일을 만든다. 스키마는 Room 이 열 때 다시 확인한다. */
@@ -50,6 +53,12 @@ class MigrationTest {
             for (i in 0 until entities.length()) {
                 val entity = entities.getJSONObject(i)
                 db.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", entity.getString("tableName")))
+                // 인덱스도 그 버전 그대로 만든다(배신 굿즈 굿즈 표의 genreId 인덱스 등).
+                entity.optJSONArray("indices")?.let { idx ->
+                    for (j in 0 until idx.length()) {
+                        db.execSQL(idx.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", entity.getString("tableName")))
+                    }
+                }
             }
             val setup = json.getJSONArray("setupQueries")
             for (i in 0 until setup.length()) db.execSQL(setup.getString(i))
@@ -69,8 +78,25 @@ class MigrationTest {
     }
 
     @Test
+    fun 공식_굿즈_DB_8에서_9로_올리면_인덱스가_생기고_보유_기록이_남는다() = runBlocking {
+        schemaDb("g8", GoodsDatabase::class.java, 8,
+            "INSERT INTO tb_goods (goodsReleaseDate, goodsSeries, goodsPrice, goodsChara, goodsCategory, goodsIsGotten, goodsStatus, goodsUrl, goodsMemo, goodsPurchaseDate, goodsPurchaseStore, goodsReceiveDate, goodsQuantity, goodsShippingDate, goodsUid) VALUES ('2024-07-04','1.0','59위안','감심','인형',1,'GOTTEN','u','단품','','타오바오','',2,'',77)")
+        val db = Room.databaseBuilder(context, GoodsDatabase::class.java, "g8").addMigrations(*goodsMigrations).build()
+        val g = db.goodsDao().getByUid(77)!!
+        assertEquals(listOf("GOTTEN", 2), listOf(g.goodsStatus, g.goodsQuantity))
+        assertEquals(listOf(g.goodsId), db.goodsDao().getBySeriesIn(listOf("1.0", "없음")).map { it.goodsId })
+        assertEquals(listOf("타오바오"), db.goodsDao().purchaseStores())
+        // 인덱스로 찾는지(표 전체를 훑지 않는지)
+        val plan = db.openHelper.readableDatabase.query("EXPLAIN QUERY PLAN SELECT * FROM tb_goods WHERE goodsSeries = '1.0'").use { c ->
+            buildString { while (c.moveToNext()) append(c.getString(c.columnCount - 1)) }
+        }
+        assertTrue(plan, plan.contains("index_tb_goods_goodsSeries"))
+        db.close()
+    }
+
+    @Test
     fun 공식_굿즈_DB_4에서_7까지_어느_버전에서든_8로_올린다() = runBlocking {
-        for (v in 4..7) {
+        for (v in 4..8) {
             schemaDb("gv$v", GoodsDatabase::class.java, v)
             val db = Room.databaseBuilder(context, GoodsDatabase::class.java, "gv$v").addMigrations(*goodsMigrations).build()
             assertEquals(0, db.goodsDao().count())
@@ -85,6 +111,33 @@ class MigrationTest {
         val db = Room.databaseBuilder(context, FanGoodsDatabase::class.java, "f3").addMigrations(*fanMigrations).build()
         val f = db.fanGoodsDao().getAllFlow().first().single()
         assertEquals(listOf("GOTTEN", 1, "5000"), listOf(f.fanGoodsStatus, f.fanGoodsQuantity, f.fanGoodsPrice))
+        db.close()
+    }
+
+    @Test
+    fun 이차창작_DB_8에서_9로_올리면_시리즈_날짜가_빈_값으로_생기고_시리즈가_남는다() = runBlocking {
+        schemaDb("f8", FanGoodsDatabase::class.java, 8,
+            "INSERT INTO tb_fan_series (seriesNm, seriesImgPath, seriesIconPath) VALUES ('코믹','/b.webp','')")
+        val db = Room.databaseBuilder(context, FanGoodsDatabase::class.java, "f8").addMigrations(*fanMigrations).build()
+        val s = db.fanGoodsDao().allSeries().single()
+        assertEquals(listOf("코믹", "/b.webp", ""), listOf(s.seriesNm, s.seriesImgPath, s.seriesDate))
+        db.close()
+    }
+
+    @Test
+    fun 배신_굿즈_DB_4에서_5로_올리면_시리즈_날짜가_빈_값으로_생기고_시리즈가_남는다() = runBlocking {
+        val cls = com.example.wowagoodsproject.db.betray.BetrayDatabase::class.java
+        schemaDb("b4", cls, 4,
+            "INSERT INTO tb_betray_genre (genreId, genreNm, genreOrder, genreImgPath, genreIconPath) VALUES (1,'원신',1,'','')",
+            "INSERT INTO tb_betray_series (genreId, seriesNm, seriesImgPath, seriesIconPath) VALUES (1,'1주년','','')")
+        val db = Room.databaseBuilder(context, cls, "b4").addMigrations(
+            com.example.wowagoodsproject.db.betray.BetrayDatabase.MIGRATION_1_2,
+            com.example.wowagoodsproject.db.betray.BetrayDatabase.MIGRATION_2_3,
+            com.example.wowagoodsproject.db.betray.BetrayDatabase.MIGRATION_3_4,
+            com.example.wowagoodsproject.db.betray.BetrayDatabase.MIGRATION_4_5
+        ).build()
+        val s = db.betrayDao().seriesOf(1).single()
+        assertEquals(listOf("1주년", ""), listOf(s.seriesNm, s.seriesDate))
         db.close()
     }
 

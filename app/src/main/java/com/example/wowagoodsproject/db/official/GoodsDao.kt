@@ -22,6 +22,14 @@ interface GoodsDao {
     @Delete
     suspend fun delete(goods: GoodsEntity)
 
+    /** 여러 시리즈의 굿즈를 한 번에(시리즈마다 따로 읽지 않게). 인자는 999개까지라 부르는 쪽이 나눠 부른다 */
+    @Query("SELECT * FROM tb_goods WHERE goodsSeries IN (:series) ORDER BY goodsReleaseDate DESC")
+    suspend fun getBySeriesIn(series: List<String>): List<GoodsEntity>
+
+    /** 적힌 구입처만(구입처 추천). 많이 쓴 순으로 세려고 겹치는 값도 그대로 */
+    @Query("SELECT goodsPurchaseStore FROM tb_goods WHERE goodsPurchaseStore != ''")
+    suspend fun purchaseStores(): List<String>
+
     @Query("SELECT * FROM tb_goods WHERE goodsSeries = :series ORDER BY goodsReleaseDate DESC")
     suspend fun getBySeries(series: String): List<GoodsEntity>
 

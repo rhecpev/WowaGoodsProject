@@ -7,6 +7,7 @@ import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.db.fan.FanGoodsEntity
 import com.example.wowagoodsproject.db.official.GoodsEntity
 import com.example.wowagoodsproject.screen.mypage.BackupZip
+import com.example.wowagoodsproject.screen.mypage.ExportPreview
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -140,7 +141,12 @@ class BackupZipTest {
     fun 추출한_백업을_불러오면_모든_칸이_그대로_돌아온다() = runBlocking {
         seedOfficial(); seedFan(); seedCharas("감심", "플로로")
         val before = stateByUid()
-        val fansBefore = fanDao.getAll().map { it.copy(fanGoodsId = 0, fanGoodsImgPath = File(it.fanGoodsImgPath).name) }
+        // 기기에 사진 파일이 없는 굿즈는 추출할 때 사진 없이 담긴다(기록과 zip 안 사진이 늘 맞는다).
+        val fansBefore = fanDao.getAll().map {
+            it.copy(fanGoodsId = 0, fanGoodsImgPath = if (File(it.fanGoodsImgPath).isFile) File(it.fanGoodsImgPath).name else "")
+        }
+        // 굿즈 번호(PK)도 그대로 돌아와야 '이 굿즈 알림 받지 않기' 기록이 이어진다.
+        val fanIdsBefore = fanDao.getAll().associate { it.fanGoodsCategory to it.fanGoodsId }
         val photoBefore = File(TestDb.context.filesDir, "fan_a.jpg").readBytes()
         val zip = File(workDir, "b.zip")
         BackupZip.write(zip)
@@ -151,6 +157,7 @@ class BackupZipTest {
         assertEquals(before, stateByUid())
         val fansAfter = fanDao.getAll().map { it.copy(fanGoodsId = 0, fanGoodsImgPath = File(it.fanGoodsImgPath).name) }
         assertEquals(fansBefore.sortedBy { it.fanGoodsCategory }, fansAfter.sortedBy { it.fanGoodsCategory })
+        assertEquals(fanIdsBefore, fanDao.getAll().associate { it.fanGoodsCategory to it.fanGoodsId })
         assertEquals(setOf("감심", "플로로"), charaDao.getAll().filter { it.charaIsFavorite }.map { it.charaNm }.toSet())
         // 사진은 바이트까지 같다
         assertArrayEquals(photoBefore, File(filesDir, "fan_a.jpg").readBytes())
@@ -159,6 +166,35 @@ class BackupZipTest {
         assertEquals(6, report.restored)
         assertEquals(4, report.fanGoods)
         assertEquals(2, report.favorites)
+    }
+
+    @Test
+    fun 추출_전_확인에_보인_숫자가_만든_파일에도_불러온_뒤에도_그대로다() = runBlocking {
+        seedOfficial(); seedFan(); seedCharas("감심", "플로로")
+        val shown = ExportPreview.load() // 확인 시트에 보이는 것
+        val zip = File(workDir, "preview.zip")
+        BackupZip.write(zip)
+
+        // 1. 만든 파일을 다시 읽어 센 것이 같다(추출할 때 앱이 하는 확인)
+        val written = ExportPreview.fromZip(zip)
+        assertEquals(emptyList<String>(), shown.differencesFrom(written))
+        assertEquals(shown, written)
+
+        // 2. 지우고 불러온 뒤 기기에서 다시 센 것도 같다
+        clearUserData()
+        BackupZip.restore(zip.inputStream(), filesDir)
+        assertEquals(emptyList<String>(), shown.differencesFrom(ExportPreview.load()))
+    }
+
+    @Test
+    fun 만든_파일이_기기_데이터와_다르면_어느_칸인지_알려준다() = runBlocking {
+        seedOfficial(); seedFan()
+        val zip = File(workDir, "diff.zip")
+        BackupZip.write(zip)
+        val written = ExportPreview.fromZip(zip)
+        goodsDao.insert(official(99, "엽서").copy(goodsStatus = "GOTTEN")) // 파일을 만든 뒤 기기에서 바뀜
+        val diffs = ExportPreview.load().differencesFrom(written)
+        assertTrue(diffs.toString(), "공식 보유" in diffs && "공식 굿즈 줄 수" in diffs)
     }
 
     @Test
@@ -395,6 +431,30 @@ class BackupZipTest {
         ))
         assertEquals("PENDING", goodsDao.getAll().single { it.goodsUid == 2 }.goodsStatus)
         assertEquals("img", File(filesDir, "fan_x.jpg").readText())
+    }
+
+    @Test
+    fun 되살릴_것이_없는_옛_백업은_지금_기록을_지우지_않는다() = runBlocking {
+        // 1.1~1.2 앱이 아무것도 보유하지 않은 채 만든 백업. 안드로이드 Gson 이라 칸이 이름순이다.
+        seedOfficial()
+        seedFan()
+        val before = stateByUid() to fanDao.getAll()
+        val message = restoreFails(zipOf(
+            "fan_goods.json" to "[]".toByteArray(),
+            "official_gotten.json" to """[{"goodsCategory":"인형","goodsChara":"감심","goodsIsGotten":false,"goodsSeries":"1.0버전"}]""".toByteArray()
+        ))
+        assertTrue(message, message.contains("하나도 없어"))
+        assertEquals(before, stateByUid() to fanDao.getAll())
+    }
+
+    @Test
+    fun 되살릴_것이_없는_백업도_지울_기록이_없으면_불러온다() = runBlocking {
+        goodsDao.insert(official(1, "인형"))
+        val report = restore(zipOf(
+            "fan_goods.json" to "[]".toByteArray(),
+            "official_gotten.json" to """[{"goodsCategory":"인형","goodsChara":"감심","goodsIsGotten":false,"goodsSeries":"1.0버전"}]""".toByteArray()
+        ))
+        assertEquals("입력 완료! 보유·구매예정 0개 중 0개, 2차창작 0개", report.message())
     }
 
     @Test

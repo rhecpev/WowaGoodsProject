@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -70,6 +71,8 @@ fun GoodsDetailDialog(
     onSetPending: () -> Unit,
     onDelete: () -> Unit,
     showDelete: Boolean = true,
+    /** 넘기면 '이 굿즈 수정' 버튼을 둔다(직접 등록한 굿즈만). 누르면 팝업을 닫고 부른다 */
+    onEdit: (() -> Unit)? = null,
     onSeriesClick: (String) -> Unit = {},
     purchaseInfo: PurchaseInfo = PurchaseInfo(),
     onSavePendingInfo: ((PurchaseInfo) -> Unit)? = null,
@@ -78,10 +81,10 @@ fun GoodsDetailDialog(
     /** 넘기면 구매 정보 아래에 배송 시작/취소 버튼을 둔다. */
     onToggleShipping: (() -> Unit)? = null,
     quantity: Int = 1,
-    onQuantityChange: ((Int) -> Unit)? = null
+    onQuantityChange: ((Int) -> Unit)? = null,
+    /** 어떤 굿즈인지(종류·id). 내용이 같은 두 굿즈 사이를 옮겨도 화면 상태를 새로 시작하게 한다. [goodsIdentity] */
+    itemKey: Any? = null
 ){
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
 
     val encodedPath = encodeGoodsImagePath(imgPath)
     val imageModel: Any? = if (encodedPath.startsWith("http")) {
@@ -95,13 +98,16 @@ fun GoodsDetailDialog(
         isPending -> GoodsStatus.PENDING
         else -> GoodsStatus.NOT_GOTTEN
     }
+    // 태블릿 옆 칸은 상세를 연 채 다른 굿즈를 누르면 같은 자리에서 내용만 바뀐다.
+    // 앞 굿즈의 화면 상태(스크롤·먼저 반영한 상태 등)가 남지 않게 굿즈가 바뀌면 새로 시작한다.
+    val identity = listOf(itemKey, imgPath, series, chara, category, price, memo)
     // 누르자마자 선택이 옮겨간 것처럼 보이게 먼저 반영하고, DB 값이 돌아오면 그 값으로 맞춘다.
-    var shownStatus by remember(status) { mutableStateOf(status) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showFullImage by remember { mutableStateOf(false) }
-    var showPurchaseDialog by remember { mutableStateOf(false) }
+    var shownStatus by remember(status, identity) { mutableStateOf(status) }
+    var showDeleteConfirm by remember(identity) { mutableStateOf(false) }
+    var showFullImage by remember(identity) { mutableStateOf(false) }
+    var showPurchaseDialog by remember(identity) { mutableStateOf(false) }
     // 누르자마자 숫자가 바뀌어 보이게 먼저 반영하고, DB 값이 돌아오면 그 값으로 맞춘다.
-    var shownQuantity by remember(quantity) { mutableIntStateOf(quantity) }
+    var shownQuantity by remember(quantity, identity) { mutableIntStateOf(quantity) }
     val onChangeQuantity: ((Int) -> Unit)? = onQuantityChange?.let { save ->
         { q -> shownQuantity = q; save(q) }
     }
@@ -125,6 +131,7 @@ fun GoodsDetailDialog(
             initial = purchaseInfo,
             title = if (editing) "구매 정보 수정" else "구매예정으로 표시",
             confirmText = if (editing) "저장" else "구매예정으로",
+            prefillToday = !editing,
             onDismiss = { showPurchaseDialog = false },
             onConfirm = { edit ->
                 showPurchaseDialog = false
@@ -161,97 +168,60 @@ fun GoodsDetailDialog(
         )
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
+    // 세로: 아래에서 올라오는 시트, 가로: 오른쪽 절반 패널(사진 위 · 정보 아래)
+    AdaptiveSheet(
+        onDismiss = onDismiss,
         sheetState = sheetState,
-        // 필터 시트와 같이 위 모서리를 각지게 둔다.
-        shape = RectangleShape,
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        panelCloseButton = true
     ) {
         val keepSheet = remember { KeepSheetWhileScrollingConnection() }
+        val heroHeight = minOf(260f, LocalConfiguration.current.screenHeightDp * 0.4f).dp
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // 이미지는 제자리에 두고 정보 쪽만 스크롤한다(가로 화면은 오른쪽, 세로 화면은 아래쪽).
+                // 이미지는 제자리에 두고 아래 정보 쪽만 스크롤한다(가로 화면은 오른쪽 절반 패널).
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
-            if (isLandscape) {
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    HeroImage(
-                        model = imageModel,
-                        status = shownStatus,
-                        onClick = { showFullImage = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            // 화면이 낮으면 시트 높이에 맞춰 줄어든다.
-                            .heightIn(max = 280.dp)
-                    )
-                    DetailBody(
-                        series = series,
-                        chara = chara,
-                        category = category,
-                        price = price,
-                        memo = memo,
-                        status = shownStatus,
-                        onSelectStatus = onSelectStatus,
-                        purchaseInfo = shownPurchaseInfo,
-                        onEditPurchase = { showPurchaseDialog = true },
-                        shippingDate = shippingDate,
-                        onToggleShipping = onToggleShipping,
-                        quantity = shownQuantity,
-                        onQuantityChange = onChangeQuantity,
-                        setGoods = setGoods,
-                        setComponentTotal = setComponentTotal,
-                        setComponentGotten = setComponentGotten,
-                        onSetClick = onSetClick,
-                        showDelete = showDelete,
-                        onDeleteClick = { showDeleteConfirm = true },
-                        onSeriesClick = onSeriesClick,
-                        modifier = Modifier
-                            .weight(1f)
-                            .nestedScroll(keepSheet)
-                            .verticalScroll(rememberScrollState())
-                    )
-                }
-            } else {
-                HeroImage(
-                    model = imageModel,
-                    status = shownStatus,
-                    onClick = { showFullImage = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(260.dp)
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                DetailBody(
-                    series = series,
-                    chara = chara,
-                    category = category,
-                    price = price,
-                    memo = memo,
-                    status = shownStatus,
-                    onSelectStatus = onSelectStatus,
-                    purchaseInfo = shownPurchaseInfo,
-                    onEditPurchase = { showPurchaseDialog = true },
-                    shippingDate = shippingDate,
-                    onToggleShipping = onToggleShipping,
-                    quantity = shownQuantity,
-                    onQuantityChange = onChangeQuantity,
-                    setGoods = setGoods,
-                    setComponentTotal = setComponentTotal,
-                    setComponentGotten = setComponentGotten,
-                    onSetClick = onSetClick,
-                    showDelete = showDelete,
-                    onDeleteClick = { showDeleteConfirm = true },
-                    onSeriesClick = onSeriesClick,
-                    // 정보가 화면에 다 들어가면 그 높이만큼만 차지하고, 넘칠 때만 남은 높이 안에서 스크롤한다.
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .nestedScroll(keepSheet)
-                        .verticalScroll(rememberScrollState())
-                )
-            }
+            HeroImage(
+                model = imageModel,
+                status = shownStatus,
+                onClick = { showFullImage = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 패널(가로)처럼 낮은 화면에서는 사진을 줄여 정보가 보이게
+                    .height(heroHeight)
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            DetailBody(
+                series = series,
+                chara = chara,
+                category = category,
+                price = price,
+                memo = memo,
+                status = shownStatus,
+                onSelectStatus = onSelectStatus,
+                purchaseInfo = shownPurchaseInfo,
+                onEditPurchase = { showPurchaseDialog = true },
+                shippingDate = shippingDate,
+                onToggleShipping = onToggleShipping,
+                quantity = shownQuantity,
+                onQuantityChange = onChangeQuantity,
+                setGoods = setGoods,
+                setComponentTotal = setComponentTotal,
+                setComponentGotten = setComponentGotten,
+                onSetClick = onSetClick,
+                showDelete = showDelete,
+                onDeleteClick = { showDeleteConfirm = true },
+                onEditClick = onEdit?.let { e -> { onDismiss(); e() } },
+                onSeriesClick = onSeriesClick,
+                // 정보가 화면에 다 들어가면 그 높이만큼만 차지하고, 넘칠 때만 남은 높이 안에서 스크롤한다.
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .nestedScroll(keepSheet)
+                    .verticalScroll(androidx.compose.runtime.key(identity) { rememberScrollState() })
+            )
         }
     }
 }
@@ -327,6 +297,7 @@ private fun DetailBody(
     onSetClick: () -> Unit,
     showDelete: Boolean,
     onDeleteClick: () -> Unit,
+    onEditClick: (() -> Unit)?,
     onSeriesClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -406,20 +377,31 @@ private fun DetailBody(
             QuantityStepper(quantity = quantity, onChange = onQuantityChange)
         }
 
-        if (showDelete) {
+        // 수정 · 삭제(직접 등록한 굿즈만)
+        if (showDelete || onEditClick != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            TextButton(
-                onClick = onDeleteClick,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("이 굿즈 삭제")
+            Row(modifier = Modifier.align(Alignment.CenterHorizontally), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onEditClick != null) {
+                    TextButton(onClick = onEditClick) {
+                        Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("이 굿즈 수정")
+                    }
+                }
+                if (showDelete) {
+                    TextButton(
+                        onClick = onDeleteClick,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("이 굿즈 삭제")
+                    }
+                }
             }
         }
     }
@@ -487,7 +469,7 @@ private fun QuantityInputDialog(initial: Int, onDismiss: () -> Unit, onConfirm: 
         onDismissRequest = onDismiss,
         title = { Text("수량 입력") },
         text = {
-            OutlinedTextField(
+            com.example.wowagoodsproject.component.UnderlineTextField(
                 value = text,
                 onValueChange = { new ->
                     if (new.text.length <= 2 && new.text.all { it.isDigit() }) text = new
@@ -527,7 +509,11 @@ private fun PurchaseInfoSummary(
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("구매 정보", modifier = Modifier.weight(1f))
-            TextButton(onClick = onEdit, shape = RectangleShape) { Text("수정") }
+            TextButton(onClick = onEdit, shape = RectangleShape) {
+                Text("수정")
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+            }
         }
         LinedSection {
             InfoLine(label = "구입처", value = info.purchaseStore.ifEmpty { "미정" })

@@ -48,6 +48,56 @@ data class ReleaseSection(
 object ReleaseNotes {
 
     private val notes: Map<String, List<ReleaseSection>> = mapOf(
+        "3.1" to listOf(
+            ReleaseSection(
+                "🗂 배신 굿즈 (다른 장르)",
+                items = listOf(
+                    "명조 말고 다른 장르의 굿즈도 장르별로 따로 모아요. 마이페이지 → 배신 굿즈",
+                    "장르마다 명조와 같은 공식 · 비공식 · 굿즈 검색 · 캐릭터별 · 마이페이지 탭이 있어요",
+                    "장르 목록은 배경 / 아이콘으로 볼 수 있고, '순서 변경'을 누르면 끌어서 순서를 바꿔요",
+                    "장르 마이페이지에서 그 장르만 추출하고, 이름이 같은 장르만 불러올 수 있어요",
+                    "배신 굿즈도 구매예정 알림이 와요. 알림을 누르면 그 굿즈가 바로 열려요"
+                )
+            ),
+            ReleaseSection(
+                "✏️ 굿즈 등록·수정",
+                items = listOf(
+                    "등록한 비공식 굿즈를 고칠 수 있어요. 굿즈 상세 → '이 굿즈 수정'",
+                    "시리즈·캐릭터·카테고리·가격·메모가 모두 같은 굿즈가 있으면 알려 주고, '그래도 추가'로만 저장해요",
+                    "사진을 카메라 · 갤러리 · URL 중에서 넣어요. URL 은 미리보기를 보고 불러와요",
+                    "카테고리를 필터처럼 사진 그리드로 골라요",
+                    "입력 칸마다 왼쪽에 아이콘이 붙고, 모든 입력 칸이 밑줄 하나로 바뀌었어요",
+                    "비공식 시리즈를 따로 만들어 이름 · 날짜 · 배경 사진을 정할 수 있어요. 날짜는 처음에 만든 날이에요"
+                )
+            ),
+            ReleaseSection(
+                "🛒 구매예정",
+                items = listOf(
+                    "구입처 칸을 누르면 지금까지 적은 구입처가 아래에 떠요. 칠 때마다 걸러지고 겹치는 글자는 강조돼요",
+                    "구매예정으로 바꾸면 구매일에 오늘 날짜가 들어가요 (비어 있을 때만)",
+                    "필터 순서: 전체 · 배송 중 · 배송 전 · 구입처 미정 · 구매일 미정 · 수령일 미정"
+                )
+            ),
+            ReleaseSection(
+                "💾 데이터 추출·입력",
+                items = listOf(
+                    "불러올 내용을 Before / After 표로 보여 줘요. 캐릭터별 개수, 비공식 굿즈 하나하나, 선호 캐릭터 하트까지",
+                    "파일 내용을 마이페이지 보유 현황 그래프로 미리 보고, 처음 쓰는 폰에서도 사진이 보여요",
+                    "불러오기가 끝나면 전·후를 막대로 견준 보고서가 떠요",
+                    "추출 파일 이름이 wuwaGoods_버전_날짜_항목.zip 으로 바뀌었고, 장르를 골라 담을 수 있어요",
+                    "다운로드 폴더에 제대로 저장됐는지까지 확인해요"
+                )
+            ),
+            ReleaseSection(
+                "📱 화면·기타",
+                items = listOf(
+                    "하단 탭 순서: 공식 · 비공식 · 검색 · 캐릭터별 · 마이페이지 ('2차창작' → '비공식')",
+                    "앱 새 버전이 나오면 알려 주고, 앱 안에서 받아 설치해요",
+                    "캐릭터를 열 때와 구입처 추천이 더 빨라졌어요",
+                    "마이페이지 → 변경점에서 지난 버전들의 변경점도 볼 수 있어요"
+                )
+            )
+        ),
         "3.0" to listOf(
             ReleaseSection(
                 "✨ 새 디자인",
@@ -306,6 +356,21 @@ object ReleaseNotes {
 
     val currentVersion: String get() = BuildConfig.VERSION_NAME
 
+    /** 적어 둔 모든 버전의 변경점. 최신 버전이 앞 */
+    fun allVersions(): List<Pair<String, List<ReleaseSection>>> =
+        notes.entries.sortedWith { a, b -> compareVersions(b.key, a.key) }.map { it.key to it.value }
+
+    /** "3.1" 과 "3.0.1" 처럼 점으로 나뉜 숫자를 앞에서부터 견준다 */
+    internal fun compareVersions(a: String, b: String): Int {
+        val x = a.split('.').map { it.toIntOrNull() ?: 0 }
+        val y = b.split('.').map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(x.size, y.size)) {
+            val d = (x.getOrNull(i) ?: 0) - (y.getOrNull(i) ?: 0)
+            if (d != 0) return d
+        }
+        return 0
+    }
+
     /** 지금 버전의 변경점. 적어 둔 게 없으면 null. */
     fun forCurrentVersion(): List<ReleaseSection>? = notes[currentVersion]
 
@@ -338,9 +403,10 @@ fun WhatsNewDialog(
     val hasImages = sections.any { it.beforeImage != null || it.afterImage != null }
     val screenHeight = LocalConfiguration.current.screenHeightDp
     // 팝업의 제목·페이지 표시·버튼·여백이 약 250dp 를 쓰므로, 그만큼은 남겨야 낮은 가로 화면에서도 아래가 잘리지 않는다.
+    // 사진이 없어도 낮은 가로 화면에서는 줄인다(320dp 고정이면 페이지 표시·버튼이 화면 밖으로 밀린다).
     val pageHeight = if (hasImages) {
         minOf(screenHeight * 0.6f, screenHeight - 250f).dp.coerceIn(120.dp, 560.dp)
-    } else 320.dp
+    } else minOf(320f, screenHeight - 250f).dp.coerceAtLeast(120.dp)
     var zoomed by remember { mutableStateOf<Int?>(null) }
     zoomed?.let { res -> FullScreenImageViewer(model = res, onDismiss = { zoomed = null }) }
     val page = pagerState.currentPage
@@ -450,7 +516,7 @@ fun WhatsNewDialog(
  * 한쪽만 있으면 그 사진만 절반 폭으로 둔다. 누르면 전체 화면으로 크게 본다.
  */
 @Composable
-private fun BeforeAfterImages(
+internal fun BeforeAfterImages(
     @DrawableRes before: Int?,
     @DrawableRes after: Int?,
     onZoom: (Int) -> Unit

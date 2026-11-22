@@ -81,51 +81,66 @@ fun rememberPendingBulk(
     onApply: (officialIds: Set<Int>, fanIds: Set<Int>, edit: PurchaseInfoEdit) -> Unit,
     onStartShipping: (officialIds: Set<Int>, fanIds: Set<Int>) -> Unit
 ): PendingBulk {
-    var showPurchaseDialog by remember { mutableStateOf(false) }
-
-    val totalCount = officialGoods.size + fanGoods.size
-
     // 필터로 가려진 굿즈가 선택에 남아 있어도 화면에 보이는 것만 다룬다.
     val visibleOfficial = officialGoods.filter { it.goodsId in selectedOfficialIds }
     val visibleFan = fanGoods.filter { it.fanGoodsId in selectedFanIds }
-    val selectedCount = visibleOfficial.size + visibleFan.size
+    val officialIds = visibleOfficial.map { it.goodsId }.toSet()
+    val fanIds = visibleFan.map { it.fanGoodsId }.toSet()
+    return rememberPendingBulkFor(
+        totalCount = officialGoods.size + fanGoods.size,
+        selected = visibleOfficial + visibleFan,
+        onSelectAll = onSelectAll,
+        onClearSelection = onClearSelection,
+        onApply = { edit -> onApply(officialIds, fanIds, edit) },
+        onStartShipping = { onStartShipping(officialIds, fanIds) }
+    )
+}
 
-    // 고른 굿즈들의 현재 값. 하나로 같을 때만 다이얼로그에 미리 채워 준다.
-    val selectedItems: List<GoodsItem> = visibleOfficial + visibleFan
+/**
+ * [rememberPendingBulk] 의 공통 버전. 굿즈 종류(명조 공식·2차창작, 배신 굿즈)와 상관없이 고른 굿즈 목록으로 만든다.
+ * 구매 정보 입력 다이얼로그도 여기서 띄운다.
+ *
+ * @param totalCount 화면에 보이는 구매예정 굿즈 수(전체 선택 표시용)
+ * @param selected 화면에 보이는 것 중 고른 굿즈
+ */
+@Composable
+fun rememberPendingBulkFor(
+    totalCount: Int,
+    selected: List<GoodsItem>,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
+    onApply: (edit: PurchaseInfoEdit) -> Unit,
+    onStartShipping: () -> Unit
+): PendingBulk {
+    var showPurchaseDialog by remember { mutableStateOf(false) }
 
     if (showPurchaseDialog) {
+        // 고른 굿즈들의 현재 값. 하나로 같을 때만 다이얼로그에 미리 채워 준다.
         PurchaseInfoDialog(
             initial = PurchaseInfo(
-                purchaseStore = selectedItems.map { it.purchaseStore }.distinct().singleOrNull() ?: "",
-                receiveDate = selectedItems.map { it.receiveDate }.distinct().singleOrNull() ?: "",
-                purchaseDate = selectedItems.map { it.purchaseDate }.distinct().singleOrNull() ?: ""
+                purchaseStore = selected.map { it.purchaseStore }.distinct().singleOrNull() ?: "",
+                receiveDate = selected.map { it.receiveDate }.distinct().singleOrNull() ?: "",
+                purchaseDate = selected.map { it.purchaseDate }.distinct().singleOrNull() ?: ""
             ),
-            targetCount = selectedCount,
+            targetCount = selected.size,
+            // 이미 구매예정인 굿즈의 정보 수정이라 '구매일 미정'을 오늘로 바꾸지 않는다.
+            prefillToday = false,
             onDismiss = { showPurchaseDialog = false },
             onConfirm = { edit ->
                 showPurchaseDialog = false
-                onApply(
-                    visibleOfficial.map { it.goodsId }.toSet(),
-                    visibleFan.map { it.fanGoodsId }.toSet(),
-                    edit
-                )
+                onApply(edit)
             }
         )
     }
 
     return PendingBulk(
-        selectedCount = selectedCount,
-        allSelected = totalCount > 0 && selectedCount == totalCount,
-        notShippedCount = selectedItems.count { it.shippingDate.isEmpty() },
+        selectedCount = selected.size,
+        allSelected = totalCount > 0 && selected.size == totalCount,
+        notShippedCount = selected.count { it.shippingDate.isEmpty() },
         onSelectAll = onSelectAll,
         onClearSelection = onClearSelection,
-        // 이미 배송 중인 굿즈는 시작일을 그대로 두고, 배송 전인 것만 오늘로 시작한다.
-        onStartShipping = {
-            onStartShipping(
-                visibleOfficial.map { it.goodsId }.toSet(),
-                visibleFan.map { it.fanGoodsId }.toSet()
-            )
-        },
+        // 이미 배송 중인 굿즈는 시작일을 그대로 두고, 배송 전인 것만 오늘로 시작한다(부르는 쪽이 처리).
+        onStartShipping = onStartShipping,
         onEditPurchase = { showPurchaseDialog = true }
     )
 }
@@ -214,7 +229,7 @@ private fun PendingBulkActionButtons(bulk: PendingBulk, buttonModifier: Modifier
 }
 
 /**
- * 구매예정 굿즈 목록.
+ * 구매예정 굿즈 목록(명조 공식·2차창작).
  * 줄을 누르면 굿즈 상세 팝업이 열려 그 굿즈의 구매 정보와 배송을 바로 고칠 수 있다.
  * 다중 선택 중([selectionMode])에는 줄을 눌러 여러 개를 고른 뒤
  * 구입처/구매일/수령예정일을 한 번에 적어 넣거나 배송 시작으로 표시한다([bulk]).
@@ -242,9 +257,54 @@ fun PendingGoodsSection(
     onOpenGoods: (GoodsItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val totalCount = officialGoods.size + fanGoods.size
+    PendingGoodsList(
+        // 공식 다음에 2차창작
+        items = officialGoods + fanGoods,
+        selectionMode = selectionMode,
+        isSelected = { g ->
+            when (g) {
+                is GoodsEntity -> g.goodsId in selectedOfficialIds
+                is FanGoodsEntity -> g.fanGoodsId in selectedFanIds
+                else -> false
+            }
+        },
+        onToggle = { g ->
+            when (g) {
+                is GoodsEntity -> onToggleOfficial(g.goodsId)
+                is FanGoodsEntity -> onToggleFan(g.fanGoodsId)
+            }
+        },
+        bulk = bulk,
+        showBulkButtons = showBulkButtons,
+        isGridMode = isGridMode,
+        gridColumns = gridColumns,
+        isFiltered = isFiltered,
+        onToggleShipping = onToggleShipping,
+        onOpenGoods = onOpenGoods,
+        modifier = modifier
+    )
+}
 
-    if (totalCount == 0) {
+/**
+ * 구매예정 굿즈 목록의 공통 버전. 명조 마이페이지와 배신 굿즈 장르 마이페이지가 같이 쓴다.
+ * 굿즈 종류와 상관없이 [items] 순서대로 놓고, 고르기·열기는 부르는 쪽 함수로 한다.
+ */
+@Composable
+fun PendingGoodsList(
+    items: List<GoodsItem>,
+    selectionMode: Boolean,
+    isSelected: (GoodsItem) -> Boolean,
+    onToggle: (GoodsItem) -> Unit,
+    bulk: PendingBulk,
+    showBulkButtons: Boolean = true,
+    isGridMode: Boolean = false,
+    gridColumns: Int = 2,
+    isFiltered: Boolean = false,
+    onToggleShipping: (GoodsItem) -> Unit = {},
+    onOpenGoods: (GoodsItem) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    if (items.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -278,10 +338,8 @@ fun PendingGoodsSection(
         if (selectionMode && showBulkButtons) PendingBulkButtons(bulk)
 
         if (isGridMode) {
-            // 공식과 2차창작을 이어서 한 줄에 gridColumns 개씩 놓는다.
-            val cells: List<GoodsItem> = officialGoods + fanGoods
             // 시리즈가 바뀌면 새 줄에서 시작하고, 그 줄 위에 이중선을 둔다.
-            val rows = remember(cells, gridColumns) { chunkBySeries(cells, gridColumns) }
+            val rows = remember(items, gridColumns) { chunkBySeries(items, gridColumns) }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -301,21 +359,12 @@ fun PendingGoodsSection(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         rowItems.forEach { goods ->
-                            val isOfficial = goods is GoodsEntity
-                            val id = (goods as? GoodsEntity)?.goodsId ?: (goods as FanGoodsEntity).fanGoodsId
                             Box(modifier = Modifier.weight(1f)) {
                                 PendingGoodsCard(
                                     goods = goods,
-                                    isFanGoods = !isOfficial,
-                                    selected = if (!selectionMode) null
-                                    else if (isOfficial) id in selectedOfficialIds else id in selectedFanIds,
-                                    onClick = {
-                                        when {
-                                            !selectionMode -> onOpenGoods(goods)
-                                            isOfficial -> onToggleOfficial(id)
-                                            else -> onToggleFan(id)
-                                        }
-                                    }
+                                    isFanGoods = isFanItem(goods),
+                                    selected = if (!selectionMode) null else isSelected(goods),
+                                    onClick = { if (selectionMode) onToggle(goods) else onOpenGoods(goods) }
                                 )
                             }
                         }
@@ -328,7 +377,6 @@ fun PendingGoodsSection(
             return@Column
         }
 
-        val listItems: List<GoodsItem> = officialGoods + fanGoods
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -340,24 +388,14 @@ fun PendingGoodsSection(
                 bottom = AppStyles.paddingMedium
             )
         ) {
-            // 줄마다 아래 선이 있어 줄 사이 간격은 두지 않는다. 공식 다음에 2차창작. 앞 굿즈와 시리즈가 다르면 그 줄 위에 이중선을 둔다.
-            itemsIndexed(listItems, key = { _, goods -> pendingKey(goods) }) { index, goods ->
-                if (isSeriesStart(listItems, index)) SeriesBoundaryDivider(verticalPadding = 4.dp)
-                val official = goods as? GoodsEntity
-                val fan = goods as? FanGoodsEntity
+            // 줄마다 아래 선이 있어 줄 사이 간격은 두지 않는다. 앞 굿즈와 시리즈가 다르면 그 줄 위에 이중선을 둔다.
+            itemsIndexed(items, key = { _, goods -> pendingKey(goods) }) { index, goods ->
+                if (isSeriesStart(items, index)) SeriesBoundaryDivider(verticalPadding = 4.dp)
                 PendingGoodsRow(
                     goods = goods,
-                    isFanGoods = official == null,
-                    selected = if (!selectionMode) null
-                    else if (official != null) official.goodsId in selectedOfficialIds
-                    else fan?.fanGoodsId in selectedFanIds,
-                    onClick = {
-                        when {
-                            !selectionMode -> onOpenGoods(goods)
-                            official != null -> onToggleOfficial(official.goodsId)
-                            fan != null -> onToggleFan(fan.fanGoodsId)
-                        }
-                    },
+                    isFanGoods = isFanItem(goods),
+                    selected = if (!selectionMode) null else isSelected(goods),
+                    onClick = { if (selectionMode) onToggle(goods) else onOpenGoods(goods) },
                     onToggleShipping = { onToggleShipping(goods) }
                 )
             }
@@ -365,9 +403,17 @@ fun PendingGoodsSection(
     }
 }
 
+/** 2차창작(비공식) 굿즈인지. 배신 굿즈는 종류 칸으로 본다. */
+private fun isFanItem(goods: GoodsItem): Boolean = when (goods) {
+    is GoodsEntity -> false
+    is com.example.wowagoodsproject.db.betray.BetrayGoodsEntity -> goods.kind == com.example.wowagoodsproject.db.betray.BetrayKind.FAN
+    else -> true
+}
+
 private fun pendingKey(goods: GoodsItem): String = when (goods) {
     is GoodsEntity -> "official-${goods.goodsId}"
     is FanGoodsEntity -> "fan-${goods.fanGoodsId}"
+    is com.example.wowagoodsproject.db.betray.BetrayGoodsEntity -> "betray-${goods.goodsId}"
     else -> goods.hashCode().toString()
 }
 

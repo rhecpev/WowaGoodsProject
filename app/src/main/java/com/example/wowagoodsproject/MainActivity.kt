@@ -48,15 +48,35 @@ class MainActivity : ComponentActivity() {
     /** 알림을 눌러 들어왔을 때 열어야 할 화면(굿즈/소식). 화면이 열고 나면 null 로 비운다. */
     private val openTarget = MutableStateFlow<OpenTarget?>(null)
 
+    override fun onResume() {
+        super.onResume()
+        AppUpdater.inForeground = true
+    }
+
+    override fun onPause() {
+        AppUpdater.inForeground = false
+        super.onPause()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        OpenTarget.takeFrom(intent)?.let { openTarget.value = it }
+        OpenTarget.takeFrom(intent)?.let { handleTarget(it) }
+    }
+
+    /** 새 버전 알림이면 바로 업데이트를 확인하고, 그 밖에는 화면(굿즈/소식)을 연다. */
+    private fun handleTarget(target: OpenTarget) {
+        if (target is OpenTarget.AppUpdate) AppUpdater.checkNow(this, toastIfLatest = true)
+        else openTarget.value = target
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        openTarget.value = OpenTarget.takeFrom(intent)
+        // 업데이트하고 나면 받아 둔 APK 는 필요 없다.
+        AppUpdater.cleanup(this)
+        // 설치를 기다리던 APK 가 있으면 먼저 그 '설치' 창을 띄운다(새 버전 알림으로 켠 경우에도 다시 받지 않게).
+        AppUpdater.resumePendingInstall(this)
+        OpenTarget.takeFrom(intent)?.let { handleTarget(it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !PendingGoodsNotifier.hasPermission(this)
         ) {
@@ -72,10 +92,10 @@ class MainActivity : ComponentActivity() {
                 var isReady by remember { mutableStateOf(false) }
                 // 새 버전 확인이 끝났는지. 끝나기 전에 '달라진 점' 을 띄우면 새 버전 안내와 겹친다.
                 var appUpdateChecked by remember { mutableStateOf(false) }
-                var showUpdateDialog by remember { mutableStateOf(false) }
+                // 새 버전 안내·받기·설치 창은 AppUpdater 가 맡는다(마이페이지 '현재 버전'과 같은 창).
+                val updateState by AppUpdater.state.collectAsState()
+                val showUpdateDialog = updateState !is AppUpdater.State.Idle
                 var showWhatsNew by remember { mutableStateOf(false) }
-                var latestVersion by remember { mutableStateOf("") }
-                var releaseNote by remember { mutableStateOf("") }
                 val updateProgress by UpdateManager.progress.collectAsState()
                 val isUpdating by UpdateManager.showProgress.collectAsState()
                 val scope = rememberCoroutineScope()
@@ -101,48 +121,13 @@ class MainActivity : ComponentActivity() {
 
                         // 새 버전 확인은 인터넷이 느리면 수십 초 걸릴 수 있어, 화면을 먼저 띄운 뒤에 한다.
                         isReady = true
-                        val result = UpdateManager.checkAppUpdate()
-                        if (result != null) {
-                            latestVersion = result.first
-                            releaseNote = result.second
-                            showUpdateDialog = true
-                        }
+                        // 새 버전이면 APK 주소까지 읽어 둔 것으로 받을지 묻는다.
+                        UpdateManager.checkAppUpdate()?.let { AppUpdater.offer(it) }
                         appUpdateChecked = true
                     }
                 }
 
-                if (showUpdateDialog) {
-                    androidx.compose.material3.AlertDialog(
-                        // 앱 전체 기준: 팝업도 둥근 모서리 없이 각지게.
-                        shape = RectangleShape,
-                        onDismissRequest = { showUpdateDialog = false },
-                        title = { Text("업데이트 가능") },
-                        text = {
-                            Column {
-                                Text("새 버전이 출시되었습니다!")
-                                Spacer(modifier = Modifier.height(AppStyles.paddingSmall))
-                                Text("${BuildConfig.VERSION_NAME} → $latestVersion")
-                            }
-                        },
-                        confirmButton = {
-                            androidx.compose.material3.TextButton(onClick = {
-                                val intent = android.content.Intent(
-                                    android.content.Intent.ACTION_VIEW,
-                                    android.net.Uri.parse("https://github.com/rhecpev/WowaGoodsProject/releases/latest")
-                                )
-                                context.startActivity(intent)
-                                showUpdateDialog = false
-                            }) { Text("다운로드") }
-                        },
-                        dismissButton = {
-                            androidx.compose.material3.TextButton(onClick = {
-                                showUpdateDialog = false
-                            }) {
-                                Text("나중에")
-                            }
-                        }
-                    )
-                }
+                AppUpdateDialogs()
 
                 // 업데이트 후 처음 열 때 한 번만 변경점을 보여 준다. 새 버전 안내 팝업이 있으면 그걸 먼저 닫은 뒤에 띄운다.
                 if (isReady && appUpdateChecked && showWhatsNew && !showUpdateDialog) {

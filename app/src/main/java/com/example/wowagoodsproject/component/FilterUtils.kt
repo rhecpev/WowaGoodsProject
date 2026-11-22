@@ -5,13 +5,14 @@ import com.example.wowagoodsproject.db.official.GoodsEntity
 
 /**
  * 구매예정 굿즈를 구매 정보로 거르는 필터. 한 번에 하나만 고를 수 있다.
+ * 이 순서대로 '전체' 뒤에 놓인다(배송 중 · 배송 전을 앞에).
  */
 enum class PendingInfoFilter(val label: String, val matches: (GoodsItem) -> Boolean) {
+    SHIPPING("배송 중", { it.shippingDate.isNotBlank() }),
+    NOT_SHIPPING("배송 전", { it.shippingDate.isBlank() }),
     NO_STORE("구입처 미정", { it.purchaseStore.isBlank() }),
     NO_PURCHASE_DATE("구매일 미정", { it.purchaseDate.isBlank() }),
-    NO_RECEIVE_DATE("수령일 미정", { it.receiveDate.isBlank() }),
-    SHIPPING("배송 중", { it.shippingDate.isNotBlank() }),
-    NOT_SHIPPING("배송 전", { it.shippingDate.isBlank() })
+    NO_RECEIVE_DATE("수령일 미정", { it.receiveDate.isBlank() })
 }
 
 /** [filter] 가 null 이면 거르지 않는다(전체). */

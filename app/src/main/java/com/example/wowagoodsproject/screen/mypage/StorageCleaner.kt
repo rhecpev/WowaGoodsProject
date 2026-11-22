@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.screen.mypage
 
+import com.example.wowagoodsproject.db.betray.usedImagePaths
 import android.content.Context
 import androidx.room.RoomDatabase
 import coil.annotation.ExperimentalCoilApi
@@ -16,7 +17,7 @@ enum class CleanTarget(val title: String, val description: String) {
     READ_NEWS("읽은 소식", "이미 본 신규·변경 소식. 안 읽은 소식은 남아요"),
     CHECKED_CHANGES("처리한 변경 기록", "변경된 굿즈 중 처리한 기록. 미처리 기록은 남아요"),
     IMAGE_CACHE("이미지 캐시", "받아 둔 굿즈·캐릭터 사진. 필요할 때 다시 받아요"),
-    TEMP_FILES("남은 임시 파일", "카메라 임시 사진, 백업 임시 파일, 어느 2차창작 굿즈도 쓰지 않는 사진")
+    TEMP_FILES("남은 임시 파일", "카메라 임시 사진, 앱 안에 남은 백업 임시 파일(다운로드 폴더의 백업은 그대로), 어느 굿즈도 쓰지 않는 사진")
 }
 
 /**
@@ -114,13 +115,13 @@ object StorageCleaner {
      */
     private suspend fun tempFiles(context: Context): List<File> {
         val result = mutableListOf<File>()
-        context.cacheDir.listFiles()?.filter { it.isFile && it.name.startsWith("camera_temp_") }?.let { result += it }
+        context.cacheDir.listFiles()?.filter { it.isFile && (it.name.startsWith("camera_temp_") || it.name.startsWith("url_temp_")) }?.let { result += it }
         File(context.filesDir, ".restore_staging").takeIf { it.exists() }?.let { result += it }
-        File(context.filesDir, "wowa_backup.zip").takeIf { it.isFile }?.let { result += it }
+        // 예전 방식(안드로이드 9 이하 공유)으로 내보내고 남은 백업 zip. 지금 이름은 wuwaGoods_버전_날짜_항목.zip, 옛 이름은 wowa_backup*.zip
+        result += BackupExport.leftoverCopies(context)
+        // 배신 굿즈 사진도 같은 앱 폴더에 있으므로 쓰는 사진으로 센다.
         val used = runCatching {
-            App.fanDatabase.fanGoodsDao().getAll()
-                .map { it.fanGoodsImgPath }
-                .filter { it.isNotEmpty() }
+            com.example.wowagoodsproject.db.allUsedImagePaths()
                 .map { File(it).canonicalPath }
                 .toSet()
         }.getOrNull()

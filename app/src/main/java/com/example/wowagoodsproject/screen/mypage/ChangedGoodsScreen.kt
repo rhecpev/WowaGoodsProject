@@ -359,6 +359,7 @@ private fun ChangedGoodsDialogs(
         val parentSet = findSetGoods(goods, seriesGoods)
         val setComponents = parentSet?.let { getSetComponents(it, seriesGoods) } ?: emptyList()
         GoodsDetailDialog(
+            itemKey = com.example.wowagoodsproject.component.goodsIdentity(goods),
             imgPath = goods.imgPath,
             series = goods.series,
             chara = goods.chara,
