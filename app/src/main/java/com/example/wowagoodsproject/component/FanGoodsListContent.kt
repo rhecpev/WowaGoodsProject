@@ -26,60 +26,66 @@ fun FanGoodsListContent(
         return
     }
 
-    if (isGridMode) {
-        // 시리즈가 바뀌면 새 줄에서 시작해 줄 사이에 이중선을 넣는다.
-        val rows = remember(goods, gridColumns) { chunkBySeries(goods, gridColumns) }
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
-            itemsIndexed(rows) { rowIndex, rowItems ->
-                if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider()
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    rowItems.forEach { item ->
-                        Box(modifier = Modifier.weight(1f)) {
-                            GoodsGridItem(
-                                imgPath = item.imgPath,
-                                series = item.series,
-                                chara = item.chara,
-                                category = item.category,
-                                price = item.price,
-                                isGotten = item.isGotten,
-                                gottenStatus = item.status.asGottenStatus(),
-                                memo = item.memo,
-                                quantity = item.quantity,
-                                selected = selectedIds?.let { item.fanGoodsId in it },
-                                onClick = { onGoodsClick(item) }
-                            )
+    // 보기 방식을 바꾸면 줌 애니메이션으로 넘긴다(ViewSwitchAnimation.kt)
+    ProvideGoodsCardImageSize(gridColumns) {
+    GridListSwitch(isGridMode) { grid ->
+        if (grid) {
+            // 시리즈가 바뀌면 새 줄에서 시작해 줄 사이에 이중선을 넣는다.
+            val rows = remember(goods, gridColumns) { chunkBySeries(goods, gridColumns) }
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
+                itemsIndexed(rows) { rowIndex, rowItems ->
+                    if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider()
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        rowItems.forEach { item ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                GoodsGridItem(
+                                    imgPath = item.imgPath,
+                                    series = item.series,
+                                    chara = item.chara,
+                                    category = item.category,
+                                    price = item.price,
+                                    isGotten = item.isGotten,
+                                    gottenStatus = item.status.asGottenStatus(),
+                                    memo = item.memo,
+                                    quantity = item.quantity,
+                                    selected = selectedIds?.let { item.fanGoodsId in it },
+                                    onClick = { onGoodsClick(item) }
+                                )
+                            }
+                        }
+                        repeat(gridColumns - rowItems.size) {
+                            Box(modifier = Modifier.weight(1f))
                         }
                     }
-                    repeat(gridColumns - rowItems.size) {
-                        Box(modifier = Modifier.weight(1f))
+                    if (rowIndex < rows.lastIndex && !isSeriesStartRow(rows, rowIndex + 1)) {
+                        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
-                if (rowIndex < rows.lastIndex && !isSeriesStartRow(rows, rowIndex + 1)) {
-                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                }
             }
-        }
-    } else {
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
-            itemsIndexed(goods) { index, item ->
-                GoodsListItem(
-                    imgPath = item.imgPath,
-                    series = item.series,
-                    chara = item.chara,
-                    category = item.category,
-                    price = item.price,
-                    isGotten = item.isGotten,
-                    gottenStatus = item.status.asGottenStatus(),
-                    memo = item.memo,
-                    quantity = item.quantity,
-                    selected = selectedIds?.let { item.fanGoodsId in it },
-                    onClick = { onGoodsClick(item) }
-                )
-                if (index < goods.lastIndex) {
-                    if (isSeriesStart(goods, index + 1)) SeriesBoundaryDivider()
-                    else HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = contentPadding) {
+                itemsIndexed(goods) { index, item ->
+                    GoodsListItem(
+                        imgPath = item.imgPath,
+                        series = item.series,
+                        chara = item.chara,
+                        category = item.category,
+                        price = item.price,
+                        isGotten = item.isGotten,
+                        gottenStatus = item.status.asGottenStatus(),
+                        memo = item.memo,
+                        quantity = item.quantity,
+                        selected = selectedIds?.let { item.fanGoodsId in it },
+                        onClick = { onGoodsClick(item) }
+                    )
+                    if (index < goods.lastIndex) {
+                        if (isSeriesStart(goods, index + 1)) SeriesBoundaryDivider()
+                        else HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
         }
     }
+    }
+
 }

@@ -144,7 +144,10 @@ private fun BetrayGenreListScreen(onBack: () -> Unit, onOpen: (BetrayGenreEntity
 
     // 순서 변경 중: 장르를 끌어 옮긴다. 손을 떼면 그 순서를 저장한다. 뒤로 가기는 순서 변경만 끝낸다.
     BackHandler(enabled = reordering) { reordering = false }
-    val gridState = rememberLazyGridState()
+    // 보기(배경 / 아이콘)마다 따로 둔다. 바꿀 때 두 목록이 잠깐 함께 그려지므로 한 상태를 같이 쓰면 안 된다.
+    val backgroundGridState = rememberLazyGridState()
+    val iconGridState = rememberLazyGridState()
+    val gridState = if (viewMode == GenreViewMode.GRID) backgroundGridState else iconGridState
     // 끄는 동안 보일 순서. 끄는 손이 같은 상태를 계속 보도록 한 번만 만들고, 저장된 목록이 바뀌면 맞춘다.
     var order by remember { mutableStateOf(rows.orEmpty()) }
     var dragId by remember { mutableStateOf<Int?>(null) }
@@ -185,13 +188,17 @@ private fun BetrayGenreListScreen(onBack: () -> Unit, onOpen: (BetrayGenreEntity
         TopBar(
             title = "배신 굿즈",
             subtitle = "다른 장르의 굿즈를 따로 모아 둡니다",
-            onBack = onBack,
+            // 순서 변경 중에는 뒤로 가기처럼 순서 변경만 끝낸다
+            onBack = { if (reordering) { endDrag(); reordering = false } else onBack() },
             actions = {
-                // 장르 추가: 새로 만들기 / 복구(장르 마이페이지에서 추출한 파일)
+                // 장르 추가: 새로 만들기 / 복구(장르 마이페이지에서 추출한 파일). 순서 변경 중에는 막는다.
                 Box {
                     var addMenu by remember { mutableStateOf(false) }
-                    IconButton(onClick = { addMenu = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "장르 추가", tint = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = { addMenu = true }, enabled = !reordering) {
+                        Icon(
+                            Icons.Default.Add, contentDescription = "장르 추가",
+                            tint = if (reordering) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else MaterialTheme.colorScheme.primary
+                        )
                     }
                     DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
                         DropdownMenuItem(
@@ -218,9 +225,11 @@ private fun BetrayGenreListScreen(onBack: () -> Unit, onOpen: (BetrayGenreEntity
                 modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // 순서 변경 중에는 보기를 바꾸지 못한다(끄는 중인 격자가 바뀌지 않게)
                 GenreViewToggle(
                     mode = viewMode,
-                    onMode = { vm.setViewMode(it) }
+                    onMode = { vm.setViewMode(it) },
+                    enabled = !reordering
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (list.size >= 2) {
@@ -239,58 +248,65 @@ private fun BetrayGenreListScreen(onBack: () -> Unit, onOpen: (BetrayGenreEntity
                 title = "아직 장르가 없습니다",
                 message = "오른쪽 위 '+'로 새 장르를 만들거나 백업에서 복구하세요"
             )
-            else -> LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = if (viewMode == GenreViewMode.GRID) 160.dp else 104.dp),
-                state = gridState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (viewMode == GenreViewMode.GRID) 12.dp else 8.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(if (reordering) order else list, key = { it.genre.genreId }) { row ->
-                    val id = row.genre.genreId
-                    val menu: @Composable () -> Unit = {
-                        if (reordering) {
-                            // 순서 변경 중에는 메뉴 대신 끌 수 있다는 표시
-                            Icon(
-                                Icons.Default.DragIndicator,
-                                contentDescription = "끌어서 옮기기",
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f), CircleShape)
-                                    .padding(4.dp)
+            // 배경 ↔ 아이콘 보기를 줌 애니메이션으로 넘긴다(ViewSwitchAnimation.kt). 아이콘 보기가 더 작게, 더 많이 보는 쪽이다.
+            else -> androidx.compose.animation.AnimatedContent(
+                targetState = viewMode,
+                transitionSpec = { com.example.wowagoodsproject.component.viewSwitchTransform(zoomOut = targetState == GenreViewMode.CIRCLE) },
+                label = "genreViewSwitch"
+            ) { mode ->
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = if (mode == GenreViewMode.GRID) 160.dp else 104.dp),
+                    state = if (mode == GenreViewMode.GRID) backgroundGridState else iconGridState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (mode == GenreViewMode.GRID) 12.dp else 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(if (reordering) order else list, key = { it.genre.genreId }) { row ->
+                        val id = row.genre.genreId
+                        val menu: @Composable () -> Unit = {
+                            if (reordering) {
+                                // 순서 변경 중에는 메뉴 대신 끌 수 있다는 표시
+                                Icon(
+                                    Icons.Default.DragIndicator,
+                                    contentDescription = "끌어서 옮기기",
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f), CircleShape)
+                                        .padding(4.dp)
+                                )
+                            } else GenreMenu(
+                                onEdit = { editId = id },
+                                onDelete = { deleteTarget = row }
                             )
-                        } else GenreMenu(
-                            onEdit = { editId = id },
-                            onDelete = { deleteTarget = row }
-                        )
-                    }
-                    val itemModifier = if (reordering && dragId == id) {
-                        val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }
-                        Modifier
-                            .zIndex(1f)
-                            .graphicsLayer {
-                                if (info != null) {
-                                    translationX = dragPointer.x - dragGrab.x - info.offset.x
-                                    translationY = dragPointer.y - dragGrab.y - info.offset.y
+                        }
+                        val itemModifier = if (reordering && dragId == id) {
+                            val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }
+                            Modifier
+                                .zIndex(1f)
+                                .graphicsLayer {
+                                    if (info != null) {
+                                        translationX = dragPointer.x - dragGrab.x - info.offset.x
+                                        translationY = dragPointer.y - dragGrab.y - info.offset.y
+                                    }
+                                    scaleX = 1.05f
+                                    scaleY = 1.05f
+                                    alpha = 0.9f
                                 }
-                                scaleX = 1.05f
-                                scaleY = 1.05f
-                                alpha = 0.9f
-                            }
-                    } else Modifier.animateItem()
-                    val dragModifier = if (reordering) Modifier.pointerInput(id) {
-                        detectDragGestures(
-                            onDragStart = { startDrag(id, it) },
-                            onDrag = { change, delta -> change.consume(); moveDrag(delta) },
-                            onDragEnd = { endDrag() },
-                            onDragCancel = { endDrag() }
-                        )
-                    } else Modifier
-                    val onClick: (() -> Unit)? = if (reordering) null else ({ onOpen(row.genre) })
-                    Box(modifier = itemModifier.then(dragModifier)) {
-                        if (viewMode == GenreViewMode.GRID) GenreGridCard(row, onClick = onClick, menu = menu)
-                        else GenreCircleCard(row, onClick = onClick, menu = menu)
+                        } else Modifier.animateItem()
+                        val dragModifier = if (reordering) Modifier.pointerInput(id) {
+                            detectDragGestures(
+                                onDragStart = { startDrag(id, it) },
+                                onDrag = { change, delta -> change.consume(); moveDrag(delta) },
+                                onDragEnd = { endDrag() },
+                                onDragCancel = { endDrag() }
+                            )
+                        } else Modifier
+                        val onClick: (() -> Unit)? = if (reordering) null else ({ onOpen(row.genre) })
+                        Box(modifier = itemModifier.then(dragModifier)) {
+                            if (mode == GenreViewMode.GRID) GenreGridCard(row, onClick = onClick, menu = menu)
+                            else GenreCircleCard(row, onClick = onClick, menu = menu)
+                        }
                     }
                 }
             }
@@ -303,16 +319,22 @@ private fun BetrayGenreListScreen(onBack: () -> Unit, onOpen: (BetrayGenreEntity
  * 아이콘 보기는 동그라미 셋 아이콘(마이페이지의 사람 아이콘과 헷갈리지 않게).
  */
 @Composable
-private fun GenreViewToggle(mode: GenreViewMode, onMode: (GenreViewMode) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun GenreViewToggle(mode: GenreViewMode, onMode: (GenreViewMode) -> Unit, enabled: Boolean = true) {
+    // 막혀 있으면(순서 변경 중) 흐리게
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.graphicsLayer { alpha = if (enabled) 1f else 0.38f }) {
         listOf(
             Triple(GenreViewMode.GRID, "배경", Icons.Default.GridView),
             Triple(GenreViewMode.CIRCLE, "아이콘", Icons.Default.Workspaces)
         ).forEach { (m, label, icon) ->
             val selected = mode == m
-            val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            val color by androidx.compose.animation.animateColorAsState(
+                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                androidx.compose.animation.core.tween(com.example.wowagoodsproject.component.VIEW_SWITCH_IN_MS),
+                label = "genreToggleColor"
+            )
             TextButton(
                 onClick = { onMode(m) },
+                enabled = enabled,
                 shape = RectangleShape,
                 contentPadding = PaddingValues(horizontal = 10.dp),
                 modifier = Modifier.semantics { contentDescription = if (m == GenreViewMode.GRID) "배경으로 보기" else "아이콘으로 보기" }

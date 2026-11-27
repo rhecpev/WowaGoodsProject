@@ -1,5 +1,6 @@
 package com.example.wowagoodsproject.screen.betray
 
+import com.example.wowagoodsproject.component.GridListSwitch
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
@@ -329,45 +330,51 @@ fun BetrayGoodsList(
         return
     }
     val padding = PaddingValues(bottom = 16.dp)
-    if (isGridMode) {
-        val rows = remember(goods, gridColumns) { chunkBySeries(goods, gridColumns) }
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = padding) {
-            itemsIndexed(rows) { rowIndex, rowItems ->
-                if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider()
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    rowItems.forEach { item ->
-                        Box(modifier = Modifier.weight(1f)) {
-                            GoodsGridItem(
-                                imgPath = item.imgPath, series = item.series, chara = item.chara,
-                                category = item.category, price = item.price, isGotten = item.isGotten,
-                                gottenStatus = item.status.asGottenStatus(), memo = item.memo, quantity = item.quantity,
-                                selected = selectedIds?.let { item.goodsId in it },
-                                onClick = { onClick(item) }
-                            )
+    // 보기 방식을 바꾸면 줌 애니메이션으로 넘긴다(ViewSwitchAnimation.kt)
+    com.example.wowagoodsproject.component.ProvideGoodsCardImageSize(gridColumns) {
+    GridListSwitch(isGridMode) { grid ->
+        if (grid) {
+            val rows = remember(goods, gridColumns) { chunkBySeries(goods, gridColumns) }
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = padding) {
+                itemsIndexed(rows) { rowIndex, rowItems ->
+                    if (isSeriesStartRow(rows, rowIndex)) SeriesBoundaryDivider()
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        rowItems.forEach { item ->
+                            Box(modifier = Modifier.weight(1f)) {
+                                GoodsGridItem(
+                                    imgPath = item.imgPath, series = item.series, chara = item.chara,
+                                    category = item.category, price = item.price, isGotten = item.isGotten,
+                                    gottenStatus = item.status.asGottenStatus(), memo = item.memo, quantity = item.quantity,
+                                    selected = selectedIds?.let { item.goodsId in it },
+                                    onClick = { onClick(item) }
+                                )
+                            }
                         }
+                        repeat(gridColumns - rowItems.size) { Box(modifier = Modifier.weight(1f)) }
                     }
-                    repeat(gridColumns - rowItems.size) { Box(modifier = Modifier.weight(1f)) }
-                }
-                if (rowIndex < rows.lastIndex && !isSeriesStartRow(rows, rowIndex + 1)) {
-                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    if (rowIndex < rows.lastIndex && !isSeriesStartRow(rows, rowIndex + 1)) {
+                        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
-        }
-    } else {
-        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = padding) {
-            itemsIndexed(goods, key = { _, g -> g.goodsId }) { index, item ->
-                GoodsListItem(
-                    imgPath = item.imgPath, series = item.series, chara = item.chara,
-                    category = item.category, price = item.price, isGotten = item.isGotten,
-                    gottenStatus = item.status.asGottenStatus(), memo = item.memo, quantity = item.quantity,
-                    selected = selectedIds?.let { item.goodsId in it },
-                    onClick = { onClick(item) }
-                )
-                if (index < goods.lastIndex) {
-                    if (isSeriesStart(goods, index + 1)) SeriesBoundaryDivider()
-                    else HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = padding) {
+                itemsIndexed(goods, key = { _, g -> g.goodsId }) { index, item ->
+                    GoodsListItem(
+                        imgPath = item.imgPath, series = item.series, chara = item.chara,
+                        category = item.category, price = item.price, isGotten = item.isGotten,
+                        gottenStatus = item.status.asGottenStatus(), memo = item.memo, quantity = item.quantity,
+                        selected = selectedIds?.let { item.goodsId in it },
+                        onClick = { onClick(item) }
+                    )
+                    if (index < goods.lastIndex) {
+                        if (isSeriesStart(goods, index + 1)) SeriesBoundaryDivider()
+                        else HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
         }
     }
+    }
+
 }

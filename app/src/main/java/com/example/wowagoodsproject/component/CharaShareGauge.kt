@@ -1,6 +1,5 @@
 package com.example.wowagoodsproject.component
 
-import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.layout.ContentScale
@@ -26,14 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.Layout
-import androidx.palette.graphics.Palette
-import coil.imageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
 import com.example.wowagoodsproject.db.character.CharaEntity
 import com.example.wowagoodsproject.ui.theme.AppStyles
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * 캐릭터마다 사진에서 뽑은 대표색. [order] 앞의 캐릭터부터 서로 헷갈리지 않게 정한다([assignDistinctColors]).
@@ -46,32 +39,20 @@ fun rememberCharaColors(order: List<String>, charas: List<CharaEntity>): State<M
     val context = LocalContext.current
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val urls = charas.associate { it.charaNm to it.charaUrl }
-    return produceState(initialValue = emptyMap(), order, urls, darkTheme) {
-        value = withContext(Dispatchers.IO) {
-            val candidates = order.associateWith { name ->
-                val url = urls[name].orEmpty()
-                if (url.isEmpty()) return@associateWith emptyList()
-                runCatching {
-                    val request = ImageRequest.Builder(context)
-                        .data(url)
-                        .size(96)
-                        .allowHardware(false) // Palette 가 픽셀을 읽으려면 소프트웨어 비트맵이어야 한다
-                        .build()
-                    val bitmap = ((context.imageLoader.execute(request) as? SuccessResult)
-                        ?.drawable as? BitmapDrawable)?.bitmap ?: return@runCatching emptyList()
-                    val p = Palette.from(bitmap).generate()
-                    // 많이 쓰인 색이 먼저. 회색 계열은 색이 있는 후보 뒤로.
-                    p.swatches
-                        .sortedWith(
-                            compareBy<Palette.Swatch> { argbToHsl(it.rgb).s < GREY_SATURATION }
-                                .thenByDescending { it.population }
-                        )
-                        .map { it.rgb }
-                        .distinct()
-                }.getOrDefault(emptyList())
-            }
-            assignDistinctColors(order, candidates, darkTheme).mapValues { Color(it.value) }
-        }
+    // 저장해 둔 색 후보가 모두 있으면 처음부터 그 색으로 그린다(회색으로 기다리지 않는다). CharaColorCache 참고.
+    val ready = androidx.compose.runtime.remember(order, urls, darkTheme) {
+        val cached = order.associateWith { name -> urls[name].orEmpty().let { if (it.isEmpty()) emptyList() else CharaColorCache.cached(it) } }
+        if (cached.values.any { it == null }) emptyMap()
+        else assignDistinctColors(order, cached.mapValues { it.value.orEmpty() }, darkTheme).mapValues { Color(it.value) }
+    }
+    return produceState(initialValue = ready, order, urls, darkTheme) {
+        // 보이는 캐릭터가 바뀌었을 때도 저장값으로 다 되면 바로 그 색으로
+        value = ready
+        if (order.isEmpty()) return@produceState
+        // IO 에서 사진이 그대로인지 확인하고, 없거나 바뀐 것만 사진에서 뽑아 저장한다(다음부터는 바로 뜬다).
+        // 모두 그대로면 같은 색이 나와 다시 그리지 않는다.
+        val candidates = order.associateWith { name -> CharaColorCache.candidates(context, urls[name].orEmpty()) }
+        value = assignDistinctColors(order, candidates, darkTheme).mapValues { Color(it.value) }
     }
 }
 

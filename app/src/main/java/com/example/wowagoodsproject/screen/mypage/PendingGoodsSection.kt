@@ -337,13 +337,13 @@ fun PendingGoodsList(
     Column(modifier = modifier.fillMaxSize()) {
         if (selectionMode && showBulkButtons) PendingBulkButtons(bulk)
 
-        if (isGridMode) {
+        // 보기 방식을 바꾸면 줌 애니메이션으로 넘긴다(ViewSwitchAnimation.kt)
+        com.example.wowagoodsproject.component.GridListSwitch(isGridMode, Modifier.fillMaxWidth().weight(1f)) { grid ->
+            if (grid) {
             // 시리즈가 바뀌면 새 줄에서 시작하고, 그 줄 위에 이중선을 둔다.
             val rows = remember(items, gridColumns) { chunkBySeries(items, gridColumns) }
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = AppStyles.paddingMedium,
                     end = AppStyles.paddingMedium,
@@ -374,30 +374,28 @@ fun PendingGoodsList(
                     }
                 }
             }
-            return@Column
-        }
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(
-                start = AppStyles.paddingLarge,
-                end = AppStyles.paddingLarge,
-                top = 4.dp,
-                bottom = AppStyles.paddingMedium
-            )
-        ) {
-            // 줄마다 아래 선이 있어 줄 사이 간격은 두지 않는다. 앞 굿즈와 시리즈가 다르면 그 줄 위에 이중선을 둔다.
-            itemsIndexed(items, key = { _, goods -> pendingKey(goods) }) { index, goods ->
-                if (isSeriesStart(items, index)) SeriesBoundaryDivider(verticalPadding = 4.dp)
-                PendingGoodsRow(
-                    goods = goods,
-                    isFanGoods = isFanItem(goods),
-                    selected = if (!selectionMode) null else isSelected(goods),
-                    onClick = { if (selectionMode) onToggle(goods) else onOpenGoods(goods) },
-                    onToggleShipping = { onToggleShipping(goods) }
+            } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = AppStyles.paddingLarge,
+                    end = AppStyles.paddingLarge,
+                    top = 4.dp,
+                    bottom = AppStyles.paddingMedium
                 )
+            ) {
+                // 줄마다 아래 선이 있어 줄 사이 간격은 두지 않는다. 앞 굿즈와 시리즈가 다르면 그 줄 위에 이중선을 둔다.
+                itemsIndexed(items, key = { _, goods -> pendingKey(goods) }) { index, goods ->
+                    if (isSeriesStart(items, index)) SeriesBoundaryDivider(verticalPadding = 4.dp)
+                    PendingGoodsRow(
+                        goods = goods,
+                        isFanGoods = isFanItem(goods),
+                        selected = if (!selectionMode) null else isSelected(goods),
+                        onClick = { if (selectionMode) onToggle(goods) else onOpenGoods(goods) },
+                        onToggleShipping = { onToggleShipping(goods) }
+                    )
+                }
+            }
             }
         }
     }

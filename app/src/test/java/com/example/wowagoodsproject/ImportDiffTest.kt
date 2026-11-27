@@ -1,8 +1,5 @@
 package com.example.wowagoodsproject
 
-import com.example.wowagoodsproject.component.GoodsStatus
-import com.example.wowagoodsproject.screen.mypage.GoodsChangeRow
-import com.example.wowagoodsproject.screen.mypage.goodsChanges
 import com.example.wowagoodsproject.screen.mypage.DiffRow
 import com.example.wowagoodsproject.screen.mypage.FavRow
 import com.example.wowagoodsproject.screen.mypage.countByChara
@@ -35,19 +32,27 @@ class ImportDiffTest {
     }
 
     @Test
-    fun `굿즈는 내용으로 짝지어 상태 바뀜, 생김, 없어짐만 남긴다`() {
-        // (내용, 상태)
-        val before = listOf("a" to GoodsStatus.GOTTEN, "a" to GoodsStatus.PENDING, "b" to GoodsStatus.GOTTEN, "c" to GoodsStatus.NOT_GOTTEN)
-        val after = listOf("a" to GoodsStatus.PENDING, "a" to GoodsStatus.PENDING, "c" to GoodsStatus.NOT_GOTTEN, "d" to GoodsStatus.GOTTEN)
-        val rows = goodsChanges(before, after, { it.first }, { it.second }) { g, b, a -> GoodsChangeRow(g.first, "", "", b, a) }
-        assertEquals(
-            listOf(
-                GoodsChangeRow("a", "", "", GoodsStatus.GOTTEN, GoodsStatus.PENDING),
-                GoodsChangeRow("d", "", "", null, GoodsStatus.GOTTEN),
-                GoodsChangeRow("b", "", "", GoodsStatus.GOTTEN, null)
-            ),
-            rows
+    fun `수량만 바뀌어도 바뀌는 굿즈, 없어지는 굿즈는 불러온 뒤 상태가 없다`() {
+        val gotten = com.example.wowagoodsproject.component.GoodsStatus.GOTTEN
+        fun g(name: String, qty: Int) = com.example.wowagoodsproject.screen.mypage.ReviewGoods(
+            official = false, series = name, chara = "", category = "", price = "", memo = "", status = gotten, quantity = qty
         )
+        // 지금: (이름, 수량)
+        val now = listOf("a" to 3, "b" to 2, "c" to 1)
+        val rows = com.example.wowagoodsproject.screen.mypage.withChanges(
+            file = listOf(g("a", 1) to "a", g("b", 2) to "b"),
+            now = now,
+            key = { it.first },
+            status = { gotten },
+            quantity = { it.second },
+            gone = { g(it.first, it.second).copy(change = gotten to null) }
+        )
+        val a = rows.first { it.series == "a" }
+        assertEquals(gotten to gotten, a.change)
+        assertEquals(3, a.beforeQuantity)
+        assertEquals(null, rows.first { it.series == "b" }.change)
+        val c = rows.first { it.series == "c" }
+        assertEquals(null, c.afterStatus)
     }
 
     @Test

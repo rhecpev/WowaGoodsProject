@@ -83,7 +83,15 @@ fun GoodsDetailDialog(
     quantity: Int = 1,
     onQuantityChange: ((Int) -> Unit)? = null,
     /** 어떤 굿즈인지(종류·id). 내용이 같은 두 굿즈 사이를 옮겨도 화면 상태를 새로 시작하게 한다. [goodsIdentity] */
-    itemKey: Any? = null
+    itemKey: Any? = null,
+    /**
+     * 보기 전용(불러오기 확인 등). 상태 버튼·수량·구매 정보 수정·수정/삭제·시리즈 이동을 숨기고,
+     * 상태 자리에 [statusChange](지금 → 불러온 뒤, 한쪽이 null 이면 그쪽에 없음) 또는 지금 상태를 보여 준다.
+     */
+    readOnly: Boolean = false,
+    statusChange: Pair<GoodsStatus?, GoodsStatus?>? = null,
+    /** 보기 전용: [statusChange] 의 지금 수량([quantity] 는 불러온 뒤 수량) */
+    beforeQuantity: Int = quantity
 ){
 
     val encodedPath = encodeGoodsImagePath(imgPath)
@@ -186,7 +194,7 @@ fun GoodsDetailDialog(
         ) {
             HeroImage(
                 model = imageModel,
-                status = shownStatus,
+                status = if (readOnly) statusChange?.let { it.second ?: it.first } ?: shownStatus else shownStatus,
                 onClick = { showFullImage = true },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -212,10 +220,13 @@ fun GoodsDetailDialog(
                 setComponentTotal = setComponentTotal,
                 setComponentGotten = setComponentGotten,
                 onSetClick = onSetClick,
-                showDelete = showDelete,
+                showDelete = showDelete && !readOnly,
                 onDeleteClick = { showDeleteConfirm = true },
-                onEditClick = onEdit?.let { e -> { onDismiss(); e() } },
+                onEditClick = if (readOnly) null else onEdit?.let { e -> { onDismiss(); e() } },
                 onSeriesClick = onSeriesClick,
+                readOnly = readOnly,
+                statusChange = statusChange,
+                beforeQuantity = beforeQuantity,
                 // 정보가 화면에 다 들어가면 그 높이만큼만 차지하고, 넘칠 때만 남은 높이 안에서 스크롤한다.
                 modifier = Modifier
                     .weight(1f, fill = false)
@@ -223,6 +234,39 @@ fun GoodsDetailDialog(
                     .verticalScroll(androidx.compose.runtime.key(identity) { rememberScrollState() })
             )
         }
+    }
+}
+
+/**
+ * 보기 전용 상태: "보유 상태" 제목 아래 지금 → 불러온 뒤 배지(바뀌지 않으면 지금 상태 하나)와 한 줄 설명.
+ * 상태 버튼 자리에 같은 구역 모양(제목 + 선)으로 둔다.
+ */
+@Composable
+private fun ReadOnlyStatus(status: GoodsStatus, change: Pair<GoodsStatus?, GoodsStatus?>?, quantity: Int, beforeQuantity: Int) {
+    fun label(s: GoodsStatus) = when (s) {
+        GoodsStatus.GOTTEN -> "보유"
+        GoodsStatus.PENDING -> "구매예정"
+        GoodsStatus.NOT_GOTTEN -> "미보유"
+    }
+    SectionTitle("보유 상태")
+    LinedSection {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (change != null) StatusChangeBadges(change.first?.asGottenStatus(), change.second?.asGottenStatus(), quantity, beforeQuantity)
+            else GottenStatusBadge(status = status.asGottenStatus(), quantity = quantity)
+        }
+    }
+    change?.let { (b, a) ->
+        Text(
+            when {
+                b == null -> "파일에만 있어 새로 추가돼요"
+                a == null -> "파일에 없어 삭제돼요"
+                b == a -> "수량이 ${beforeQuantity}개 → ${quantity}개로 바뀌어요"
+                else -> "${label(b)} → ${label(a)}${if (a == GoodsStatus.PENDING) "으로" else "로"} 바뀌어요"
+            },
+            style = AppStyles.textCardSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp)
+        )
     }
 }
 
@@ -259,7 +303,7 @@ private fun HeroImage(
             .clickable(enabled = model != null, onClick = onClick)
     ) {
         Image(
-            painter = rememberAsyncImagePainter(model = model),
+            painter = rememberAsyncImagePainter(model = rememberDetailImageRequest(model)),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
@@ -299,13 +343,16 @@ private fun DetailBody(
     onDeleteClick: () -> Unit,
     onEditClick: (() -> Unit)?,
     onSeriesClick: (String) -> Unit,
+    readOnly: Boolean = false,
+    statusChange: Pair<GoodsStatus?, GoodsStatus?>? = null,
+    beforeQuantity: Int = quantity,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        // 시리즈명은 링크처럼 보여주고 누르면 해당 시리즈 화면으로 이동한다.
+        // 시리즈명은 링크처럼 보여주고 누르면 해당 시리즈 화면으로 이동한다(보기 전용은 이동하지 않는다).
         Row(
             modifier = Modifier
-                .clickable { onSeriesClick(series) }
+                .then(if (readOnly) Modifier else Modifier.clickable { onSeriesClick(series) })
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -317,7 +364,7 @@ private fun DetailBody(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            Icon(
+            if (!readOnly) Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "시리즈로 이동",
                 tint = MaterialTheme.colorScheme.primary,
@@ -366,13 +413,18 @@ private fun DetailBody(
                 LineDivider()
                 InfoLine(label = "메모", value = memo)
             }
+            if (readOnly && quantity > 1 && (statusChange?.second ?: status) != GoodsStatus.NOT_GOTTEN) {
+                LineDivider()
+                InfoLine(label = "수량", value = "${quantity}개")
+            }
         }
 
         Spacer(modifier = Modifier.height(SECTION_GAP))
-        StatusSegmentedButtons(current = status, onSelect = onSelectStatus)
+        if (readOnly) ReadOnlyStatus(status, statusChange, quantity, beforeQuantity)
+        else StatusSegmentedButtons(current = status, onSelect = onSelectStatus)
 
         // 수량은 가지고 있거나 살 예정인 굿즈에만 의미가 있다.
-        if (onQuantityChange != null && status != GoodsStatus.NOT_GOTTEN) {
+        if (!readOnly && onQuantityChange != null && status != GoodsStatus.NOT_GOTTEN) {
             Spacer(modifier = Modifier.height(12.dp))
             QuantityStepper(quantity = quantity, onChange = onQuantityChange)
         }
@@ -713,5 +765,22 @@ fun DetailRow(
                     else Modifier
                 )
         )
+    }
+}
+
+/**
+ * 상세 큰 사진 요청. 인터넷 사진이면 목록에서 이미 받은 작은 사진(메모리)을 먼저 보여 주고, 큰 사진이 오면 바꿔 끼운다.
+ * 목록 카드는 같은 주소로 작게 읽어 두므로([rememberGoodsCardPainter]) 그 메모리 열쇠를 자리 사진으로 쓴다.
+ */
+@Composable
+private fun rememberDetailImageRequest(model: Any?): Any? {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(model) {
+        val url = model as? String
+        if (url == null || !url.startsWith("http")) model
+        else coil.request.ImageRequest.Builder(context)
+            .data(url)
+            .placeholderMemoryCacheKey(coil.memory.MemoryCache.Key(url))
+            .build()
     }
 }

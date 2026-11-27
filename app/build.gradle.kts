@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -54,6 +55,9 @@ ksp {
 }
 
 dependencies {
+    // 베이스라인 프로필: 설치할 때(또는 첫 실행 뒤) 자주 쓰는 코드를 미리 컴파일해 둔다. 프로필은 :baselineprofile 이 만든다.
+    implementation(libs.androidx.profileinstaller)
+    "baselineProfile"(project(":baselineprofile"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

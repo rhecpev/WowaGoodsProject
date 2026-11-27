@@ -59,8 +59,7 @@ class ImportLayoutShots {
             listOf(
                 ImportSection(ImportPart.OFFICIAL, "보유 120 · 구매예정 8", "보유 131 · 구매예정 9", changed = true,
                     details = listOf("상태가 바뀌는 굿즈 12개"), rows = rows, pendingRows = rows.take(3)),
-                ImportSection(ImportPart.FAN, "40개", "43개", changed = true, rows = rows.take(4),
-                    goodsRows = (1..6).map { GoodsChangeRow("코믹 · 아크릴 $it", "치사", "", GoodsStatus.PENDING, GoodsStatus.GOTTEN) }),
+                ImportSection(ImportPart.FAN, "40개", "43개", changed = true, rows = rows.take(4)),
                 ImportSection(ImportPart.FAVORITES, "4명", "5명", changed = true,
                     favRows = charas.mapIndexed { i, n -> FavRow(n, "", i < 4, i < 5) }),
                 ImportSection(ImportPart.BETRAY, "장르 1개 · 굿즈 2개", "장르 2개 · 굿즈 9개", changed = true,

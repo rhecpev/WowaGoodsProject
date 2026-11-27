@@ -646,8 +646,6 @@ fun MyPageScreen(
                 SettingsRow(
                     icon = Icons.Default.ShoppingCart,
                     title = "구매예정 굿즈",
-                    subtitle = if (pendingTotal > 0) "구매일·구입처를 정리해 두세요"
-                    else "구매예정으로 표시한 굿즈가 없습니다",
                     trailing = if (pendingTotal > 0) {
                         { StatusPill(text = "${pendingTotal}개", color = AppStyles.colorPending) }
                     } else null,
@@ -658,8 +656,6 @@ fun MyPageScreen(
                 SettingsRow(
                     icon = Icons.Default.ChangeCircle,
                     title = "변경된 굿즈",
-                    subtitle = if (changedGoodsCount > 0) "확인하지 않은 변경이 있습니다"
-                    else "확인할 변경이 없습니다",
                     trailing = if (changedGoodsCount > 0) {
                         { StatusPill(text = "${changedGoodsCount}개", color = MaterialTheme.colorScheme.primary) }
                     } else null,
@@ -670,7 +666,6 @@ fun MyPageScreen(
                 SettingsRow(
                     icon = Icons.Default.Diversity3,
                     title = "배신 굿즈",
-                    subtitle = "다른 장르의 굿즈를 장르별로 따로 모아 두기",
                     onClick = onNavigateToBetray
                 )
             }
@@ -678,7 +673,6 @@ fun MyPageScreen(
                 SettingsRow(
                     icon = Icons.Default.FileDownload,
                     title = "데이터 추출",
-                    subtitle = "보유 현황·2차창작·선호 캐릭터를 백업 파일로 저장",
                     showChevron = false,
                     // 바로 추출하지 않고 담길 내용을 먼저 보여 준다. 빈 백업을 모르고 넘기지 않게.
                     onClick = {
@@ -691,7 +685,6 @@ fun MyPageScreen(
                 SettingsRow(
                     icon = Icons.Default.FileUpload,
                     title = "데이터 입력",
-                    subtitle = "백업 파일(zip)에서 불러오기",
                     showChevron = false,
                     // 메신저·클라우드로 받은 zip 은 형식이 다르게 붙어 있어 고를 수 없게 되므로 넓게 받는다.
                     // 백업인지는 불러올 때 내용으로 확인한다.
@@ -751,7 +744,6 @@ fun MyPageScreen(
                     icon = Icons.Default.CleaningServices,
                     title = "용량 정리",
                     titleBadge = maxBytes?.takeIf { it > 0 }?.let { "최대 ${StorageCleaner.formatBytes(it)} 정리 가능" },
-                    subtitle = "쌓인 기록·캐시 중 지워도 되는 것만 골라 지우기",
                     onClick = { showStorageSheet = true; viewModel.scanStorage(context) }
                 )
             }
@@ -783,8 +775,6 @@ fun MyPageScreen(
                 SettingsRow(
                     icon = Icons.Default.NewReleases,
                     title = "변경점",
-                    subtitle = if (ReleaseNotes.forCurrentVersion() != null) "v${ReleaseNotes.currentVersion}에서 달라진 점 · 지난 버전"
-                    else "버전별로 달라진 점",
                     onClick = onNavigateToReleaseNotes
                 )
             }

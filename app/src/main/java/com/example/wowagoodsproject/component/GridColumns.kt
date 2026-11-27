@@ -59,7 +59,18 @@ fun rememberGridColumns(listModeViewModel: ListModeViewModel, widthSizeClass: Wi
 @Composable
 fun GridColumnsBar(listModeViewModel: ListModeViewModel, widthSizeClass: WindowWidthSizeClass) {
     val isGridMode by listModeViewModel.isGridMode.collectAsState()
-    if (!isGridMode) return
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isGridMode,
+        enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(VIEW_SWITCH_IN_MS)) +
+            androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(VIEW_SWITCH_IN_MS)),
+        exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(VIEW_SWITCH_OUT_MS)) +
+            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(VIEW_SWITCH_OUT_MS))
+    ) { GridColumnsBarContent(listModeViewModel, widthSizeClass) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GridColumnsBarContent(listModeViewModel: ListModeViewModel, widthSizeClass: WindowWidthSizeClass) {
     val columns = rememberGridColumns(listModeViewModel, widthSizeClass)
     val active = MaterialTheme.colorScheme.primary
     val inactive = MaterialTheme.colorScheme.outlineVariant

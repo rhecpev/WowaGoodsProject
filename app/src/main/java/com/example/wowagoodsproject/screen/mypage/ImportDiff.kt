@@ -150,40 +150,6 @@ internal fun <T> countByChara(items: List<T>, chara: (T) -> String): Map<String,
     return m
 }
 
-/** 굿즈 한 개의 Before / After 상태. null 이면 그쪽에 없음(새로 생김 / 없어짐) */
-data class GoodsChangeRow(val name: String, val sub: String, val avatar: String, val before: GoodsStatus?, val after: GoodsStatus?)
-
-/**
- * 굿즈를 내용([key]: 상태를 뺀 시리즈·캐릭터·종류 등)으로 짝지어, 상태가 바뀌거나 생기거나 없어지는 굿즈만 고른다.
- * 같은 내용 굿즈가 여러 개면 상태가 같은 것끼리 먼저 짝짓는다. 순서: 상태 바뀜 → 새로 생김 → 없어짐.
- */
-internal fun <T> goodsChanges(
-    before: List<T>,
-    after: List<T>,
-    key: (T) -> String,
-    status: (T) -> GoodsStatus,
-    row: (item: T, before: GoodsStatus?, after: GoodsStatus?) -> GoodsChangeRow
-): List<GoodsChangeRow> {
-    val changed = mutableListOf<GoodsChangeRow>()
-    val added = mutableListOf<GoodsChangeRow>()
-    val removed = mutableListOf<GoodsChangeRow>()
-    val b = before.groupBy(key)
-    val a = after.groupBy(key)
-    (b.keys + a.keys).distinct().forEach { k ->
-        val restB = b[k].orEmpty().toMutableList()
-        val restA = mutableListOf<T>()
-        a[k].orEmpty().forEach { item ->
-            val i = restB.indexOfFirst { status(it) == status(item) }
-            if (i >= 0) restB.removeAt(i) else restA += item
-        }
-        val pairs = minOf(restB.size, restA.size)
-        for (i in 0 until pairs) changed += row(restA[i], status(restB[i]), status(restA[i]))
-        restA.drop(pairs).forEach { added += row(it, null, status(it)) }
-        restB.drop(pairs).forEach { removed += row(it, status(it), null) }
-    }
-    return changed + added + removed
-}
-
 /** 선호 캐릭터 Before / After. 파일 순서대로, 그다음 파일에서 빠지는 캐릭터 */
 internal fun favRows(before: List<String>, after: List<String>, avatar: (String) -> String): List<FavRow> =
     favRows(before, after, emptyList(), avatar)
@@ -296,59 +262,6 @@ private fun SummaryCell(label: String, value: String, before: Boolean, modifier:
         )
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = if (before) FontWeight.Normal else FontWeight.Bold)
     }
-}
-
-/** 굿즈 | Before 상태 | → | After 상태. 많으면 앞의 [limit]개만 보이고 나머지는 개수로 */
-@Composable
-internal fun GoodsChangeTable(label: String, rows: List<GoodsChangeRow>, limit: Int = 50) {
-    if (rows.isEmpty()) return
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-        DiffHeader(label)
-        rows.take(limit).forEach { GoodsChangeRowItem(it) }
-        if (rows.size > limit) {
-            Text("외 ${rows.size - limit}개", style = AppStyles.textCardSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-        }
-    }
-}
-
-/** 굿즈 | Before 상태 | → | After 상태 한 줄 */
-@Composable
-internal fun GoodsChangeRowItem(r: GoodsChangeRow) {
-    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-        Row(modifier = Modifier.weight(1f).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            CharaAvatar(r.avatar, 28)
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(r.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (r.sub.isNotBlank()) {
-                    Text(r.sub, style = AppStyles.textCardSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-        ZoneCell(before = true) { StatusText(r.before, strong = false) }
-        Box(modifier = Modifier.width(DIFF_WIDTH), contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-        }
-        ZoneCell(before = false) { StatusText(r.after, strong = true) }
-    }
-}
-
-@Composable
-private fun StatusText(status: GoodsStatus?, strong: Boolean) {
-    val (text, color) = when (status) {
-        null -> "없음" to MaterialTheme.colorScheme.outline
-        GoodsStatus.GOTTEN -> "보유" to AppStyles.colorGotten
-        GoodsStatus.PENDING -> "구매예정" to AppStyles.colorPending
-        GoodsStatus.NOT_GOTTEN -> "미보유" to MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Text(
-        text,
-        style = AppStyles.textCardSmall,
-        fontWeight = if (strong && status != null) FontWeight.Bold else FontWeight.Normal,
-        color = color,
-        textAlign = TextAlign.Center,
-        maxLines = 1
-    )
 }
 
 /** 캐릭터 | Before 하트 | → | After 하트. 선호면 꽉 찬 하트, 아니면 빈 하트 */

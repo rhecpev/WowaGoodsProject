@@ -370,10 +370,16 @@ private fun SeriesChoiceGrid(
     scopeGoods: List<GoodsItem>? = null,
     useSeriesDb: Boolean = true
 ) {
+    // 시리즈 DB 를 다 읽기 전(null)에는 그리지 않는다. 읽기 전 순서(가나다)로 한 번 그렸다가 DB 순서(최신순)로 바뀌면
+    // 목록이 처음 보이던 칸을 따라가 스크롤이 중간쯤에 가 있게 된다.
     val allSeries by remember { App.seriesDatabase.seriesDao().getAllFlow() }
-        .collectAsState(initial = emptyList())
+        .collectAsState(initial = null)
+    if (useSeriesDb && allSeries == null) {
+        Box(modifier = modifier.fillMaxWidth())
+        return
+    }
     val seriesByName = remember(allSeries, useSeriesDb) {
-        if (useSeriesDb) allSeries.associateBy { it.seriesNm.trim() } else emptyMap()
+        if (useSeriesDb) allSeries.orEmpty().associateBy { it.seriesNm.trim() } else emptyMap()
     }
     // 시리즈 DB에 그림이 없는 시리즈는 그 시리즈로 등록된 굿즈 사진(선호 우선순위)으로 채운다.
     val goodsCovers by rememberCoverImages(seriesNames, scopeGoods, ::seriesCoverImages)

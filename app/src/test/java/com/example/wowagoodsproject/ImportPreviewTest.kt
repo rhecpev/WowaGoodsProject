@@ -190,4 +190,25 @@ class ImportPreviewTest {
         assertTrue("게이지가 오른다", progress.size >= 2 && progress.zipWithNext().all { (a, b) -> b >= a })
         assertEquals(1f, progress.last())
     }
+
+    @Test
+    fun 캐릭터별_굿즈_확인에_지금_보유인데_파일에_없는_굿즈가_보유에서_미보유로_나온다() = runBlocking {
+        // 파일을 만든 뒤 기기에서 금희 굿즈를 보유로, 비공식 굿즈 하나를 더한다(파일에는 둘 다 없다)
+        goods.getAll().first { it.goodsChara == "금희" }.let { goods.update(it.copy(goodsStatus = "GOTTEN", goodsIsGotten = true)) }
+        fan.insert(FanGoodsEntity(fanGoodsSeries = "새 행사", fanGoodsChara = "금희", fanGoodsStatus = "GOTTEN", fanGoodsIsGotten = true))
+        val rows = plan().report.goods
+        val lost = rows.single { it.official && it.chara == "금희" }
+        assertEquals(GoodsStatus.GOTTEN to GoodsStatus.NOT_GOTTEN, lost.change)
+        assertEquals(GoodsStatus.NOT_GOTTEN, lost.status)
+        val gone = rows.single { !it.official && it.series == "새 행사" }
+        assertEquals("비공식은 없어진다", GoodsStatus.GOTTEN to null, gone.change)
+        // 그대로인 굿즈는 바뀜 표시가 없다
+        assertNull(rows.single { it.official && it.chara == "장리" }.change)
+        assertNull(rows.single { !it.official && it.series == "코믹" }.change)
+        // 배신 굿즈: 파일 장르와 같은 이름 장르에 파일에 없는 굿즈를 더하면 '없어짐'
+        betray.insertGoods(BetrayGoodsEntity(genreId = genshin, goodsChara = "나히다", goodsStatus = GoodsStatus.PENDING.name))
+        val genre = plan().report.betrayReview.single { it.genreName == "원신" }
+        assertEquals(GoodsStatus.PENDING to null, genre.goods.single { it.chara == "나히다" }.change)
+        assertNull(genre.goods.single { it.chara == "푸리나" }.change)
+    }
 }

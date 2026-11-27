@@ -38,12 +38,27 @@ class App : Application(), ImageLoaderFactory {
                 .maxSizePercent(0.20) // 앱이 쓸 수 있는 메모리의 20%
                 .build()
         }
+        // 한 서버에서 동시에 받는 사진 수. 통신 라이브러리(OkHttp) 기본값은 5개라, 시리즈를 처음 열어 사진 20장이 필요하면
+        // 5장씩 차례로 받느라 늦게 뜬다. 굿즈 사진은 모두 같은 서버(GitHub)에서 오므로 넉넉히 늘린다.
+        .okHttpClient {
+            okhttp3.OkHttpClient.Builder()
+                .dispatcher(okhttp3.Dispatcher().apply {
+                    maxRequests = 64
+                    maxRequestsPerHost = IMAGE_MAX_REQUESTS_PER_HOST
+                })
+                .build()
+        }
         .build()
 
 
     companion object {
-        /** 이미지 디스크 캐시 한도 100MB */
-        private const val IMAGE_DISK_CACHE_BYTES = 100L * 1024 * 1024
+        /**
+         * 이미지 디스크 캐시 한도 400MB. 굿즈 사진 전체가 365MB 정도라, 한 번 본 사진이 밀려나 다시 받는 일이 거의 없게 한다.
+         * (예전 100MB 는 여기저기 보다 보면 본 사진을 다시 받았다.) 마이페이지 '용량 정리'로 비울 수 있다.
+         */
+        private const val IMAGE_DISK_CACHE_BYTES = 400L * 1024 * 1024
+        /** 한 서버에서 동시에 받는 사진 수(OkHttp 기본 5) */
+        private const val IMAGE_MAX_REQUESTS_PER_HOST = 16
 
         lateinit var database: GoodsDatabase
         lateinit var fanDatabase: FanGoodsDatabase
@@ -151,6 +166,9 @@ class App : Application(), ImageLoaderFactory {
         ).build()
 
         DailySchedule.schedule(this)
+
+        // 마이페이지 캐릭터 색을 미리 준비한다(사진에서 뽑은 색 후보를 저장해 두고, 없는 것만 뒤에서 뽑는다)
+        com.example.wowagoodsproject.component.CharaColorCache.prewarm(this)
 
 
     }

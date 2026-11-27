@@ -24,3 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "WowaGoodsProject"
 include(":app")
+// 베이스라인 프로필(자주 쓰는 코드를 설치할 때 미리 컴파일) 만드는 테스트
+include(":baselineprofile")

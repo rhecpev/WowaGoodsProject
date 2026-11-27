@@ -11,14 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.rememberAsyncImagePainter
 import com.example.wowagoodsproject.ui.theme.AppStyles
 
 /** 그리드 칸 이미지의 가로:세로 비율 */
 private const val GRID_IMAGE_RATIO = 4f / 3f
 
 /** 칸이 이보다 좁으면(한 줄에 많이 놓았을 때) 글자를 빼고 이미지와 상태 점만 보여준다. */
-private val GRID_COMPACT_WIDTH = 72.dp
+internal val GRID_COMPACT_WIDTH = 72.dp
 
 @Composable
 fun GoodsGridItem(
@@ -32,13 +31,46 @@ fun GoodsGridItem(
     memo: String,
     quantity: Int = 1,
     selected: Boolean? = null,
+    /** 사진 칸에 붙일 것(보기 전환 애니메이션의 공유 요소 등) */
+    imageModifier: Modifier = Modifier,
+    /** 글자 칸에 붙일 것(보기 전환 때 글자를 늦게 보이게 하는 등) */
+    textModifier: Modifier = Modifier,
+    /**
+     * 좁은 칸(글자 없이 사진·상태 점만)인지. 목록이 한 번 재서 넘기면 칸마다 너비를 재지 않는다(그리는 시간이 줄어든다).
+     * null 이면 칸이 직접 잰다.
+     */
+    compact: Boolean? = null,
     onClick: () -> Unit = {}
 ){
     val encodedPath = encodeGoodsImagePath(imgPath)
     val status = gottenStatus ?: if (isGotten) GottenStatus.GOTTEN else GottenStatus.NOT_GOTTEN
 
+    if (compact != null) {
+        GridItemBody(encodedPath, series, chara, category, price, status, memo, quantity, selected, imageModifier, textModifier, compact, onClick)
+        return
+    }
     BoxWithConstraints {
-        val compact = maxWidth < GRID_COMPACT_WIDTH
+        GridItemBody(encodedPath, series, chara, category, price, status, memo, quantity, selected, imageModifier, textModifier, maxWidth < GRID_COMPACT_WIDTH, onClick)
+    }
+}
+
+@Composable
+private fun GridItemBody(
+    encodedPath: String,
+    series: String,
+    chara: String,
+    category: String,
+    price: String,
+    status: GottenStatus,
+    memo: String,
+    quantity: Int,
+    selected: Boolean?,
+    imageModifier: Modifier,
+    textModifier: Modifier,
+    compact: Boolean,
+    onClick: () -> Unit
+) {
+    run {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -53,13 +85,12 @@ fun GoodsGridItem(
                     .fillMaxWidth()
                     // 한 줄 개수를 바꿔도 칸 모양이 유지되도록 높이를 너비에 맞춘다.
                     .aspectRatio(GRID_IMAGE_RATIO)
+                    .then(imageModifier)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = rememberAsyncImagePainter(
-                        model = if (encodedPath.isNotEmpty()) encodedPath else null
-                    ),
+                    painter = rememberGoodsCardPainter(encodedPath),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
@@ -97,7 +128,7 @@ fun GoodsGridItem(
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             Column(
-                modifier = Modifier.padding(AppStyles.paddingMedium)
+                modifier = textModifier.padding(AppStyles.paddingMedium)
             ) {
                 Text(
                     text = series,

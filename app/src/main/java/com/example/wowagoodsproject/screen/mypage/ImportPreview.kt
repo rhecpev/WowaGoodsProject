@@ -64,9 +64,7 @@ data class ImportSection(
     val pendingRows: List<DiffRow> = emptyList(),
     val favRows: List<FavRow> = emptyList(),
     /** 배신 굿즈 장르별 Before / After */
-    val genres: List<GenreDiff> = emptyList(),
-    /** 굿즈 하나하나의 Before / After 상태(비공식 굿즈) */
-    val goodsRows: List<GoodsChangeRow> = emptyList()
+    val genres: List<GenreDiff> = emptyList()
 )
 
 /** 보고서의 캐릭터 한 줄: 파일 안 공식(보유·구매예정)·2차창작 굿즈 수 */
@@ -297,20 +295,8 @@ object ImportPreviewer {
             val file = fileEntities
                 .map { key(it.fanGoodsSeries, it.fanGoodsChara, it.fanGoodsCategory, it.fanGoodsPrice, it.fanGoodsMemo, it.fanGoodsStatus, it.fanGoodsImgPath) }
             val (added, removed) = multisetDiff(now, file)
-            // 굿즈마다 상태가 어떻게 바뀌는지: 상태를 뺀 내용으로 짝짓는다.
-            fun content(g: com.example.wowagoodsproject.db.fan.FanGoodsEntity) =
-                listOf(g.fanGoodsSeries.trim(), g.fanGoodsChara.trim(), g.fanGoodsCategory.trim(), g.fanGoodsPrice.trim(), g.fanGoodsMemo.trim(), File(g.fanGoodsImgPath).name)
-                    .joinToString("\u0001")
-            val goodsRows = goodsChanges(current, fileEntities, ::content, { it.status }) { g, b, a ->
-                GoodsChangeRow(
-                    name = listOf(g.fanGoodsSeries.trim().ifEmpty { "시리즈 없음" }, g.fanGoodsCategory.trim()).filter { it.isNotEmpty() }.joinToString(" · "),
-                    sub = g.fanGoodsChara.trim(),
-                    avatar = com.example.wowagoodsproject.db.betray.charaNames(g.fanGoodsChara).firstOrNull()?.let(avatarOf).orEmpty(),
-                    before = b, after = a
-                )
-            }
+            // 굿즈 하나하나의 바뀜은 굿즈 확인 단계('바뀌는 굿즈')에서 보인다
             sections += ImportSection(
-                goodsRows = goodsRows,
                 rows = diffRows(countByChara(current) { it.fanGoodsChara }, countByChara(fileEntities) { it.fanGoodsChara }, avatarOf),
                 part = ImportPart.FAN, now = "${current.size}개", file = "${backups.size}개", changed = added + removed > 0,
                 details = if (added + removed == 0) listOf("내용이 같습니다")
@@ -398,9 +384,9 @@ object ImportPreviewer {
             favorites = favoriteNames.map { chara(it) },
             charas = counts.keys.map { chara(it) }.sortedWith(compareByDescending<ReportChara> { it.total }.thenBy { it.name }),
             betrayGenres = genres.map { it.genreNm.orEmpty() to (goodsByGenre[it.genreId] ?: 0) },
-            goods = reviewGoodsOf(official, fan),
+            goods = reviewGoodsOf(official, fan, "official_gotten.json" in texts, "fan_goods.json" in texts),
             avatars = avatars,
-            betrayReview = betray?.let { betrayReviewOf(it) }.orEmpty(),
+            betrayReview = betray?.let { withLocalChanges(betrayReviewOf(it)) }.orEmpty(),
             graphs = listOfNotNull(
                 if (listOf("official_gotten.json", "fan_goods.json", "favorite_charas.json").any { it in texts }) wuwaGraph(official, fan, favoriteNames) else null
             ) + betray?.let { betrayGraphs(it) }.orEmpty()
@@ -467,20 +453,100 @@ object ImportPreviewer {
     }
 
     /** 공식은 이 기기 굿즈와 짝지어(사진·가격은 기기 데이터) 되살아날 것만, 2차창작은 파일 그대로. 사진은 이 기기에 같은 파일이 있을 때만. */
-    private suspend fun reviewGoodsOf(official: List<OfficialGoodsBackup>, fan: List<FanGoodsBackup>): List<ReviewGoods> {
+    private suspend fun reviewGoodsOf(
+        official: List<OfficialGoodsBackup>,
+        fan: List<FanGoodsBackup>,
+        /** 파일에 공식 보유 목록·비공식 목록이 있는지(없으면 그 부분은 불러와도 그대로라 없어지는 굿즈가 없다) */
+        officialInFile: Boolean,
+        fanInFile: Boolean
+    ): List<ReviewGoods> {
         val local = App.database.goodsDao().getAll()
-        return matchOfficialBackups(official, local).map { (b, g) ->
+        val pairs = matchOfficialBackups(official, local)
+        val matched = pairs.map { it.second.goodsId }.toSet()
+        val officialRows = pairs.map { (b, g) ->
+            val before = goodsStatusOf(g.goodsStatus)
+            val beforeQty = reviewQuantity(before, g.goodsQuantity)
+            val afterQty = (b.goodsQuantity ?: 1).coerceAtLeast(1)
+            // 상태가 같아도 수량이 다르면 바뀌는 굿즈
+            val changed = before != b.restoredStatus || beforeQty != reviewQuantity(b.restoredStatus, afterQty)
             ReviewGoods(
                 official = true, series = g.goodsSeries, chara = g.goodsChara, category = g.goodsCategory,
                 price = g.goodsPrice, memo = b.goodsMemo.orEmpty(), status = b.restoredStatus,
-                quantity = (b.goodsQuantity ?: 1).coerceAtLeast(1), img = g.imgPath
+                quantity = afterQty, img = g.imgPath,
+                change = if (changed) before to b.restoredStatus else null,
+                beforeQuantity = beforeQty
             )
-        } + fan.map { f ->
+        } + local
+            // 지금 보유·구매예정인데 파일에서 짝을 못 찾은 굿즈: 불러오면 미보유가 된다(세트 줄은 구성품에 따라 정해지므로 뺀다)
+            .filter { officialInFile && it.goodsId !in matched && goodsStatusOf(it.goodsStatus) != GoodsStatus.NOT_GOTTEN && it.goodsCategory != com.example.wowagoodsproject.component.CATEGORY_SET }
+            .map { g ->
+                ReviewGoods(
+                    official = true, series = g.goodsSeries, chara = g.goodsChara, category = g.goodsCategory,
+                    price = g.goodsPrice, memo = g.goodsMemo, status = GoodsStatus.NOT_GOTTEN, quantity = 1, img = g.imgPath,
+                    change = goodsStatusOf(g.goodsStatus) to GoodsStatus.NOT_GOTTEN,
+                    beforeQuantity = g.goodsQuantity.coerceAtLeast(1)
+                )
+            }
+        // 비공식: 파일 것으로 통째로 바뀐다. 내용(시리즈·캐릭터·카테고리·가격·메모·사진)으로 짝지어 지금 → 불러온 뒤를 붙인다.
+        fun fanKey(series: String, chara: String, category: String, price: String, memo: String, img: String) =
+            listOf(series.trim(), chara.trim(), category.trim(), price.trim(), memo.trim(), File(img).name).joinToString("\u0001")
+        val fileFan = fan.map { f ->
             val e = f.toEntity("")
             ReviewGoods(
                 official = false, series = e.fanGoodsSeries, chara = e.fanGoodsChara, category = e.fanGoodsCategory,
                 price = e.fanGoodsPrice, memo = e.fanGoodsMemo, status = e.status, quantity = e.quantity,
                 img = previewPath(f.fanGoodsImgPath)
+            ) to fanKey(e.fanGoodsSeries, e.fanGoodsChara, e.fanGoodsCategory, e.fanGoodsPrice, e.fanGoodsMemo, f.fanGoodsImgPath.orEmpty())
+        }
+        // 파일에 비공식 목록이 없으면 지금 비공식 굿즈는 그대로라 비교하지 않는다.
+        val fanRows = if (!fanInFile) emptyList() else withChanges(
+            file = fileFan,
+            now = App.fanDatabase.fanGoodsDao().getAll(),
+            key = { fanKey(it.fanGoodsSeries, it.fanGoodsChara, it.fanGoodsCategory, it.fanGoodsPrice, it.fanGoodsMemo, it.fanGoodsImgPath) },
+            status = { it.status },
+            quantity = { it.fanGoodsQuantity },
+            gone = {
+                ReviewGoods(
+                    official = false, series = it.fanGoodsSeries, chara = it.fanGoodsChara, category = it.fanGoodsCategory,
+                    price = it.fanGoodsPrice, memo = it.fanGoodsMemo, status = it.status, quantity = it.fanGoodsQuantity,
+                    img = it.fanGoodsImgPath, change = it.status to null
+                )
+            }
+        )
+        return officialRows + fanRows
+    }
+
+    /**
+     * 배신 굿즈 장르마다 확인 목록에 지금 → 불러온 뒤를 붙인다. 파일 장르와 이름이 같은 이 기기 장르의 굿즈는 파일 것으로 바뀌므로
+     * 내용(시리즈·캐릭터·카테고리·가격·메모·종류)으로 짝짓고, 파일에 없는 이 기기 굿즈는 '없어지는 굿즈'로 더한다.
+     */
+    private suspend fun withLocalChanges(reviews: List<ExportPreview.BetrayReview>): List<ExportPreview.BetrayReview> {
+        val dao = App.betrayDatabase.betrayDao()
+        val genres = dao.genres()
+        return reviews.map { r ->
+            val local = genres.firstOrNull { it.genreNm.trim().equals(r.genreName.trim(), ignoreCase = true) }
+            val now = local?.let { dao.goodsOf(it.genreId) }.orEmpty()
+            fun key(official: Boolean, series: String, chara: String, category: String, price: String, memo: String) =
+                listOf(official.toString(), series.trim(), chara.trim(), category.trim(), price.trim(), memo.trim()).joinToString("\u0001")
+            r.copy(
+                goods = withChanges(
+                    file = r.goods.map { it to key(it.official, it.series, it.chara, it.category, it.price, it.memo) },
+                    now = now,
+                    key = { key(it.kind == com.example.wowagoodsproject.db.betray.BetrayKind.OFFICIAL, it.goodsSeries, it.goodsChara, it.goodsCategory, it.goodsPrice, it.goodsMemo) },
+                    status = { it.status },
+                    quantity = { it.goodsQuantity },
+                    gone = {
+                        ReviewGoods(
+                            it.kind == com.example.wowagoodsproject.db.betray.BetrayKind.OFFICIAL,
+                            it.goodsSeries, it.goodsChara, it.goodsCategory, it.goodsPrice, it.goodsMemo, it.status, it.goodsQuantity, it.goodsImgPath,
+                            change = it.status to null
+                        )
+                    }
+                ),
+                // 없어지는 굿즈의 캐릭터 사진도 보이게 이 기기 장르 사진을 더한다
+                avatars = r.avatars + local?.let { l ->
+                    com.example.wowagoodsproject.screen.betray.betrayCharas(now, dao.favoritesOf(l.genreId), dao.charasOf(l.genreId)).associate { it.name to it.cover }
+                }.orEmpty().filterKeys { it !in r.avatars }
             )
         }
     }
@@ -684,7 +750,8 @@ fun ImportPreviewSheet(
                     avatars = r.avatars,
                     checked = checkedCharas,
                     onCheck = { name, on -> setChecked(if (on) checkedCharas + name else checkedCharas - name) },
-                    onCheckAll = { setChecked(allCharas) }
+                    onCheckAll = { setChecked(allCharas) },
+                    importing = true
                 )
                 }
                 STEP_CONFIRM -> {
@@ -794,7 +861,6 @@ fun ImportPreviewSheet(
                                 }
                                 ImportPart.FAN -> {
                                     table("fan_c", "캐릭터별 굿즈 수", sec.rows) { DiffRowItem(it) }
-                                    table("fan_g", "바뀌는 굿즈", sec.goodsRows) { GoodsChangeRowItem(it) }
                                 }
                                 ImportPart.FAVORITES -> favTable("fav", "선호", sec.favRows)
                                 ImportPart.BETRAY -> sec.genres.forEachIndexed { gi, g ->
@@ -829,7 +895,8 @@ fun ImportPreviewSheet(
                                 avatars = review.avatars,
                                 checked = mine,
                                 onCheck = { name, on -> setBetrayChecked(betrayChecked + (id to (if (on) mine + name else mine - name))) },
-                                onCheckAll = { setBetrayChecked(betrayChecked + (id to betrayAll[id].orEmpty())) }
+                                onCheckAll = { setBetrayChecked(betrayChecked + (id to betrayAll[id].orEmpty())) },
+                                importing = true
                             )
                         }
                     }

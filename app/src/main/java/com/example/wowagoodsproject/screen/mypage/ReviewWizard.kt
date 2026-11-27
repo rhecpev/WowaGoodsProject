@@ -52,10 +52,23 @@ data class ReviewGoods(
     val memo: String,
     val status: GoodsStatus,
     val quantity: Int,
-    val img: String = ""
+    val img: String = "",
+    /**
+     * 불러오기 확인에서 상태나 수량이 바뀌면 (지금, 불러온 뒤). 바뀌지 않으면 null.
+     * 지금이 null 이면 새로 생기는 굿즈, 불러온 뒤가 null 이면 없어지는 굿즈(비공식·배신 굿즈).
+     * 공식 굿즈는 지금 보유·구매예정인데 파일에 없으면 (보유, 미보유)로 들어간다.
+     * 상태는 같고 수량만 바뀌면 두 상태가 같다([beforeQuantity] 와 [quantity] 가 다르다).
+     */
+    val change: Pair<GoodsStatus?, GoodsStatus?>? = null,
+    /** 불러오기 확인: 지금 수량(지금 있는 굿즈만 의미가 있다). [quantity] 는 불러온 뒤 수량 */
+    val beforeQuantity: Int = quantity
 ) {
     val charaNames: List<String>
         get() = chara.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct().ifEmpty { listOf(NO_CHARA) }
+
+    /** 불러온 뒤 상태. 없어지는 굿즈면 null */
+    val afterStatus: GoodsStatus?
+        get() = if (change != null) change.second else status
 
     companion object {
         /** 캐릭터 칸이 빈 굿즈를 모으는 이름 */
@@ -309,7 +322,7 @@ internal fun ColumnScope.FavoritesReviewStep(
 }
 
 private enum class KindFilter(val label: String) { ALL("전체"), OFFICIAL("공식"), FAN("2차창작") }
-private enum class StateFilter(val label: String) { ALL("전체"), GOTTEN("보유"), PENDING("구매예정"), NOT_GOTTEN("미보유") }
+private enum class StateFilter(val label: String) { ALL("전체"), CHANGED("바뀌는 굿즈"), GOTTEN("보유"), PENDING("구매예정"), NOT_GOTTEN("미보유") }
 
 /**
  * 굿즈 단계: 첫 줄에 캐릭터 아이콘(확인하면 초록 체크), 누르면 아래에 그 캐릭터 굿즈 목록.
@@ -321,7 +334,9 @@ internal fun ColumnScope.GoodsReviewStep(
     avatars: Map<String, String>,
     checked: Set<String>,
     onCheck: (String, Boolean) -> Unit,
-    onCheckAll: () -> Unit
+    onCheckAll: () -> Unit,
+    /** 불러오기 확인이면 true('바뀌는 굿즈' 칩을 보인다). 추출 확인은 false */
+    importing: Boolean = false
 ) {
     val charas = remember(goods) {
         goods.flatMap { it.charaNames }.groupingBy { it }.eachCount()
@@ -391,7 +406,7 @@ internal fun ColumnScope.GoodsReviewStep(
             }
             VerticalDivider(modifier = Modifier.padding(horizontal = 12.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                current?.let { name -> GoodsReviewList(goods, name, query, { query = it }, kind, { kind = it }, state, { state = it }, wide = true) }
+                current?.let { name -> GoodsReviewList(goods, name, query, { query = it }, kind, { kind = it }, state, { state = it }, wide = true, showChanged = importing) }
                 Spacer(modifier = Modifier.height(8.dp))
                 current?.let { name -> CheckConfirmRow("$name 굿즈 확인했어요", name in checked, { onCheck(name, it) }) }
             }
@@ -409,7 +424,7 @@ internal fun ColumnScope.GoodsReviewStep(
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 6.dp))
 
     val name = current ?: return
-    GoodsReviewList(goods, name, query, { query = it }, kind, { kind = it }, state, { state = it }, wide = false)
+    GoodsReviewList(goods, name, query, { query = it }, kind, { kind = it }, state, { state = it }, wide = false, showChanged = importing)
     Spacer(modifier = Modifier.height(8.dp))
     CheckConfirmRow("$name 굿즈 확인했어요", name in checked, { onCheck(name, it) })
 }
@@ -428,7 +443,8 @@ private fun ColumnScope.GoodsReviewList(
     onKind: (KindFilter) -> Unit,
     state: StateFilter,
     onState: (StateFilter) -> Unit,
-    wide: Boolean
+    wide: Boolean,
+    showChanged: Boolean
 ) {
     val words = remember(query) { query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() } }
     val list = remember(goods, name, words, kind, state) {
@@ -437,25 +453,56 @@ private fun ColumnScope.GoodsReviewList(
             .filter {
                 when (state) {
                     StateFilter.ALL -> true
-                    StateFilter.GOTTEN -> it.status == GoodsStatus.GOTTEN
-                    StateFilter.PENDING -> it.status == GoodsStatus.PENDING
-                    StateFilter.NOT_GOTTEN -> it.status == GoodsStatus.NOT_GOTTEN
+                    StateFilter.CHANGED -> it.change != null
+                    // 불러온 뒤 상태로 거른다(없어지는 굿즈는 어느 상태에도 들지 않는다)
+                    StateFilter.GOTTEN -> it.afterStatus == GoodsStatus.GOTTEN
+                    StateFilter.PENDING -> it.afterStatus == GoodsStatus.PENDING
+                    StateFilter.NOT_GOTTEN -> it.afterStatus == GoodsStatus.NOT_GOTTEN
                 }
             }
             .filter { g ->
                 val text = listOf(g.series, g.chara, g.category, g.memo, g.price).joinToString(" ").lowercase()
                 words.all { it in text }
             }
+            // 바뀌는 굿즈(특히 지금 보유인데 미보유가 되는 굿즈)가 위에 오게
+            .sortedBy { reviewChangeRank(it) }
     }
     val kindChips: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
         items(KindFilter.entries, key = { "k" + it.name }) { k ->
             FilterChip(selected = kind == k, onClick = { onKind(k) }, label = { Text(k.label) }, shape = RectangleShape)
         }
     }
+    // '바뀌는 굿즈'는 불러오기 확인에만 있다(추출은 바뀌는 것이 없다)
+    val stateEntries = if (showChanged) StateFilter.entries else StateFilter.entries - StateFilter.CHANGED
     val stateChips: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
-        items(StateFilter.entries, key = { "s" + it.name }) { st ->
+        items(stateEntries, key = { "s" + it.name }) { st ->
             FilterChip(selected = state == st, onClick = { onState(st) }, label = { Text(if (st == StateFilter.ALL) "모든 상태" else st.label) }, shape = RectangleShape)
         }
+    }
+    // 굿즈를 누르면 크게 본다(보기만). 사진이 작거나 글자가 잘려도 확인할 수 있게.
+    var detail by remember { mutableStateOf<ReviewGoods?>(null) }
+    detail?.let { g ->
+        // 굿즈 목록과 같은 상세 창을 보기 전용으로(상태는 바꾸지 않고, 지금 → 불러온 뒤를 보여 준다)
+        com.example.wowagoodsproject.component.GoodsDetailDialog(
+            imgPath = g.img,
+            series = (if (g.official) "공식 · " else "2차창작 · ") + g.series.trim().ifEmpty { "시리즈 없음" },
+            chara = g.chara,
+            category = g.category,
+            price = g.price,
+            isGotten = g.status == GoodsStatus.GOTTEN,
+            isPending = g.status == GoodsStatus.PENDING,
+            memo = g.memo,
+            onDismiss = { detail = null },
+            onToggleGotten = {},
+            onSetPending = {},
+            onDelete = {},
+            showDelete = false,
+            quantity = g.quantity,
+            itemKey = g,
+            readOnly = true,
+            statusChange = g.change,
+            beforeQuantity = g.beforeQuantity
+        )
     }
     // 검색·필터도 목록과 함께 스크롤해, 짧은 화면에서도 굿즈 목록이 넉넉히 보이게 한다.
     LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -500,11 +547,59 @@ private fun ColumnScope.GoodsReviewList(
                 isGotten = g.status == GoodsStatus.GOTTEN,
                 gottenStatus = g.status.asGottenStatus(),
                 memo = g.memo,
-                quantity = g.quantity
+                quantity = g.quantity,
+                change = g.change?.let { (b, a) -> b?.asGottenStatus() to a?.asGottenStatus() },
+                changeBeforeQuantity = g.beforeQuantity,
+                onClick = { detail = g }
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
+}
+
+/** 목록 순서: 잃는 굿즈(→ 미보유·없음) → 그 밖에 바뀌는 굿즈 → 바뀌지 않는 굿즈 */
+internal fun reviewChangeRank(g: ReviewGoods): Int = when {
+    g.change == null -> 2
+    g.change.second == null || g.change.second == GoodsStatus.NOT_GOTTEN -> 0
+    else -> 1
+}
+
+/** 비교에 쓰는 수량. 미보유는 수량이 의미가 없어 1로 본다. */
+internal fun reviewQuantity(status: GoodsStatus, quantity: Int): Int =
+    if (status == GoodsStatus.NOT_GOTTEN) 1 else quantity.coerceAtLeast(1)
+
+/**
+ * 파일 굿즈와 지금 굿즈를 내용([key])으로 짝지어 지금 → 불러온 뒤를 붙인다
+ * (같은 내용이 여럿이면 상태·수량이 같은 것, 그다음 상태가 같은 것끼리 먼저).
+ * 상태나 수량이 다르면 바뀌는 굿즈다. 파일에만 있으면 새로 생김, 지금에만 있으면 [gone] 으로 만든 '없어지는 굿즈'를 더한다.
+ */
+internal fun <T> withChanges(
+    /** 파일 굿즈와 그 내용 열쇠 */
+    file: List<Pair<ReviewGoods, String>>,
+    now: List<T>,
+    key: (T) -> String,
+    status: (T) -> GoodsStatus,
+    quantity: (T) -> Int,
+    gone: (T) -> ReviewGoods
+): List<ReviewGoods> {
+    val rest = now.groupBy(key).mapValues { it.value.toMutableList() }.toMutableMap()
+    fun qty(t: T) = reviewQuantity(status(t), quantity(t))
+    val out = file.map { (g, k) ->
+        val pool = rest[k]
+        val fileQty = reviewQuantity(g.status, g.quantity)
+        val i = pool?.indexOfFirst { status(it) == g.status && qty(it) == fileQty }?.takeIf { it >= 0 }
+            ?: pool?.indexOfFirst { status(it) == g.status }?.takeIf { it >= 0 }
+            ?: if (pool.isNullOrEmpty()) -1 else 0
+        if (i < 0) g.copy(change = null to g.status)
+        else {
+            val match = pool!!.removeAt(i)
+            val before = status(match)
+            val beforeQty = qty(match)
+            if (before == g.status && beforeQty == fileQty) g.copy(beforeQuantity = beforeQty)
+            else g.copy(change = before to g.status, beforeQuantity = beforeQty)
+        }
+    }
+    return out + rest.values.flatten().map(gone)
 }
 
 /** 캐릭터 이름 목록(굿즈 단계와 같은 기준) */

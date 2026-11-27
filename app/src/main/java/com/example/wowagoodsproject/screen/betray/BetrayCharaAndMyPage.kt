@@ -500,7 +500,6 @@ internal fun BetrayMyPage(
         SettingsRow(
             icon = Icons.Default.ShoppingCart,
             title = "구매예정 굿즈",
-            subtitle = if (pending > 0) "구매일·구입처를 정리해 두세요" else "구매예정으로 표시한 굿즈가 없습니다",
             trailing = if (pending > 0) {
                 { StatusPill(text = "${pending}개", color = AppStyles.colorPending) }
             } else null,
@@ -508,13 +507,12 @@ internal fun BetrayMyPage(
         )
     }
     val editRow: @Composable () -> Unit = {
-        SettingsRow(icon = Icons.Default.Edit, title = "장르 편집", subtitle = "이름·배경·아이콘 사진", onClick = onEdit)
+        SettingsRow(icon = Icons.Default.Edit, title = "장르 편집", onClick = onEdit)
     }
     val exportRow: @Composable () -> Unit = {
         SettingsRow(
             icon = Icons.Default.FileDownload,
             title = "데이터 추출",
-            subtitle = "'$genreName' 장르만 백업 파일로 저장",
             showChevron = false,
             onClick = { onLoadExportPreview(); showExport = true }
         )
@@ -523,13 +521,12 @@ internal fun BetrayMyPage(
         SettingsRow(
             icon = Icons.Default.FileUpload,
             title = "데이터 입력",
-            subtitle = "백업 파일에서 '$genreName' 장르만 불러오기",
             showChevron = false,
             onClick = onImport
         )
     }
     val switchRow: @Composable () -> Unit = {
-        SettingsRow(icon = Icons.Default.SwapHoriz, title = "다른 장르로", subtitle = "장르 목록으로 돌아갑니다", onClick = onExit)
+        SettingsRow(icon = Icons.Default.SwapHoriz, title = "다른 장르로", onClick = onExit)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

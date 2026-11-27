@@ -1,6 +1,9 @@
 package com.example.wowagoodsproject.navigation
 
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -93,11 +96,34 @@ fun TopBarAction(
                 if (active) Badge(containerColor = MaterialTheme.colorScheme.primary)
             }
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = if (active) MaterialTheme.colorScheme.primary else LocalContentColor.current
-            )
+            // 아이콘이 바뀌면(보기 방식 전환 등) 반 바퀴 돌며 바뀐다
+            androidx.compose.animation.AnimatedContent(
+                targetState = icon,
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(160)) +
+                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(160), initialScale = 0.6f))
+                        .togetherWith(
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)) +
+                                androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(120), targetScale = 0.6f)
+                        )
+                },
+                label = "topBarIcon"
+            ) { shown ->
+                // 들어올 때 -90도에서, 나갈 때 90도로 돌아간다
+                val turn by transition.animateFloat(label = "turn") { state ->
+                    when (state) {
+                        androidx.compose.animation.EnterExitState.PreEnter -> -90f
+                        androidx.compose.animation.EnterExitState.Visible -> 0f
+                        androidx.compose.animation.EnterExitState.PostExit -> 90f
+                    }
+                }
+                Icon(
+                    imageVector = shown,
+                    contentDescription = contentDescription,
+                    tint = if (active) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    modifier = Modifier.graphicsLayer { rotationZ = turn }
+                )
+            }
         }
     }
 }

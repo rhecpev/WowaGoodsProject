@@ -260,13 +260,16 @@ internal fun BetraySearch(
                         title = "검색 결과가 없습니다",
                         message = "다른 검색어를 넣거나 조건을 바꿔 보세요"
                     )
-                    else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        val onClick: (BetrayGoodsEntity) -> Unit = { g ->
-                            if (selection.mode) selection.toggle(g.goodsId) else selectedId = if (selectedId == g.goodsId) null else g.goodsId
+                    // 보기 방식을 바꾸면 줌 애니메이션으로 넘긴다(ViewSwitchAnimation.kt)
+                    else -> com.example.wowagoodsproject.component.GridListSwitch(isGridMode) { grid ->
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            val onClick: (BetrayGoodsEntity) -> Unit = { g ->
+                                if (selection.mode) selection.toggle(g.goodsId) else selectedId = if (selectedId == g.goodsId) null else g.goodsId
+                            }
+                            val selectedOf: (BetrayGoodsEntity) -> Boolean? = { g -> if (selection.mode) g.goodsId in selection.ids else null }
+                            resultSection("공식", shownOfficial, grid, gridColumns, { "official_${it.goodsId}" }, selectedOf, onClick)
+                            resultSection("2차창작", shownFan, grid, gridColumns, { "fan_${it.goodsId}" }, selectedOf, onClick)
                         }
-                        val selectedOf: (BetrayGoodsEntity) -> Boolean? = { g -> if (selection.mode) g.goodsId in selection.ids else null }
-                        resultSection("공식", shownOfficial, isGridMode, gridColumns, { "official_${it.goodsId}" }, selectedOf, onClick)
-                        resultSection("2차창작", shownFan, isGridMode, gridColumns, { "fan_${it.goodsId}" }, selectedOf, onClick)
                     }
                 }
             }
